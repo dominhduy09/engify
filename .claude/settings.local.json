@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xcodebuild -scheme Engify -destination 'platform=iOS Simulator,name=iPhone 16' build)",
+      "Bash(ls /Applications/ | grep -i xcode 2>/dev/null || echo \"Checking for Xcode...\")",
+      "Read(//Applications/**)",
+      "Bash(sudo xcode-select -s /Applications/Xcode.app/Contents/Developer)",
+      "Bash(DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -project Engify.xcodeproj -scheme Engify -destination 'generic/platform=iOS Simulator' build)",
+      "Bash(xcodebuild -scheme Engify -destination \"platform=iOS Simulator,name=iPhone 16\" build)",
+      "Bash(ls -la *.xcodeproj)",
+      "Bash(ls -la *.xcworkspace)",
+      "Bash(xcodebuild -project Engify.xcodeproj -scheme Engify -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 16' build)",
+      "Bash(xcodebuild -project Engify.xcodeproj -scheme Engify -destination 'platform=iOS Simulator,name=iPhone 16' build)",
+      "Bash(xargs -I{} ls -la \"{}/../\")"
+    ]
+  }
+}

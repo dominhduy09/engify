@@ -1,0 +1,291 @@
+import Auth
+import Combine
+import Foundation
+
+enum AuthenticationState: Equatable {
+    case restoring
+    case authenticated
+    case unauthenticated
+}
+
+@MainActor
+final class AuthenticationManager: ObservableObject {
+    @Published private(set) var currentUser: User?
+    @Published private(set) var authState: AuthenticationState = .restoring
+    @Published private(set) var isLoading = false
+    @Published var errorMessage: String?
+    @Published var infoMessage: String?
+    @Published var profileUpdateMessage: String?
+
+    var isAuthenticated: Bool {
+        authState == .authenticated
+    }
+
+    var isSupabaseConfigured: Bool {
+        authService.isConfigured
+    }
+
+    var configurationErrorMessage: String? {
+        authService.configurationErrorMessage
+    }
+
+    private let authService: AuthServicing
+    private var authStateTask: Task<Void, Never>?
+
+    init(authService: AuthServicing? = nil) {
+        self.authService = authService ?? SupabaseAuthService(
+            provider: .shared,
+            profileService: .shared
+        )
+        restoreInitialState()
+        observeAuthStateChanges()
+    }
+
+    deinit {
+        authStateTask?.cancel()
+    }
+
+    func signIn(email: String, password: String) async -> Bool {
+        do {
+            let credentials = try AuthValidator.validateSignIn(email: email, password: password)
+            resetMessages()
+            isLoading = true
+            defer { isLoading = false }
+
+            let session = try await authService.signIn(
+                email: credentials.email,
+                password: credentials.password
+            )
+            apply(session: session)
+            return true
+        } catch {
+            errorMessage = friendlyError(error)
+            return false
+        }
+    }
+
+    func signUp(email: String, password: String, confirmPassword: String, displayName: String) async -> Bool {
+        do {
+            let credentials = try AuthValidator.validateSignUp(
+                email: email,
+                password: password,
+                confirmPassword: confirmPassword,
+                displayName: displayName
+            )
+            resetMessages()
+            isLoading = true
+            defer { isLoading = false }
+
+            let result = try await authService.signUp(
+                email: credentials.email,
+                password: credentials.password,
+                displayName: credentials.displayName
+            )
+
+            switch result {
+            case let .authenticated(session):
+                apply(session: session)
+            case let .pendingEmailConfirmation(email):
+                authState = .unauthenticated
+                infoMessage = "Account created for \(email). Check your inbox to confirm your email before logging in."
+            }
+
+            return true
+        } catch {
+            errorMessage = friendlyError(error)
+            return false
+        }
+    }
+
+    func signOut() async {
+        resetMessages()
+        isLoading = true
+        defer { isLoading = false }
+
+        do {
+            try await authService.signOut()
+        } catch {
+            errorMessage = friendlyError(error)
+        }
+
+        clearSession()
+    }
+
+    func updateProfile(displayName: String, avatarStyle: EngifyAvatarStyle) async -> Bool {
+        do {
+            let payload = try AuthValidator.validateProfileUpdate(
+                displayName: displayName,
+                avatarStyle: avatarStyle
+            )
+            resetMessages()
+            isLoading = true
+            defer { isLoading = false }
+
+            let updatedUser = try await authService.updateProfile(
+                displayName: payload.displayName,
+                avatarStyle: payload.avatarStyle
+            )
+            currentUser = mapUser(updatedUser)
+            authState = .authenticated
+            profileUpdateMessage = "Profile updated."
+            return true
+        } catch {
+            errorMessage = friendlyError(error)
+            return false
+        }
+    }
+
+    func sendPasswordReset(email: String) async -> Bool {
+        do {
+            let validatedEmail = try AuthValidator.validatePasswordReset(email: email)
+            resetMessages()
+            isLoading = true
+            defer { isLoading = false }
+
+            try await authService.sendPasswordReset(email: validatedEmail)
+            infoMessage = "Password reset email sent to \(validatedEmail)."
+            return true
+        } catch {
+            errorMessage = friendlyError(error)
+            return false
+        }
+    }
+
+    func consumeInfoMessage() -> String? {
+        defer { infoMessage = nil }
+        return infoMessage
+    }
+
+    func clearError() {
+        errorMessage = nil
+    }
+
+    func consumeProfileUpdateMessage() -> String? {
+        defer { profileUpdateMessage = nil }
+        return profileUpdateMessage
+    }
+
+    private func restoreInitialState() {
+        if let session = authService.currentSession {
+            apply(session: session)
+        } else {
+            authState = .unauthenticated
+        }
+    }
+
+    private func observeAuthStateChanges() {
+        authStateTask = Task { [weak self] in
+            guard let self else { return }
+
+            for await (event, session) in authService.authStateChanges {
+                guard !Task.isCancelled else { return }
+
+                switch event {
+                case .initialSession, .signedIn, .tokenRefreshed, .userUpdated:
+                    if let session {
+                        apply(session: session)
+                    } else {
+                        clearSession()
+                    }
+                case .signedOut:
+                    clearSession()
+                case .passwordRecovery:
+                    infoMessage = "Password recovery session detected. Please update your password."
+                    if let session {
+                        apply(session: session)
+                    }
+                default:
+                    break
+                }
+            }
+        }
+    }
+
+    private func apply(session: Session) {
+        currentUser = mapUser(session.user)
+        authState = .authenticated
+        errorMessage = nil
+    }
+
+    private func clearSession() {
+        currentUser = nil
+        authState = .unauthenticated
+    }
+
+    private func mapUser(_ user: UserInfo) -> User {
+        User(
+            id: user.id,
+            email: user.email ?? "",
+            displayName: displayName(from: user),
+            avatarStyle: avatarStyle(from: user)
+        )
+    }
+
+    private func displayName(from user: UserInfo) -> String {
+        if let displayName = user.userMetadata["display_name"]?.stringValue, !displayName.isEmpty {
+            return displayName
+        }
+
+        if let fullName = user.userMetadata["full_name"]?.stringValue, !fullName.isEmpty {
+            return fullName
+        }
+
+        if let email = user.email, let prefix = email.split(separator: "@").first {
+            return String(prefix)
+        }
+
+        return "Learner"
+    }
+
+    private func avatarStyle(from user: UserInfo) -> EngifyAvatarStyle {
+        guard
+            let rawValue = user.userMetadata["avatar_style"]?.stringValue,
+            let style = EngifyAvatarStyle(rawValue: rawValue)
+        else {
+            return .meadow
+        }
+
+        return style
+    }
+
+    private func resetMessages() {
+        errorMessage = nil
+        infoMessage = nil
+        profileUpdateMessage = nil
+    }
+
+    private func friendlyError(_ error: Error) -> String {
+        if let validationError = error as? AuthValidationError {
+            return validationError.localizedDescription
+        }
+
+        let message = error.localizedDescription.lowercased()
+
+        if message.contains("email") && message.contains("already") {
+            return "An account with this email already exists. Try logging in instead."
+        }
+        if message.contains("invalid login credentials") {
+            return "Email or password is incorrect. Please try again."
+        }
+        if message.contains("email not confirmed") {
+            return "Please confirm your email before signing in."
+        }
+        if message.contains("network") || message.contains("connection") {
+            return "Connection issue. Check your internet and try again."
+        }
+        if message.contains("rate") || message.contains("too many") {
+            return "Too many attempts. Please wait a moment before trying again."
+        }
+
+        return error.localizedDescription
+    }
+}
+
+private extension AnyJSON {
+    var stringValue: String? {
+        if case let .string(value) = self {
+            return value
+        }
+        return nil
+    }
+}

@@ -1,0 +1,1185 @@
+import SwiftUI
+
+// MARK: - Design Tokens
+
+enum EngifyColors {
+    static let primary = Color(red: 0.11, green: 0.12, blue: 0.16)
+    static let primaryLight = Color(red: 0.20, green: 0.22, blue: 0.28)
+
+    static let accent = Color(red: 0.28, green: 0.62, blue: 0.41)
+    static let accentDark = Color(red: 0.19, green: 0.47, blue: 0.31)
+    static let accentLight = Color(red: 0.82, green: 0.94, blue: 0.86)
+
+    static let sky = Color(red: 0.45, green: 0.73, blue: 0.60)
+    static let sage = Color(red: 0.22, green: 0.55, blue: 0.35)
+    static let coral = Color(red: 0.87, green: 0.36, blue: 0.32)
+    static let warning = Color(red: 0.86, green: 0.59, blue: 0.19)
+
+    static let canvas = Color(red: 0.98, green: 0.97, blue: 0.95)
+    static let canvasRaised = Color(red: 0.95, green: 0.94, blue: 0.91)
+    static let surface = Color(red: 1.00, green: 0.99, blue: 0.98)
+    static let surfaceMuted = Color(red: 0.95, green: 0.94, blue: 0.92)
+    static let surfaceDark = Color(red: 0.12, green: 0.13, blue: 0.17)
+    static let surfaceDarkRaised = Color(red: 0.16, green: 0.17, blue: 0.22)
+    static let border = Color(red: 0.87, green: 0.84, blue: 0.80)
+    static let borderDark = Color(red: 0.26, green: 0.27, blue: 0.34)
+
+    static let textPrimary = Color(red: 0.14, green: 0.14, blue: 0.18)
+    static let textSecondary = Color(red: 0.46, green: 0.47, blue: 0.54)
+    static let textInverse = Color.white
+
+    static let accentGradient = LinearGradient(
+        colors: [accent, accentDark],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+    )
+}
+
+enum EngifyTypography {
+    static let hero = Font.system(size: 32, weight: .bold, design: .rounded)
+    static let screenTitle = Font.system(size: 28, weight: .bold, design: .rounded)
+    static let cardTitle = Font.system(size: 22, weight: .bold, design: .rounded)
+    static let sectionTitle = Font.system(size: 20, weight: .bold, design: .rounded)
+    static let headline = Font.system(size: 17, weight: .semibold, design: .rounded)
+    static let body = Font.system(size: 16, weight: .regular, design: .default)
+    static let bodyStrong = Font.system(size: 16, weight: .semibold, design: .default)
+    static let caption = Font.system(size: 13, weight: .medium, design: .default)
+}
+
+// MARK: - Background / Screen Shell
+
+struct EngifyAppBackground: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        ZStack {
+            LinearGradient(
+                colors: colorScheme == .dark
+                    ? [EngifyColors.surfaceDark, EngifyColors.primary, Color.black]
+                    : [EngifyColors.canvas, EngifyColors.canvasRaised, Color.white],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+
+            RadialGradient(
+                colors: [
+                    EngifyColors.accent.opacity(colorScheme == .dark ? 0.22 : 0.14),
+                    Color.clear
+                ],
+                center: .topLeading,
+                startRadius: 20,
+                endRadius: 360
+            )
+            .offset(x: -120, y: -140)
+
+            RadialGradient(
+                colors: [
+                    EngifyColors.sky.opacity(colorScheme == .dark ? 0.16 : 0.08),
+                    Color.clear
+                ],
+                center: .bottomTrailing,
+                startRadius: 20,
+                endRadius: 340
+            )
+            .offset(x: 120, y: 160)
+        }
+        .ignoresSafeArea()
+    }
+}
+
+struct EngifyScreenScroll<Content: View>: View {
+    let alignment: HorizontalAlignment
+    let spacing: CGFloat
+    let bottomInset: CGFloat
+    let content: Content
+
+    init(
+        alignment: HorizontalAlignment = .leading,
+        spacing: CGFloat = Spacing.sectionGap,
+        bottomInset: CGFloat = Spacing.screenBottomInset,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.alignment = alignment
+        self.spacing = spacing
+        self.bottomInset = bottomInset
+        self.content = content()
+    }
+
+    var body: some View {
+        ZStack {
+            EngifyAppBackground()
+
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: alignment, spacing: spacing) {
+                    content
+                }
+                .padding(.horizontal, Spacing.screenPadding)
+                .padding(.top, Spacing.screenTopPadding)
+                .padding(.bottom, bottomInset)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+            }
+        }
+    }
+}
+
+// MARK: - Surfaces
+
+struct EngifyCard<Content: View>: View {
+    private let content: Content
+    var tint: Color = .clear
+    var padding: CGFloat = Spacing.cardPadding
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    init(
+        tint: Color = .clear,
+        padding: CGFloat = Spacing.cardPadding,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.tint = tint
+        self.padding = padding
+        self.content = content()
+    }
+
+    var body: some View {
+        content
+            .padding(padding)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(cardFill)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .stroke(cardBorder, lineWidth: 1)
+            )
+            .shadow(color: shadowColor, radius: 18, x: 0, y: 10)
+    }
+
+    private var cardFill: some ShapeStyle {
+        if tint != .clear {
+            return AnyShapeStyle(
+                LinearGradient(
+                    colors: [
+                        tint.opacity(colorScheme == .dark ? 0.24 : 0.14),
+                        baseFill.opacity(0.98)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+        }
+
+        return AnyShapeStyle(baseFill)
+    }
+
+    private var baseFill: Color {
+        colorScheme == .dark ? EngifyColors.surfaceDarkRaised : EngifyColors.surface
+    }
+
+    private var cardBorder: Color {
+        colorScheme == .dark ? EngifyColors.borderDark : EngifyColors.border
+    }
+
+    private var shadowColor: Color {
+        colorScheme == .dark ? .black.opacity(0.24) : EngifyColors.primary.opacity(0.08)
+    }
+}
+
+struct EngifyCollapsibleCard<Summary: View, Detail: View>: View {
+    let title: String
+    let subtitle: String?
+    let systemImage: String
+    var tint: Color = EngifyColors.accent
+    @Binding var isExpanded: Bool
+    let summary: Summary
+    let detail: Detail
+
+    init(
+        title: String,
+        subtitle: String? = nil,
+        systemImage: String,
+        tint: Color = EngifyColors.accent,
+        isExpanded: Binding<Bool>,
+        @ViewBuilder summary: () -> Summary,
+        @ViewBuilder detail: () -> Detail
+    ) {
+        self.title = title
+        self.subtitle = subtitle
+        self.systemImage = systemImage
+        self.tint = tint
+        self._isExpanded = isExpanded
+        self.summary = summary()
+        self.detail = detail()
+    }
+
+    var body: some View {
+        EngifyCard(tint: tint) {
+            VStack(alignment: .leading, spacing: Spacing.md) {
+                Button {
+                    withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+                        isExpanded.toggle()
+                    }
+                } label: {
+                    HStack(alignment: .center, spacing: Spacing.md) {
+                        EngifyIconBadge(systemImage: systemImage, tint: tint, size: 44)
+
+                        VStack(alignment: .leading, spacing: Spacing.xxs) {
+                            Text(title)
+                                .font(EngifyTypography.headline)
+                                .foregroundStyle(EngifyColors.textPrimary)
+
+                            if let subtitle, !subtitle.isEmpty {
+                                Text(subtitle)
+                                    .font(EngifyTypography.caption)
+                                    .foregroundStyle(EngifyColors.textSecondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+
+                        Spacer(minLength: 0)
+
+                        Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(EngifyColors.textSecondary)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
+                summary
+
+                if isExpanded {
+                    Divider()
+                    detail
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
+            }
+        }
+    }
+}
+
+struct CardView<Content: View>: View {
+    private let content: Content
+    var tint: Color = .clear
+
+    init(tint: Color = .clear, @ViewBuilder content: () -> Content) {
+        self.tint = tint
+        self.content = content()
+    }
+
+    var body: some View {
+        EngifyCard(tint: tint) {
+            content
+        }
+    }
+}
+
+struct EngifyIconBadge: View {
+    let systemImage: String
+    let tint: Color
+    var size: CGFloat = 48
+    var shape: RoundedRectangle = RoundedRectangle(cornerRadius: 16, style: .continuous)
+
+    var body: some View {
+        shape
+            .fill(tint.opacity(0.12))
+            .frame(width: size, height: size)
+            .overlay(
+                Image(systemName: systemImage)
+                    .font(.system(size: size * 0.42, weight: .semibold))
+                    .foregroundStyle(tint)
+            )
+    }
+}
+
+// MARK: - Reusable States
+
+enum EngifyStateTone {
+    case accent
+    case info
+    case success
+    case warning
+    case error
+
+    var color: Color {
+        switch self {
+        case .accent: return EngifyColors.accent
+        case .info: return EngifyColors.sky
+        case .success: return EngifyColors.sage
+        case .warning: return EngifyColors.warning
+        case .error: return EngifyColors.coral
+        }
+    }
+}
+
+struct EngifyStateCard: View {
+    let title: String
+    let message: String
+    let systemImage: String
+    var tone: EngifyStateTone = .accent
+    var actionTitle: String?
+    var action: (() -> Void)?
+
+    var body: some View {
+        EngifyCard(tint: tone.color) {
+            VStack(spacing: Spacing.cardGap) {
+                EngifyIconBadge(systemImage: systemImage, tint: tone.color, size: 64)
+
+                VStack(spacing: Spacing.xs) {
+                    Text(title)
+                        .font(EngifyTypography.headline)
+                        .foregroundStyle(EngifyColors.textPrimary)
+                        .multilineTextAlignment(.center)
+
+                    Text(message)
+                        .font(EngifyTypography.body)
+                        .foregroundStyle(EngifyColors.textSecondary)
+                        .multilineTextAlignment(.center)
+                }
+
+                if let actionTitle, let action {
+                    SecondaryButton(title: actionTitle, systemImage: "arrow.clockwise", action: action)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, Spacing.md)
+        }
+    }
+}
+
+struct EngifyLoadingCard: View {
+    let title: String
+    let message: String
+
+    var body: some View {
+        EngifyCard(tint: EngifyColors.sky) {
+            HStack(spacing: Spacing.lg) {
+                ProgressView()
+                    .scaleEffect(1.1)
+
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    Text(title)
+                        .font(EngifyTypography.headline)
+                        .foregroundStyle(EngifyColors.textPrimary)
+
+                    Text(message)
+                        .font(EngifyTypography.body)
+                        .foregroundStyle(EngifyColors.textSecondary)
+                }
+
+                Spacer(minLength: 0)
+            }
+        }
+    }
+}
+
+// MARK: - Search / Typography
+
+struct SearchBar: View {
+    @Binding var text: String
+    var placeholder: String = "Search"
+    var isLoading: Bool = false
+    var onSubmit: () -> Void
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        HStack(spacing: Spacing.md) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(EngifyColors.textSecondary)
+                .font(.body.weight(.semibold))
+
+            TextField(placeholder, text: $text)
+                .font(EngifyTypography.body)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .submitLabel(.search)
+                .onSubmit(onSubmit)
+
+            if isLoading {
+                ProgressView()
+                    .scaleEffect(0.9)
+            } else if !text.isEmpty {
+                Button {
+                    text = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(EngifyColors.textSecondary)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, Spacing.lg)
+        .frame(minHeight: Spacing.controlHeight)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(searchFill)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(searchBorder, lineWidth: 1)
+        )
+    }
+
+    private var searchFill: Color {
+        colorScheme == .dark ? EngifyColors.surfaceDark : EngifyColors.canvasRaised
+    }
+
+    private var searchBorder: Color {
+        colorScheme == .dark ? EngifyColors.borderDark : EngifyColors.border.opacity(0.8)
+    }
+}
+
+struct EngifySectionHeader: View {
+    let title: String
+    let subtitle: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            Text(title)
+                .font(EngifyTypography.sectionTitle)
+                .foregroundStyle(EngifyColors.textPrimary)
+
+            Text(subtitle)
+                .font(EngifyTypography.body)
+                .foregroundStyle(EngifyColors.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
+struct EngifyFeatureButton: View {
+    let title: String
+    let subtitle: String
+    let systemImage: String
+    let action: () -> Void
+    @Environment(\.themeAccentColor) private var accentColor
+
+    var body: some View {
+        Button(action: action) {
+            EngifyCard(tint: accentColor) {
+                HStack(alignment: .top, spacing: Spacing.md) {
+                    EngifyIconBadge(systemImage: systemImage, tint: accentColor)
+
+                    VStack(alignment: .leading, spacing: Spacing.xs) {
+                        Text(title)
+                            .font(EngifyTypography.headline)
+                            .foregroundStyle(EngifyColors.textPrimary)
+
+                        Text(subtitle)
+                            .font(EngifyTypography.caption)
+                            .foregroundStyle(EngifyColors.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Spacer(minLength: 0)
+
+                    Image(systemName: "arrow.right")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(accentColor)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+struct VocabularyBadge: View {
+    let text: String
+    var tint: Color?
+    @Environment(\.themeAccentColor) private var accentColor
+
+    var body: some View {
+        let color = tint ?? accentColor
+
+        Text(text)
+            .font(EngifyTypography.caption.weight(.semibold))
+            .foregroundStyle(color)
+            .padding(.horizontal, Spacing.md)
+            .padding(.vertical, Spacing.sm)
+            .background(color.opacity(0.12))
+            .clipShape(Capsule())
+    }
+}
+
+struct ArticlePreviewTag: View {
+    let text: String
+    var tint: Color? = nil
+    @Environment(\.themeAccentColor) private var accentColor
+
+    var body: some View {
+        let color = tint ?? accentColor
+
+        Text(text)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(color)
+            .padding(.horizontal, Spacing.md)
+            .padding(.vertical, Spacing.sm)
+            .background(color.opacity(0.12))
+            .clipShape(Capsule())
+    }
+}
+
+struct EngifyTopMetricsBar: View {
+    @EnvironmentObject private var gamification: GamificationManager
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.md) {
+            ProgressBar()
+            HStack(spacing: Spacing.md) {
+                StreakCounter(streakDays: gamification.progress.streakDays)
+                PointsCounter(count: gamification.progress.lingots)
+                Spacer(minLength: 0)
+            }
+        }
+    }
+}
+
+struct EngifyProfileAvatar: View {
+    let style: EngifyAvatarStyle
+    var size: CGFloat = 42
+
+    private var ringColor: Color {
+        switch style {
+        case .meadow:
+            return EngifyColors.accent
+        case .sky:
+            return EngifyColors.sky
+        case .sunrise:
+            return EngifyColors.warning
+        case .twilight:
+            return Color(red: 0.31, green: 0.48, blue: 0.66)
+        }
+    }
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(ringColor.opacity(0.14))
+
+            if UIImage(named: "ProfileAvatar") != nil {
+                Image("ProfileAvatar")
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                Image(systemName: "person.crop.circle.fill")
+                    .resizable()
+                    .scaledToFit()
+                    .padding(size * 0.14)
+                    .foregroundStyle(ringColor)
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(Circle())
+        .overlay(
+            Circle()
+                .strokeBorder(
+                    LinearGradient(
+                        colors: [Color.white.opacity(0.92), ringColor.opacity(0.75)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: max(1.5, size * 0.05)
+                )
+        )
+        .shadow(color: EngifyColors.primary.opacity(0.16), radius: 8, x: 0, y: 4)
+        .accessibilityHidden(true)
+    }
+}
+
+struct EngifyGlobalTabHeader: View {
+    let title: String
+    let subtitle: String
+    @Binding var showSettings: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.md) {
+            EngifyTopHeaderBar(
+                title: title,
+                subtitle: subtitle,
+                showSettings: $showSettings
+            )
+
+            EngifyTopMetricsBar()
+        }
+        .zIndex(20)
+    }
+}
+
+struct EngifyProfileMenuButton: View {
+    @Binding var showSettings: Bool
+    @EnvironmentObject private var authManager: AuthenticationManager
+    @Environment(\.themeAccentColor) private var accentColor
+    @State private var showProfileSheet = false
+
+    var body: some View {
+        Menu {
+            Button("Profile", systemImage: "person.crop.circle.badge.pencil") {
+                showProfileSheet = true
+            }
+
+            Button("Settings", systemImage: "gearshape.fill") {
+                showSettings = true
+            }
+
+            if authManager.isAuthenticated {
+                Divider()
+
+                Button("Log Out", systemImage: "rectangle.portrait.and.arrow.right", role: .destructive) {
+                    Task { await authManager.signOut() }
+                }
+            }
+        } label: {
+            HStack(spacing: Spacing.sm) {
+                EngifyProfileAvatar(
+                    style: authManager.currentUser?.avatarStyle ?? .meadow,
+                    size: 42
+                )
+
+                Image(systemName: "chevron.down")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(EngifyColors.textSecondary)
+            }
+            .padding(.horizontal, Spacing.sm)
+            .frame(minHeight: 46)
+            .background(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(accentColor.opacity(0.08))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(accentColor.opacity(0.14), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .sheet(isPresented: $showProfileSheet) {
+            EngifyProfileSheet(showSettings: $showSettings)
+                .environmentObject(authManager)
+        }
+    }
+}
+
+struct EngifyTopHeaderBar: View {
+    let title: String
+    let subtitle: String
+    @Binding var showSettings: Bool
+
+    var body: some View {
+        HStack(alignment: .top, spacing: Spacing.md) {
+            EngifyProfileMenuButton(showSettings: $showSettings)
+
+            Spacer(minLength: 0)
+
+            VStack(alignment: .trailing, spacing: Spacing.xxs) {
+                Text(title)
+                    .font(EngifyTypography.headline)
+                    .foregroundStyle(EngifyColors.textPrimary)
+
+                Text(subtitle)
+                    .font(EngifyTypography.caption)
+                    .foregroundStyle(EngifyColors.textSecondary)
+                    .multilineTextAlignment(.trailing)
+            }
+        }
+    }
+}
+
+struct EngifyProfileSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var authManager: AuthenticationManager
+    @EnvironmentObject private var gamification: GamificationManager
+    @Environment(\.themeAccentColor) private var accentColor
+
+    @Binding var showSettings: Bool
+
+    @State private var displayName = ""
+    @State private var selectedAvatarStyle: EngifyAvatarStyle = .meadow
+    @State private var localMessage: String?
+
+    private let columns = [
+        GridItem(.flexible(), spacing: Spacing.sm),
+        GridItem(.flexible(), spacing: Spacing.sm)
+    ]
+
+    var body: some View {
+        NavigationView {
+            ZStack {
+                EngifyAppBackground()
+
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: Spacing.xl) {
+                        summaryCard
+                        metricsCard
+                        profileFormCard
+                        actionsCard
+                    }
+                    .padding(Spacing.screenPadding)
+                    .padding(.bottom, Spacing.xxl)
+                }
+            }
+            .navigationTitle("Profile")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+        .onAppear {
+            syncDraftFromUser()
+            localMessage = authManager.consumeProfileUpdateMessage()
+        }
+        .onChange(of: authManager.currentUser) { _ in
+            syncDraftFromUser()
+        }
+        .onChange(of: authManager.profileUpdateMessage) { message in
+            if let message {
+                localMessage = message
+            }
+        }
+    }
+
+    private var summaryCard: some View {
+        EngifyCard(tint: accentColor) {
+            HStack(alignment: .center, spacing: Spacing.lg) {
+                EngifyProfileAvatar(style: selectedAvatarStyle, size: 64)
+
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    Text(authManager.currentUser?.displayName ?? "Learner")
+                        .font(EngifyTypography.cardTitle)
+                        .foregroundStyle(EngifyColors.textPrimary)
+
+                    Text(authManager.currentUser?.email ?? "No email connected")
+                        .font(EngifyTypography.body)
+                        .foregroundStyle(EngifyColors.textSecondary)
+                        .lineLimit(1)
+
+                    if let localMessage, !localMessage.isEmpty {
+                        Text(localMessage)
+                            .font(EngifyTypography.caption)
+                            .foregroundStyle(accentColor)
+                    }
+                }
+
+                Spacer(minLength: 0)
+            }
+        }
+    }
+
+    private var metricsCard: some View {
+        EngifyCard {
+            VStack(alignment: .leading, spacing: Spacing.lg) {
+                EngifySectionHeader(
+                    title: "Account Metrics",
+                    subtitle: "A quick snapshot of your current learning momentum."
+                )
+
+                HStack(spacing: Spacing.md) {
+                    profileMetric(title: "Level", value: "Lv \(gamification.progress.level)", icon: "flag.fill")
+                    profileMetric(title: "Streak", value: "\(gamification.progress.streakDays) days", icon: "flame.fill")
+                }
+
+                HStack(spacing: Spacing.md) {
+                    profileMetric(title: "Points", value: "\(gamification.progress.lingots)", icon: "star.fill")
+                    profileMetric(title: "XP", value: "\(gamification.progress.xp)", icon: "bolt.fill")
+                }
+            }
+        }
+    }
+
+    private var profileFormCard: some View {
+        EngifyCard {
+            VStack(alignment: .leading, spacing: Spacing.lg) {
+                EngifySectionHeader(
+                    title: "Edit Profile",
+                    subtitle: "Update your display name and choose the avatar style used in the global header."
+                )
+
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    Text("Display Name")
+                        .font(EngifyTypography.caption)
+                        .foregroundStyle(EngifyColors.textSecondary)
+
+                    TextField("Your name", text: $displayName)
+                        .font(EngifyTypography.body)
+                        .textInputAutocapitalization(.words)
+                        .padding(.horizontal, Spacing.lg)
+                        .frame(minHeight: Spacing.controlHeight)
+                        .background(
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .fill(EngifyColors.canvasRaised)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .stroke(EngifyColors.border.opacity(0.8), lineWidth: 1)
+                        )
+                }
+
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    Text("Profile Image Style")
+                        .font(EngifyTypography.caption)
+                        .foregroundStyle(EngifyColors.textSecondary)
+
+                    LazyVGrid(columns: columns, spacing: Spacing.sm) {
+                        ForEach(EngifyAvatarStyle.allCases) { style in
+                            profileAvatarOption(style)
+                        }
+                    }
+                }
+
+                if let errorMessage = authManager.errorMessage, !errorMessage.isEmpty {
+                    Text(errorMessage)
+                        .font(EngifyTypography.caption)
+                        .foregroundStyle(EngifyColors.coral)
+                }
+
+                PrimaryButton(
+                    title: authManager.isLoading ? "Saving..." : "Save Profile",
+                    systemImage: "checkmark.circle.fill",
+                    action: saveProfile,
+                    isDisabled: authManager.isLoading
+                )
+            }
+        }
+    }
+
+    private var actionsCard: some View {
+        EngifyCard {
+            VStack(alignment: .leading, spacing: Spacing.md) {
+                EngifySectionHeader(
+                    title: "Account Actions",
+                    subtitle: "Access settings or safely sign out from the same place across every tab."
+                )
+
+                SecondaryButton(
+                    title: "Open Settings",
+                    systemImage: "gearshape.fill",
+                    action: {
+                        dismiss()
+                        showSettings = true
+                    }
+                )
+
+                SecondaryButton(
+                    title: authManager.isLoading ? "Signing Out..." : "Log Out",
+                    systemImage: "rectangle.portrait.and.arrow.right",
+                    action: {
+                        Task {
+                            await authManager.signOut()
+                            dismiss()
+                        }
+                    },
+                    isDisabled: authManager.isLoading
+                )
+            }
+        }
+    }
+
+    private func profileMetric(title: String, value: String, icon: String) -> some View {
+        EngifyCard(tint: accentColor, padding: Spacing.lg) {
+            HStack(spacing: Spacing.md) {
+                EngifyIconBadge(systemImage: icon, tint: accentColor, size: 42)
+
+                VStack(alignment: .leading, spacing: Spacing.xxs) {
+                    Text(title)
+                        .font(EngifyTypography.caption)
+                        .foregroundStyle(EngifyColors.textSecondary)
+
+                    Text(value)
+                        .font(EngifyTypography.bodyStrong)
+                        .foregroundStyle(EngifyColors.textPrimary)
+                }
+
+                Spacer(minLength: 0)
+            }
+        }
+    }
+
+    private func profileAvatarOption(_ style: EngifyAvatarStyle) -> some View {
+        Button {
+            selectedAvatarStyle = style
+        } label: {
+            HStack(spacing: Spacing.md) {
+                EngifyProfileAvatar(style: style, size: 48)
+
+                Text(style.rawValue.capitalized)
+                    .font(EngifyTypography.bodyStrong)
+                    .foregroundStyle(EngifyColors.textPrimary)
+
+                Spacer(minLength: 0)
+
+                Image(systemName: selectedAvatarStyle == style ? "checkmark.circle.fill" : "circle")
+                    .font(.headline)
+                    .foregroundStyle(selectedAvatarStyle == style ? accentColor : EngifyColors.textSecondary.opacity(0.45))
+            }
+            .padding(.horizontal, Spacing.md)
+            .padding(.vertical, Spacing.md)
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(selectedAvatarStyle == style ? accentColor.opacity(0.12) : EngifyColors.surface)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(selectedAvatarStyle == style ? accentColor.opacity(0.30) : EngifyColors.border.opacity(0.75), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func saveProfile() {
+        Task {
+            let wasSaved = await authManager.updateProfile(
+                displayName: displayName,
+                avatarStyle: selectedAvatarStyle
+            )
+
+            if wasSaved {
+                localMessage = authManager.consumeProfileUpdateMessage()
+            }
+        }
+    }
+
+    private func syncDraftFromUser() {
+        displayName = authManager.currentUser?.displayName ?? ""
+        selectedAvatarStyle = authManager.currentUser?.avatarStyle ?? .meadow
+    }
+}
+
+private struct EngifySettingsSheetModifier: ViewModifier {
+    @Binding var isPresented: Bool
+    @EnvironmentObject private var theme: ThemeManager
+    @EnvironmentObject private var learningSettings: LearningSettingsManager
+
+    func body(content: Content) -> some View {
+        content.sheet(isPresented: $isPresented) {
+            SettingsView()
+                .environmentObject(theme)
+                .environmentObject(learningSettings)
+        }
+    }
+}
+
+extension View {
+    func engifySettingsSheet(isPresented: Binding<Bool>) -> some View {
+        modifier(EngifySettingsSheetModifier(isPresented: isPresented))
+    }
+}
+
+// MARK: - Settings Components
+
+struct EngifySettingsSection<Content: View>: View {
+    let title: String
+    let subtitle: String
+    let content: Content
+
+    init(title: String, subtitle: String, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.subtitle = subtitle
+        self.content = content()
+    }
+
+    var body: some View {
+        EngifyCard {
+            VStack(alignment: .leading, spacing: Spacing.lg) {
+                EngifySectionHeader(title: title, subtitle: subtitle)
+                content
+            }
+        }
+    }
+}
+
+struct EngifySettingToggleRow: View {
+    let title: String
+    let subtitle: String
+    @Binding var isOn: Bool
+    @Environment(\.themeAccentColor) private var accentColor
+
+    var body: some View {
+        Toggle(isOn: $isOn) {
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                Text(title)
+                    .font(EngifyTypography.bodyStrong)
+                    .foregroundStyle(EngifyColors.textPrimary)
+
+                Text(subtitle)
+                    .font(EngifyTypography.caption)
+                    .foregroundStyle(EngifyColors.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .tint(accentColor)
+    }
+}
+
+struct EngifySettingSliderRow: View {
+    let title: String
+    let subtitle: String
+    let value: Binding<Double>
+    let range: ClosedRange<Double>
+    let step: Double
+    let valueLabel: (Double) -> String
+    @Environment(\.themeAccentColor) private var accentColor
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            HStack(alignment: .top, spacing: Spacing.md) {
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    Text(title)
+                        .font(EngifyTypography.bodyStrong)
+                        .foregroundStyle(EngifyColors.textPrimary)
+
+                    Text(subtitle)
+                        .font(EngifyTypography.caption)
+                        .foregroundStyle(EngifyColors.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 0)
+
+                Text(valueLabel(value.wrappedValue))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(accentColor)
+                    .padding(.horizontal, Spacing.md)
+                    .padding(.vertical, Spacing.sm)
+                    .background(accentColor.opacity(0.12))
+                    .clipShape(Capsule())
+            }
+
+            Slider(value: value, in: range, step: step)
+                .tint(accentColor)
+        }
+    }
+}
+
+struct EngifySettingOptionChip: View {
+    let title: String
+    let isSelected: Bool
+    let action: () -> Void
+    @Environment(\.themeAccentColor) private var accentColor
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(isSelected ? EngifyColors.textInverse : EngifyColors.textPrimary)
+                .padding(.horizontal, Spacing.md)
+                .padding(.vertical, Spacing.md)
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .background(backgroundFill)
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var backgroundFill: some ShapeStyle {
+        if isSelected {
+            return AnyShapeStyle(
+                LinearGradient(
+                    colors: [accentColor, accentColor.opacity(0.82)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+        }
+
+        return AnyShapeStyle(EngifyColors.surfaceMuted)
+    }
+}
+
+// MARK: - Quiz Components
+
+struct MultipleChoiceQuestionCard: View {
+    let question: Question
+    let selectedAnswer: Int?
+    let revealAnswer: Bool
+    let onSelect: (Int) -> Void
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        EngifyCard {
+            VStack(alignment: .leading, spacing: Spacing.md) {
+                Text(question.prompt)
+                    .font(EngifyTypography.headline)
+                    .foregroundStyle(EngifyColors.textPrimary)
+
+                ForEach(question.options.indices, id: \.self) { index in
+                    let isSelected = selectedAnswer == index
+                    let isCorrect = question.answerIndex == index
+
+                    Button {
+                        onSelect(index)
+                    } label: {
+                        HStack(spacing: Spacing.md) {
+                            Text(question.options[index])
+                                .font(EngifyTypography.body)
+                                .foregroundStyle(EngifyColors.textPrimary)
+
+                            Spacer(minLength: 0)
+
+                            if revealAnswer {
+                                if isCorrect {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundStyle(EngifyColors.sage)
+                                } else if isSelected {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .foregroundStyle(EngifyColors.coral)
+                                }
+                            }
+                        }
+                        .padding(.vertical, Spacing.md)
+                        .padding(.horizontal, Spacing.lg)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(optionBackground(isCorrect: isCorrect, isSelected: isSelected))
+                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                if revealAnswer, let selectedAnswer {
+                    VStack(alignment: .leading, spacing: Spacing.xs) {
+                        Text(selectedAnswer == question.answerIndex ? "Correct" : "Incorrect")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(selectedAnswer == question.answerIndex ? EngifyColors.sage : EngifyColors.coral)
+
+                        Text(question.explanation)
+                            .font(.footnote)
+                            .foregroundStyle(EngifyColors.textSecondary)
+                    }
+                }
+            }
+        }
+    }
+
+    private func optionBackground(isCorrect: Bool, isSelected: Bool) -> Color {
+        if revealAnswer {
+            if isCorrect {
+                return EngifyColors.sage.opacity(0.14)
+            } else if isSelected {
+                return EngifyColors.coral.opacity(0.12)
+            }
+        } else if isSelected {
+            return EngifyColors.accent.opacity(0.08)
+        }
+
+        return colorScheme == .dark ? EngifyColors.surfaceDark : EngifyColors.surfaceMuted
+    }
+}
+
+// MARK: - Helpers
+
+func highlightedArticleText(_ text: String, difficultWords: [String]) -> AttributedString {
+    var attributedText = AttributedString(text)
+
+    for word in difficultWords {
+        if let range = attributedText.range(of: word) {
+            attributedText[range].foregroundColor = EngifyColors.accent
+            attributedText[range].font = .headline
+        }
+    }
+
+    return attributedText
+}

@@ -1,0 +1,27 @@
+.DS_Store
+.deriveddata/
+DerivedData/
+*.xcuserstate
+*.xcuserdata/
+xcuserdata/
+build/
+*.xcresult
+
+# Xcode / Swift Package
+Package.resolved
+SourcePackages/
+
+# Local secrets and machine-specific config
+Engify/Engify/Support/SupabaseEnvironment.local.xcconfig
+*.local.xcconfig
+*.secret
+*.env
+.env
+.env.*
+
+# Logs and generated reports
+build.log
+build_*.log
+build_*.txt
+*.log
+*.tmp
