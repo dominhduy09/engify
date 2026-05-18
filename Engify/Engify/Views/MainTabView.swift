@@ -37,10 +37,9 @@ struct FloatingTabBar: View {
     ]
 
     var body: some View {
-        HStack(spacing: Spacing.xs) {
-            ForEach(Self.tabs, id: \.0) { tab, icon, title in
-                tabButton(tab: tab, icon: icon, title: title)
-            }
+        ViewThatFits(in: .horizontal) {
+            compactRow
+            scrollingRow
         }
         .frame(maxWidth: .infinity)
         .padding(.horizontal, Spacing.sm)
@@ -54,6 +53,26 @@ struct FloatingTabBar: View {
                 .stroke(colorScheme == .dark ? EngifyColors.borderDark : EngifyColors.border, lineWidth: 1)
         )
         .shadow(color: .black.opacity(colorScheme == .dark ? 0.26 : 0.10), radius: 18, x: 0, y: 10)
+    }
+
+    private var compactRow: some View {
+        HStack(spacing: Spacing.xs) {
+            ForEach(Self.tabs, id: \.0) { tab, icon, title in
+                tabButton(tab: tab, icon: icon, title: title)
+            }
+        }
+    }
+
+    private var scrollingRow: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: Spacing.xs) {
+                ForEach(Self.tabs, id: \.0) { tab, icon, title in
+                    tabButton(tab: tab, icon: icon, title: title)
+                }
+            }
+            .padding(.horizontal, 1)
+        }
+        .scrollClipDisabled()
     }
 
     private func tabButton(tab: EngifyTab, icon: String, title: String) -> some View {
@@ -93,7 +112,13 @@ struct TabBarButton: View {
             .frame(maxWidth: .infinity)
             .frame(minHeight: 52)
             .padding(.horizontal, Spacing.sm)
-            .background(isSelected ? AnyShapeStyle(EngifyColors.accentGradient) : AnyShapeStyle(Color.clear))
+            .background(
+                Group {
+                    if isSelected {
+                        EngifyColors.accentGradient
+                    }
+                }
+            }
             .clipShape(Capsule())
             .scaleEffect(isPressed ? 0.98 : 1)
         }

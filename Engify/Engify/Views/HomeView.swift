@@ -26,6 +26,7 @@ struct HomeView: View {
             newsAndReadingSection
             practiceSection
             recommendedSection
+            recentActivitySection
         }
         .engifySettingsSheet(isPresented: $showSettingsSheet)
         .overlay {
@@ -111,6 +112,58 @@ struct HomeView: View {
                 systemImage: "book.fill"
             ) {
                 selectedTab = .vocabulary
+            }
+        }
+    }
+
+    private var recentActivitySection: some View {
+        VStack(alignment: .leading, spacing: Spacing.md) {
+            EngifySectionHeader(
+                title: "Recent Activity",
+                subtitle: "A quick look at the habits you’ve built."
+            )
+
+            VStack(spacing: Spacing.md) {
+                activityRow(
+                    icon: "book.fill",
+                    iconColor: EngifyColors.sage,
+                    title: "Reviewed Essential Verbs",
+                    subtitle: "2 days ago"
+                )
+
+                activityRow(
+                    icon: "newspaper.fill",
+                    iconColor: EngifyColors.sky,
+                    title: "Read Climate News",
+                    subtitle: "4 days ago"
+                )
+
+                activityRow(
+                    icon: "pencil.circle.fill",
+                    iconColor: theme.accentColor,
+                    title: "Practiced Grammar Quiz",
+                    subtitle: "1 week ago"
+                )
+            }
+        }
+    }
+
+    private func activityRow(icon: String, iconColor: Color, title: String, subtitle: String) -> some View {
+        EngifyCard(tint: iconColor) {
+            HStack(spacing: Spacing.md) {
+                EngifyIconBadge(systemImage: icon, tint: iconColor, size: 44)
+
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    Text(title)
+                        .font(EngifyTypography.bodyStrong)
+                        .foregroundStyle(EngifyColors.textPrimary)
+
+                    Text(subtitle)
+                        .font(EngifyTypography.caption)
+                        .foregroundStyle(EngifyColors.textSecondary)
+                }
+
+                Spacer(minLength: 0)
             }
         }
     }

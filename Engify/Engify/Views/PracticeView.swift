@@ -9,17 +9,17 @@ struct PracticeView: View {
     @EnvironmentObject private var theme: ThemeManager
     @EnvironmentObject private var gamification: GamificationManager
     @State private var showBadge = false
-    @State private var showSettingsSheet = false
+    @State private var isHeaderExpanded = false
 
     var body: some View {
         EngifyScreenScroll {
-            globalHeader
+            EngifyTopMetricsBar()
+            headerSection
             speakingSection
             grammarSection
             quizSection
         }
         .tabTransition()
-        .engifySettingsSheet(isPresented: $showSettingsSheet)
         .overlay {
             if showBadge {
                 LessonCompleteOverlay()
@@ -40,12 +40,35 @@ struct PracticeView: View {
         }
     }
 
-    private var globalHeader: some View {
-        EngifyGlobalTabHeader(
-            title: "Practice",
-            subtitle: "Quizzes, speaking, and drills",
-            showSettings: $showSettingsSheet
-        )
+    private var headerSection: some View {
+        let config = TabHeaderConfig.practice
+        return EngifyCollapsibleCard(
+            title: config.title,
+            subtitle: config.subtitle,
+            systemImage: config.icon,
+            tint: config.primaryColor,
+            isExpanded: $isHeaderExpanded
+        ) {
+            HStack(spacing: Spacing.sm) {
+                VocabularyBadge(text: "Speaking", tint: config.primaryColor)
+                VocabularyBadge(text: "Grammar + Quiz", tint: config.secondaryColor)
+                Spacer(minLength: 0)
+            }
+        } detail: {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                Text("Keep the lesson tools closer to the top with a compact header that still expands for extra context.")
+                    .font(EngifyTypography.body)
+                    .foregroundStyle(EngifyColors.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                LinearGradient(
+                    colors: [config.primaryColor.opacity(0.28), config.secondaryColor.opacity(0.08)],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+                .frame(height: 1)
+            }
+        }
     }
 
     private var speakingSection: some View {
