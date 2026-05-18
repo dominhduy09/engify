@@ -553,22 +553,65 @@ struct EngifyProfileAvatar: View {
         }
     }
 
+    private var secondaryColor: Color {
+        switch style {
+        case .meadow:
+            return Color(red: 0.63, green: 0.84, blue: 0.45)
+        case .sky:
+            return Color(red: 0.47, green: 0.78, blue: 0.98)
+        case .sunrise:
+            return Color(red: 0.99, green: 0.73, blue: 0.33)
+        case .twilight:
+            return Color(red: 0.45, green: 0.58, blue: 0.86)
+        }
+    }
+
+    private var accentSymbol: String {
+        switch style {
+        case .meadow:
+            return "leaf.fill"
+        case .sky:
+            return "cloud.fill"
+        case .sunrise:
+            return "sun.max.fill"
+        case .twilight:
+            return "moon.stars.fill"
+        }
+    }
+
     var body: some View {
         ZStack {
             Circle()
-                .fill(ringColor.opacity(0.14))
+                .fill(
+                    LinearGradient(
+                        colors: [ringColor.opacity(0.92), secondaryColor.opacity(0.86)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
 
-            if UIImage(named: "ProfileAvatar") != nil {
-                Image("ProfileAvatar")
-                    .resizable()
-                    .scaledToFill()
-            } else {
-                Image(systemName: "person.crop.circle.fill")
-                    .resizable()
-                    .scaledToFit()
-                    .padding(size * 0.14)
-                    .foregroundStyle(ringColor)
+            Circle()
+                .fill(.white.opacity(0.16))
+                .padding(size * 0.08)
+
+            Image(systemName: "person.fill")
+                .resizable()
+                .scaledToFit()
+                .padding(size * 0.24)
+                .foregroundStyle(.white.opacity(0.96))
+
+            VStack {
+                Spacer()
+                HStack {
+                    Spacer()
+                    Image(systemName: accentSymbol)
+                        .font(.system(size: size * 0.20, weight: .bold))
+                        .foregroundStyle(ringColor)
+                        .padding(size * 0.10)
+                        .background(.white, in: Circle())
+                }
             }
+            .padding(size * 0.06)
         }
         .frame(width: size, height: size)
         .clipShape(Circle())
@@ -615,34 +658,40 @@ struct EngifyProfileMenuButton: View {
 
     var body: some View {
         Menu {
-            Button("Profile", systemImage: "person.crop.circle.badge.pencil") {
+            Button {
                 showProfileSheet = true
+            } label: {
+                Label("My Profile", systemImage: "person.crop.circle")
             }
 
-            Button("Settings", systemImage: "gearshape.fill") {
+            Button {
                 showSettings = true
+            } label: {
+                Label("Settings", systemImage: "gearshape.fill")
             }
 
             if authManager.isAuthenticated {
                 Divider()
 
-                Button("Log Out", systemImage: "rectangle.portrait.and.arrow.right", role: .destructive) {
+                Button(role: .destructive) {
                     Task { await authManager.signOut() }
+                } label: {
+                    Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
                 }
             }
         } label: {
-            HStack(spacing: Spacing.sm) {
+            HStack(spacing: Spacing.xs) {
                 EngifyProfileAvatar(
                     style: authManager.currentUser?.avatarStyle ?? .meadow,
-                    size: 42
+                    size: 30
                 )
 
                 Image(systemName: "chevron.down")
-                    .font(.caption.weight(.semibold))
+                    .font(.caption2.weight(.bold))
                     .foregroundStyle(EngifyColors.textSecondary)
             }
-            .padding(.horizontal, Spacing.sm)
-            .frame(minHeight: 46)
+            .padding(.horizontal, Spacing.md)
+            .frame(minWidth: 52, minHeight: 46)
             .background(
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
                     .fill(accentColor.opacity(0.08))
@@ -653,6 +702,7 @@ struct EngifyProfileMenuButton: View {
             )
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("Profile options")
         .sheet(isPresented: $showProfileSheet) {
             EngifyProfileSheet(showSettings: $showSettings)
                 .environmentObject(authManager)
@@ -720,13 +770,6 @@ struct EngifyProfileSheet: View {
             }
             .navigationTitle("Profile")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") {
-                        dismiss()
-                    }
-                }
-            }
         }
         .onAppear {
             syncDraftFromUser()
@@ -855,7 +898,7 @@ struct EngifyProfileSheet: View {
                 )
 
                 SecondaryButton(
-                    title: "Open Settings",
+                    title: "Settings",
                     systemImage: "gearshape.fill",
                     action: {
                         dismiss()
@@ -864,7 +907,7 @@ struct EngifyProfileSheet: View {
                 )
 
                 SecondaryButton(
-                    title: authManager.isLoading ? "Signing Out..." : "Log Out",
+                    title: authManager.isLoading ? "Signing Out..." : "Sign Out",
                     systemImage: "rectangle.portrait.and.arrow.right",
                     action: {
                         Task {

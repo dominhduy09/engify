@@ -37,10 +37,7 @@ struct FloatingTabBar: View {
     ]
 
     var body: some View {
-        ViewThatFits(in: .horizontal) {
-            compactRow
-            scrollingRow
-        }
+        compactRow
         .frame(maxWidth: .infinity)
         .padding(.horizontal, Spacing.sm)
         .padding(.vertical, Spacing.sm)
@@ -61,18 +58,6 @@ struct FloatingTabBar: View {
                 tabButton(tab: tab, icon: icon, title: title)
             }
         }
-    }
-
-    private var scrollingRow: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: Spacing.xs) {
-                ForEach(Self.tabs, id: \.0) { tab, icon, title in
-                    tabButton(tab: tab, icon: icon, title: title)
-                }
-            }
-            .padding(.horizontal, 1)
-        }
-        .scrollClipDisabled()
     }
 
     private func tabButton(tab: EngifyTab, icon: String, title: String) -> some View {
@@ -118,7 +103,7 @@ struct TabBarButton: View {
                         EngifyColors.accentGradient
                     }
                 }
-            }
+            )
             .clipShape(Capsule())
             .scaleEffect(isPressed ? 0.98 : 1)
         }
