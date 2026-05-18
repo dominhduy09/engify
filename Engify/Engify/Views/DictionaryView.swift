@@ -8,13 +8,11 @@ struct DictionaryView: View {
     @EnvironmentObject private var learningSettings: LearningSettingsManager
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var audioPlayer: AVPlayer?
-    @State private var isHeaderExpanded = false
     @State private var showSettingsSheet = false
 
     var body: some View {
         EngifyScreenScroll {
-            topHeaderBar
-            headerSection
+            globalHeader
             searchSection
 
             if viewModel.isLoading {
@@ -48,45 +46,13 @@ struct DictionaryView: View {
         .engifySettingsSheet(isPresented: $showSettingsSheet)
     }
 
-    private var topHeaderBar: some View {
-        EngifyTopHeaderBar(
-            title: "Dictionary",
+    private var globalHeader: some View {
+        EngifyGlobalTabHeader(
+            title: "Lookup",
             subtitle: "Search first, read faster",
             showSettings: $showSettingsSheet
         )
     }
-
-    private var headerSection: some View {
-        let config = TabHeaderConfig.dictionary
-        return EngifyCollapsibleCard(
-            title: config.title,
-            subtitle: config.subtitle,
-            systemImage: config.icon,
-            tint: config.primaryColor,
-            isExpanded: $isHeaderExpanded
-        ) {
-            HStack(spacing: Spacing.sm) {
-                VocabularyBadge(text: "Search first", tint: config.primaryColor)
-                VocabularyBadge(text: "Recent words below", tint: config.secondaryColor)
-                Spacer(minLength: 0)
-            }
-        } detail: {
-            VStack(alignment: .leading, spacing: Spacing.sm) {
-                Text("Look up definitions, pronunciation, and examples without wasting space above the search bar.")
-                    .font(EngifyTypography.body)
-                    .foregroundStyle(EngifyColors.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                LinearGradient(
-                    colors: [config.primaryColor.opacity(0.28), config.secondaryColor.opacity(0.08)],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-                .frame(height: 1)
-            }
-        }
-    }
-
     private var searchSection: some View {
         CardView {
             VStack(alignment: .leading, spacing: Spacing.lg) {
@@ -363,16 +329,82 @@ private struct WrapChipsView<Item: Hashable, Chip: View>: View {
 private struct FlexibleChipsLayout<Item: Hashable, Chip: View>: View {
     let items: [Item]
     let chip: (Item) -> Chip
+    @State private var itemSizes: [Int: CGSize] = [:]
+    @State private var availableWidth: CGFloat = 0
+
+    private let horizontalSpacing = Spacing.xs
+    private let verticalSpacing = Spacing.xs
 
     var body: some View {
-        LazyVGrid(
-            columns: [GridItem(.adaptive(minimum: 132), spacing: Spacing.sm)],
-            alignment: .leading,
-            spacing: Spacing.sm
-        ) {
-            ForEach(items, id: \.self) { item in
-                chip(item)
+        GeometryReader { proxy in
+            let layout = layout(for: proxy.size.width)
+
+            ZStack(alignment: .topLeading) {
+                ForEach(Array(items.enumerated()), id: \.offset) { index, item in
+                    chip(item)
+                        .fixedSize()
+                        .background(sizeReader(for: index))
+                        .offset(
+                            x: layout.positions[index]?.x ?? 0,
+                            y: layout.positions[index]?.y ?? 0
+                        )
+                }
+            }
+            .frame(width: proxy.size.width, height: max(layout.height, 1), alignment: .topLeading)
+            .onAppear {
+                availableWidth = proxy.size.width
+            }
+            .onChange(of: proxy.size.width) { newWidth in
+                availableWidth = newWidth
             }
         }
+        .frame(height: max(layout(for: availableWidth).height, 1))
+        .onPreferenceChange(FlexibleChipSizePreferenceKey.self) { itemSizes = $0 }
+    }
+
+    private func layout(for availableWidth: CGFloat) -> (positions: [Int: CGPoint], height: CGFloat) {
+        guard availableWidth > 0, !items.isEmpty else {
+            return ([:], 0)
+        }
+
+        var positions: [Int: CGPoint] = [:]
+        var currentX: CGFloat = 0
+        var currentY: CGFloat = 0
+        var rowHeight: CGFloat = 0
+
+        for index in items.indices {
+            let size = itemSizes[index] ?? .zero
+            let chipWidth = size.width
+            let chipHeight = size.height
+
+            if currentX > 0, currentX + chipWidth > availableWidth {
+                currentX = 0
+                currentY += rowHeight + verticalSpacing
+                rowHeight = 0
+            }
+
+            positions[index] = CGPoint(x: currentX, y: currentY)
+            currentX += chipWidth + horizontalSpacing
+            rowHeight = max(rowHeight, chipHeight)
+        }
+
+        return (positions, currentY + rowHeight)
+    }
+
+    private func sizeReader(for index: Int) -> some View {
+        GeometryReader { proxy in
+            Color.clear.preference(
+                key: FlexibleChipSizePreferenceKey.self,
+                value: [index: proxy.size]
+            )
+        }
+    }
+}
+
+private struct FlexibleChipSizePreferenceKey: PreferenceKey {
+    static var defaultValue: [Int: CGSize] = [:]
+
+    static func reduce(value: inout [Int: CGSize], nextValue: () -> [Int: CGSize]) {
+        value.merge(nextValue(), uniquingKeysWith: { $1 })
     }
 }

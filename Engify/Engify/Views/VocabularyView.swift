@@ -11,7 +11,6 @@ struct VocabularyView: View {
     @EnvironmentObject private var gamification: GamificationManager
     @EnvironmentObject private var learningSettings: LearningSettingsManager
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    @State private var isHeaderExpanded = false
     @State private var showSettingsSheet = false
 
     init() {
@@ -29,9 +28,7 @@ struct VocabularyView: View {
 
     var body: some View {
         EngifyScreenScroll {
-            topHeaderBar
-            EngifyTopMetricsBar()
-            headerSection
+            globalHeader
             wordCard
             actionButtons
         }
@@ -56,59 +53,20 @@ struct VocabularyView: View {
         .engifySettingsSheet(isPresented: $showSettingsSheet)
     }
 
-    private var topHeaderBar: some View {
-        EngifyTopHeaderBar(
-            title: "Vocabulary",
+    private var globalHeader: some View {
+        EngifyGlobalTabHeader(
+            title: "Vocab",
             subtitle: "New words, tighter focus",
             showSettings: $showSettingsSheet
         )
     }
-
-    private var headerSection: some View {
-        let config = TabHeaderConfig.vocabulary
-        return EngifyCollapsibleCard(
-            title: config.title,
-            subtitle: config.subtitle,
-            systemImage: config.icon,
-            tint: config.primaryColor,
-            isExpanded: $isHeaderExpanded
-        ) {
-            HStack(spacing: Spacing.sm) {
-                VocabularyBadge(text: "Session \(wordsReviewedThisSession + 1)", tint: config.primaryColor)
-                VocabularyBadge(text: "Tap to review", tint: config.secondaryColor)
-                Spacer(minLength: 0)
-            }
-        } detail: {
-            VStack(alignment: .leading, spacing: Spacing.sm) {
-                Text("Build your vocabulary one word at a time with quick meanings, examples, and save actions that stay easy to scan.")
-                    .font(EngifyTypography.body)
-                    .foregroundStyle(EngifyColors.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                LinearGradient(
-                    colors: [config.primaryColor.opacity(0.28), config.secondaryColor.opacity(0.08)],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-                .frame(height: 1)
-            }
-        }
-    }
-
     private var wordCard: some View {
         EngifyCard(tint: theme.accentColor) {
             VStack(alignment: .leading, spacing: Spacing.cardGap) {
-                if horizontalSizeClass == .compact {
-                    VStack(alignment: .leading, spacing: Spacing.md) {
-                        cardMeta
-                        saveButton
-                    }
-                } else {
-                    HStack(alignment: .top, spacing: Spacing.md) {
-                        cardMeta
-                        Spacer(minLength: 0)
-                        saveButton
-                    }
+                HStack(alignment: .center, spacing: Spacing.sm) {
+                    cardMeta
+                    saveButton
+                    Spacer(minLength: 0)
                 }
 
                 VStack(alignment: .leading, spacing: Spacing.sm) {
@@ -135,7 +93,6 @@ struct VocabularyView: View {
         HStack(spacing: Spacing.sm) {
             VocabularyBadge(text: "Word #\(wordsReviewedThisSession + 1)")
             VocabularyBadge(text: currentWord.partOfSpeech.capitalized, tint: theme.accentColor)
-            Spacer(minLength: 0)
         }
     }
 

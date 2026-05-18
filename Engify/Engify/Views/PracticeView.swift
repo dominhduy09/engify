@@ -9,12 +9,11 @@ struct PracticeView: View {
     @EnvironmentObject private var theme: ThemeManager
     @EnvironmentObject private var gamification: GamificationManager
     @State private var showBadge = false
-    @State private var isHeaderExpanded = false
+    @State private var showSettingsSheet = false
 
     var body: some View {
         EngifyScreenScroll {
-            EngifyTopMetricsBar()
-            headerSection
+            globalHeader
             speakingSection
             grammarSection
             quizSection
@@ -33,6 +32,7 @@ struct PracticeView: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
+        .engifySettingsSheet(isPresented: $showSettingsSheet)
         .onAppear {
             if currentQuizQuestions.isEmpty {
                 refreshQuiz()
@@ -40,37 +40,13 @@ struct PracticeView: View {
         }
     }
 
-    private var headerSection: some View {
-        let config = TabHeaderConfig.practice
-        return EngifyCollapsibleCard(
-            title: config.title,
-            subtitle: config.subtitle,
-            systemImage: config.icon,
-            tint: config.primaryColor,
-            isExpanded: $isHeaderExpanded
-        ) {
-            HStack(spacing: Spacing.sm) {
-                VocabularyBadge(text: "Speaking", tint: config.primaryColor)
-                VocabularyBadge(text: "Grammar + Quiz", tint: config.secondaryColor)
-                Spacer(minLength: 0)
-            }
-        } detail: {
-            VStack(alignment: .leading, spacing: Spacing.sm) {
-                Text("Keep the lesson tools closer to the top with a compact header that still expands for extra context.")
-                    .font(EngifyTypography.body)
-                    .foregroundStyle(EngifyColors.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                LinearGradient(
-                    colors: [config.primaryColor.opacity(0.28), config.secondaryColor.opacity(0.08)],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-                .frame(height: 1)
-            }
-        }
+    private var globalHeader: some View {
+        EngifyGlobalTabHeader(
+            title: "Practice",
+            subtitle: "Speaking, grammar, and quiz reps",
+            showSettings: $showSettingsSheet
+        )
     }
-
     private var speakingSection: some View {
         EngifyCard(tint: theme.accentColor) {
             VStack(alignment: .leading, spacing: Spacing.cardGap) {
@@ -82,8 +58,9 @@ struct PracticeView: View {
                 }
 
                 Text(EngifySampleData.speakingSentence)
-                    .font(EngifyTypography.cardTitle)
+                    .font(.system(size: 22, weight: .medium, design: .rounded))
                     .foregroundStyle(EngifyColors.textPrimary)
+                    .lineSpacing(4)
                     .fixedSize(horizontal: false, vertical: true)
 
                 SecondaryButton(
@@ -122,31 +99,50 @@ struct PracticeView: View {
                         .foregroundStyle(EngifyColors.textPrimary)
                 }
 
-                Picker("Grammar topic", selection: $selectedGrammarTopic) {
-                    ForEach(EngifySampleData.grammarTopics.indices, id: \.self) { index in
-                        Text(EngifySampleData.grammarTopics[index].title).tag(index)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: Spacing.sm) {
+                        ForEach(EngifySampleData.grammarTopics.indices, id: \.self) { index in
+                            Button {
+                                withAnimation(.easeInOut(duration: 0.18)) {
+                                    selectedGrammarTopic = index
+                                }
+                            } label: {
+                                Text(EngifySampleData.grammarTopics[index].title)
+                                    .font(EngifyTypography.caption.weight(.semibold))
+                                    .lineLimit(1)
+                                    .fixedSize(horizontal: true, vertical: false)
+                                    .foregroundStyle(selectedGrammarTopic == index ? EngifyColors.textInverse : theme.accentColor)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                    .background(selectedGrammarTopic == index ? theme.accentColor : theme.accentColor.opacity(0.10))
+                                    .clipShape(Capsule())
+                            }
+                            .buttonStyle(.plain)
+                        }
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .pickerStyle(.segmented)
 
-                Text(topic.title)
-                    .font(EngifyTypography.cardTitle)
-                    .foregroundStyle(EngifyColors.textPrimary)
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    Text(topic.title)
+                        .font(EngifyTypography.cardTitle)
+                        .foregroundStyle(EngifyColors.textPrimary)
 
-                Text(topic.explanation)
-                    .font(EngifyTypography.body)
-                    .foregroundStyle(EngifyColors.textSecondary)
+                    Text(topic.explanation)
+                        .font(EngifyTypography.body)
+                        .foregroundStyle(EngifyColors.textSecondary)
 
-                VStack(alignment: .leading, spacing: Spacing.md) {
-                    ForEach(topic.examples, id: \.self) { example in
-                        HStack(alignment: .top, spacing: Spacing.md) {
-                            Image(systemName: "checkmark.seal.fill")
-                                .foregroundStyle(theme.accentColor)
+                    VStack(alignment: .leading, spacing: Spacing.md) {
+                        ForEach(topic.examples, id: \.self) { example in
+                            HStack(alignment: .top, spacing: Spacing.md) {
+                                Image(systemName: "checkmark.seal.fill")
+                                    .foregroundStyle(theme.accentColor)
 
-                            Text(example)
-                                .font(EngifyTypography.body)
-                                .foregroundStyle(EngifyColors.textPrimary)
-                                .fixedSize(horizontal: false, vertical: true)
+                                Text(example)
+                                    .font(EngifyTypography.body)
+                                    .foregroundStyle(EngifyColors.textPrimary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
                         }
                     }
                 }

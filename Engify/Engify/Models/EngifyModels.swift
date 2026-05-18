@@ -15,6 +15,8 @@ enum EngifyTab: Hashable {
     case home
     case vocabulary
     case dictionary
+    case news
+    case practice
 }
 
 enum EngifyAvatarStyle: String, Codable, CaseIterable, Hashable, Identifiable {

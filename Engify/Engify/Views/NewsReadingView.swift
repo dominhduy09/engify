@@ -2,12 +2,11 @@ import SwiftUI
 
 struct NewsReadingView: View {
     @StateObject private var viewModel = NewsViewModel()
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    @State private var isHeaderExpanded = false
+    @State private var showSettingsSheet = false
 
     var body: some View {
         EngifyScreenScroll {
-            headerSection
+            globalHeader
 
             if viewModel.isLoading {
                 EngifyLoadingCard(
@@ -36,6 +35,7 @@ struct NewsReadingView: View {
             }
         }
         .tabTransition()
+        .engifySettingsSheet(isPresented: $showSettingsSheet)
         .task {
             if viewModel.articles.isEmpty {
                 await viewModel.loadArticles()
@@ -43,37 +43,13 @@ struct NewsReadingView: View {
         }
     }
 
-    private var headerSection: some View {
-        let config = TabHeaderConfig.news
-        return EngifyCollapsibleCard(
-            title: config.title,
-            subtitle: config.subtitle,
-            systemImage: config.icon,
-            tint: config.primaryColor,
-            isExpanded: $isHeaderExpanded
-        ) {
-            HStack(spacing: Spacing.sm) {
-                VocabularyBadge(text: "Short reads", tint: config.primaryColor)
-                VocabularyBadge(text: "Practice daily", tint: config.secondaryColor)
-                Spacer(minLength: 0)
-            }
-        } detail: {
-            VStack(alignment: .leading, spacing: Spacing.sm) {
-                Text("Read approachable articles with a cleaner top section so the content starts sooner.")
-                    .font(EngifyTypography.body)
-                    .foregroundStyle(EngifyColors.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                LinearGradient(
-                    colors: [config.primaryColor.opacity(0.28), config.secondaryColor.opacity(0.08)],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-                .frame(height: 1)
-            }
-        }
+    private var globalHeader: some View {
+        EngifyGlobalTabHeader(
+            title: "News",
+            subtitle: "Short reads and story practice",
+            showSettings: $showSettingsSheet
+        )
     }
-
     private var articlesSection: some View {
         VStack(spacing: Spacing.lg) {
             ForEach(viewModel.articles) { article in
@@ -100,17 +76,10 @@ struct NewsReadingView: View {
                         .foregroundStyle(EngifyColors.textPrimary)
                         .fixedSize(horizontal: false, vertical: true)
 
-                    if horizontalSizeClass == .compact {
-                        VStack(alignment: .leading, spacing: Spacing.sm) {
-                            ArticlePreviewTag(text: article.category)
-                            ArticlePreviewTag(text: article.readingTime, tint: EngifyColors.sky)
-                        }
-                    } else {
-                        HStack(spacing: Spacing.sm) {
-                            ArticlePreviewTag(text: article.category)
-                            ArticlePreviewTag(text: article.readingTime, tint: EngifyColors.sky)
-                            Spacer(minLength: 0)
-                        }
+                    HStack(spacing: Spacing.sm) {
+                        ArticlePreviewTag(text: article.category)
+                        ArticlePreviewTag(text: article.readingTime, tint: EngifyColors.sky)
+                        Spacer(minLength: 0)
                     }
                 }
 
