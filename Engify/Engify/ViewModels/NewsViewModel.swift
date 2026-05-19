@@ -22,6 +22,7 @@ final class NewsViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage: String?
     @Published var currentPage = 1
+    @Published var isShowingFallbackContent = false
 
     private let service: NewsService
 
@@ -37,6 +38,7 @@ final class NewsViewModel: ObservableObject {
 
         let fetchedArticles = await service.fetchArticles(page: currentPage)
         articles = fetchedArticles
+        isShowingFallbackContent = fetchedArticles.allSatisfy { $0.source == "Engify News" || $0.source == "Engify Local" }
         isLoading = false
 
         if fetchedArticles.isEmpty {
@@ -51,6 +53,7 @@ final class NewsViewModel: ObservableObject {
         
         let fetchedArticles = await service.fetchArticles(page: currentPage)
         articles.append(contentsOf: fetchedArticles)
+        isShowingFallbackContent = articles.allSatisfy { $0.source == "Engify News" || $0.source == "Engify Local" }
         isLoading = false
         
         if fetchedArticles.isEmpty {

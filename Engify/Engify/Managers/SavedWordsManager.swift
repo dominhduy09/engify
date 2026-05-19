@@ -20,11 +20,11 @@ import Foundation
 @MainActor
 final class SavedWordsManager: ObservableObject {
     @Published private(set) var savedDictionaryEntries: [DictionaryEntry] = []
-    @Published private(set) var savedVocabularyWords: Set<String> = []
+    @Published private(set) var savedWords: [Word] = []
     @Published private(set) var lastSavedWordEvent: SavedWordEvent?
 
     private let dictionaryStorageKey = "engify.saved.dictionary.entries"
-    private let vocabularyStorageKey = "engify.saved.vocabulary.words"
+    private let savedWordsStorageKey = "engify.saved.words"
 
     init() {
         loadSavedData()
@@ -51,15 +51,15 @@ final class SavedWordsManager: ObservableObject {
     }
 
     func isSaved(word: Word) -> Bool {
-        savedVocabularyWords.contains(word.word.lowercased())
+        savedWords.contains { $0.word.lowercased() == word.word.lowercased() }
     }
 
     func toggleSaved(word: Word) {
         let key = word.word.lowercased()
-        if savedVocabularyWords.contains(key) {
-            savedVocabularyWords.remove(key)
+        if let index = savedWords.firstIndex(where: { $0.word.lowercased() == key }) {
+            savedWords.remove(at: index)
         } else {
-            savedVocabularyWords.insert(key)
+            savedWords.append(word)
             lastSavedWordEvent = .vocabulary(word)
         }
 
@@ -80,17 +80,15 @@ final class SavedWordsManager: ObservableObject {
             )
         }
 
-        let vocabularyItems: [SavedWordBankItem] = EngifySampleData.vocabularyWords.compactMap { word -> SavedWordBankItem? in
-            guard savedVocabularyWords.contains(word.word.lowercased()) else { return nil }
-
-            return SavedWordBankItem(
-                id: "vocabulary:\(word.word.lowercased())",
+        let vocabularyItems: [SavedWordBankItem] = savedWords.map { word in
+            SavedWordBankItem(
+                id: "\(word.source.rawValue):\(word.word.lowercased())",
                 title: word.word,
                 subtitle: word.partOfSpeech.capitalized,
                 phonetic: word.pronunciation,
                 detail: word.meaning,
                 example: word.example,
-                source: .vocabulary,
+                source: word.source == .news ? .news : .vocabulary,
                 createdAt: nil
             )
         }
@@ -112,8 +110,12 @@ final class SavedWordsManager: ObservableObject {
             savedDictionaryEntries = decodedEntries
         }
 
-        if let vocabularyArray = UserDefaults.standard.array(forKey: vocabularyStorageKey) as? [String] {
-            savedVocabularyWords = Set(vocabularyArray)
+        if let wordsData = UserDefaults.standard.data(forKey: savedWordsStorageKey),
+           let decodedWords = try? JSONDecoder().decode([Word].self, from: wordsData) {
+            savedWords = decodedWords
+        } else if let legacyVocabularyArray = UserDefaults.standard.array(forKey: "engify.saved.vocabulary.words") as? [String] {
+            let vocabularyLookup = Dictionary(uniqueKeysWithValues: EngifySampleData.vocabularyWords.map { ($0.word.lowercased(), $0) })
+            savedWords = legacyVocabularyArray.compactMap { vocabularyLookup[$0.lowercased()] }
         }
     }
 
@@ -122,7 +124,9 @@ final class SavedWordsManager: ObservableObject {
             UserDefaults.standard.set(encodedDictionary, forKey: dictionaryStorageKey)
         }
 
-        UserDefaults.standard.set(Array(savedVocabularyWords), forKey: vocabularyStorageKey)
+        if let encodedWords = try? JSONEncoder().encode(savedWords) {
+            UserDefaults.standard.set(encodedWords, forKey: savedWordsStorageKey)
+        }
     }
 }
 
@@ -144,6 +148,7 @@ struct SavedWordBankItem: Identifiable, Equatable {
     enum Source: Equatable {
         case dictionary
         case vocabulary
+        case news
 
         var label: String {
             switch self {
@@ -151,6 +156,8 @@ struct SavedWordBankItem: Identifiable, Equatable {
                 return "Dictionary"
             case .vocabulary:
                 return "Vocabulary"
+            case .news:
+                return "News"
             }
         }
     }

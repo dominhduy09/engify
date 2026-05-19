@@ -1,0 +1,282 @@
+[
+  {
+    "title": "Students Learn From A New Space Update",
+    "source": "Engify Local",
+    "category": "Space",
+    "publishedDate": "May 19, 2026",
+    "readingTime": "2 min",
+    "summary": "NASA shared a short update about ongoing space work. The lesson helps learners practice modern science vocabulary in simple English.",
+    "content": "NASA shared a short update about work in space. Engineers continue to monitor equipment, review mission data, and prepare future steps. This kind of report gives learners a clear example of how science news explains progress, planning, and discovery.",
+    "url": "https://www.nasa.gov/",
+    "keyVocabulary": [
+      {
+        "word": "monitor",
+        "partOfSpeech": "Verb",
+        "phonetic": "/ˈmɑː.nə.tɚ/",
+        "vietnameseMeaning": "theo dõi",
+        "example": "Scientists monitor the mission every day."
+      },
+      {
+        "word": "equipment",
+        "partOfSpeech": "Noun",
+        "phonetic": "/ɪˈkwɪp.mənt/",
+        "vietnameseMeaning": "thiết bị",
+        "example": "The team checked the equipment before the test."
+      },
+      {
+        "word": "discovery",
+        "partOfSpeech": "Noun",
+        "phonetic": "/dɪˈskʌv.ɚ.i/",
+        "vietnameseMeaning": "khám phá",
+        "example": "The discovery made students curious about space."
+      }
+    ],
+    "questions": [
+      {
+        "id": "11111111-1111-1111-1111-111111111111",
+        "prompt": "Who shared the update?",
+        "options": ["NASA", "A restaurant", "A sports club", "A bank"],
+        "answerIndex": 0,
+        "explanation": "The lesson says NASA shared the update."
+      },
+      {
+        "id": "11111111-1111-1111-1111-111111111112",
+        "prompt": "What do engineers review?",
+        "options": ["Mission data", "Movie tickets", "Class schedules", "Weather maps only"],
+        "answerIndex": 0,
+        "explanation": "The article states that engineers review mission data."
+      },
+      {
+        "id": "11111111-1111-1111-1111-111111111113",
+        "prompt": "What does the report help explain?",
+        "options": ["Progress and discovery", "Cooking steps", "Fashion trends", "Traffic rules"],
+        "answerIndex": 0,
+        "explanation": "The lesson highlights progress, planning, and discovery."
+      }
+    ]
+  },
+  {
+    "title": "A Health Story Encourages Daily Walking",
+    "source": "Engify Local",
+    "category": "Health",
+    "publishedDate": "May 19, 2026",
+    "readingTime": "2 min",
+    "summary": "A simple health story explains why short walks matter. It also gives learners practical vocabulary they can reuse in daily conversation.",
+    "content": "Doctors often encourage people to take short walks during the day. Regular movement supports energy, focus, and healthy routines. For English learners, this article is also useful because the vocabulary connects health habits with everyday actions.",
+    "url": "https://example.com/health-walking",
+    "keyVocabulary": [
+      {
+        "word": "encourage",
+        "partOfSpeech": "Verb",
+        "phonetic": "/ɪnˈkɝː.ɪdʒ/",
+        "vietnameseMeaning": "khuyến khích",
+        "example": "Teachers encourage students to keep practicing."
+      },
+      {
+        "word": "routine",
+        "partOfSpeech": "Noun",
+        "phonetic": "/ruːˈtiːn/",
+        "vietnameseMeaning": "thói quen",
+        "example": "A reading routine can improve vocabulary."
+      },
+      {
+        "word": "supports",
+        "partOfSpeech": "Verb",
+        "phonetic": "/səˈpɔːrts/",
+        "vietnameseMeaning": "hỗ trợ",
+        "example": "Daily practice supports long-term progress."
+      }
+    ],
+    "questions": [
+      {
+        "id": "22222222-2222-2222-2222-222222222221",
+        "prompt": "What do doctors encourage?",
+        "options": ["Short walks", "Late homework", "Long meetings", "No exercise"],
+        "answerIndex": 0,
+        "explanation": "The passage says doctors encourage people to take short walks."
+      },
+      {
+        "id": "22222222-2222-2222-2222-222222222222",
+        "prompt": "What can regular movement support?",
+        "options": ["Energy and focus", "Only spelling", "Only speed", "Only silence"],
+        "answerIndex": 0,
+        "explanation": "The lesson says regular movement supports energy and focus."
+      },
+      {
+        "id": "22222222-2222-2222-2222-222222222223",
+        "prompt": "Why is the vocabulary useful?",
+        "options": ["It fits daily life", "It is impossible to use", "It is only for scientists", "It removes all practice"],
+        "answerIndex": 0,
+        "explanation": "The text says the vocabulary connects health habits with everyday actions."
+      }
+    ]
+  },
+  {
+    "title": "Classroom Reading Corner Opens Quiet Practice Space",
+    "source": "Engify Local",
+    "category": "Learning",
+    "publishedDate": "May 18, 2026",
+    "readingTime": "3 min",
+    "summary": "A school created a calm reading corner for students. The lesson focuses on simple education news and approachable study vocabulary.",
+    "content": "A school opened a quiet reading corner with simple books and comfortable chairs. Teachers hope the space will improve confidence and help students build stronger reading habits. Small changes like this can make practice feel calm, clear, and welcoming.",
+    "url": "https://example.com/reading-corner",
+    "keyVocabulary": [
+      {
+        "word": "confidence",
+        "partOfSpeech": "Noun",
+        "phonetic": "/ˈkɑːn.fə.dəns/",
+        "vietnameseMeaning": "sự tự tin",
+        "example": "Practice helps build speaking confidence."
+      },
+      {
+        "word": "comfortable",
+        "partOfSpeech": "Adjective",
+        "phonetic": "/ˈkʌm.fɚ.t̬ə.bəl/",
+        "vietnameseMeaning": "thoải mái",
+        "example": "The students sat in a comfortable place to read."
+      },
+      {
+        "word": "welcoming",
+        "partOfSpeech": "Adjective",
+        "phonetic": "/ˈwel.kə.mɪŋ/",
+        "vietnameseMeaning": "thân thiện, dễ gần",
+        "example": "A welcoming classroom helps students relax."
+      }
+    ],
+    "questions": [
+      {
+        "id": "33333333-3333-3333-3333-333333333331",
+        "prompt": "What did the school open?",
+        "options": ["A reading corner", "A train station", "A music festival", "A market"],
+        "answerIndex": 0,
+        "explanation": "The school opened a quiet reading corner."
+      },
+      {
+        "id": "33333333-3333-3333-3333-333333333332",
+        "prompt": "What do teachers hope to improve?",
+        "options": ["Confidence", "Traffic", "Weather", "Cooking"],
+        "answerIndex": 0,
+        "explanation": "Teachers hope the space will improve confidence."
+      },
+      {
+        "id": "33333333-3333-3333-3333-333333333333",
+        "prompt": "How can practice feel in the new space?",
+        "options": ["Calm and welcoming", "Loud and rushed", "Cold and empty", "Complex and confusing"],
+        "answerIndex": 0,
+        "explanation": "The passage says practice can feel calm, clear, and welcoming."
+      }
+    ]
+  },
+  {
+    "title": "Weather Teams Prepare Communities For Heavy Rain",
+    "source": "Engify Local",
+    "category": "General",
+    "publishedDate": "May 18, 2026",
+    "readingTime": "2 min",
+    "summary": "A local weather lesson explains how teams prepare before heavy rain arrives. It gives learners a practical reading about warnings, planning, and safety.",
+    "content": "Weather teams shared updates before a period of heavy rain. Local leaders asked residents to stay informed, check alerts, and prepare simple supplies at home. The report shows how clear public messages can support safety and reduce confusion.",
+    "url": "https://example.com/heavy-rain",
+    "keyVocabulary": [
+      {
+        "word": "residents",
+        "partOfSpeech": "Noun",
+        "phonetic": "/ˈrez.ə.dənts/",
+        "vietnameseMeaning": "cư dân",
+        "example": "Residents listened carefully to the public update."
+      },
+      {
+        "word": "alerts",
+        "partOfSpeech": "Noun",
+        "phonetic": "/əˈlɝːts/",
+        "vietnameseMeaning": "cảnh báo",
+        "example": "Phone alerts helped people act quickly."
+      },
+      {
+        "word": "reduce",
+        "partOfSpeech": "Verb",
+        "phonetic": "/rɪˈduːs/",
+        "vietnameseMeaning": "giảm bớt",
+        "example": "Good planning can reduce confusion."
+      }
+    ],
+    "questions": [
+      {
+        "id": "44444444-4444-4444-4444-444444444441",
+        "prompt": "What were teams preparing for?",
+        "options": ["Heavy rain", "A school dance", "A football match", "A concert"],
+        "answerIndex": 0,
+        "explanation": "The update was about preparing for heavy rain."
+      },
+      {
+        "id": "44444444-4444-4444-4444-444444444442",
+        "prompt": "What were residents asked to check?",
+        "options": ["Alerts", "Recipes", "Maps of museums", "Movie reviews"],
+        "answerIndex": 0,
+        "explanation": "Residents were asked to check alerts."
+      },
+      {
+        "id": "44444444-4444-4444-4444-444444444443",
+        "prompt": "What can clear public messages support?",
+        "options": ["Safety", "Only entertainment", "Only speed", "Only homework"],
+        "answerIndex": 0,
+        "explanation": "The lesson says clear public messages can support safety."
+      }
+    ]
+  },
+  {
+    "title": "Technology Club Tests A Helpful Study App",
+    "source": "Engify Local",
+    "category": "Tech",
+    "publishedDate": "May 17, 2026",
+    "readingTime": "3 min",
+    "summary": "A student technology club tested a new study app together. The article gives learners a useful mix of digital and classroom vocabulary.",
+    "content": "A school technology club tested a study app designed to organize notes and review tasks. Students said the tool made their plan more efficient and easier to follow after class. Teachers liked that the app supported structure, reflection, and regular revision.",
+    "url": "https://example.com/study-app",
+    "keyVocabulary": [
+      {
+        "word": "efficient",
+        "partOfSpeech": "Adjective",
+        "phonetic": "/ɪˈfɪʃ.ənt/",
+        "vietnameseMeaning": "hiệu quả",
+        "example": "A simple plan can make study time more efficient."
+      },
+      {
+        "word": "organize",
+        "partOfSpeech": "Verb",
+        "phonetic": "/ˈɔːr.ɡə.naɪz/",
+        "vietnameseMeaning": "sắp xếp, tổ chức",
+        "example": "The app helps students organize their notes."
+      },
+      {
+        "word": "revision",
+        "partOfSpeech": "Noun",
+        "phonetic": "/rɪˈvɪʒ.ən/",
+        "vietnameseMeaning": "ôn tập",
+        "example": "Short revision sessions keep ideas fresh."
+      }
+    ],
+    "questions": [
+      {
+        "id": "55555555-5555-5555-5555-555555555551",
+        "prompt": "Who tested the app?",
+        "options": ["A school technology club", "A hospital", "A travel company", "A farm"],
+        "answerIndex": 0,
+        "explanation": "The article says a school technology club tested the app."
+      },
+      {
+        "id": "55555555-5555-5555-5555-555555555552",
+        "prompt": "What did the tool help organize?",
+        "options": ["Notes and tasks", "Only weather data", "Only music files", "Only sports tickets"],
+        "answerIndex": 0,
+        "explanation": "The study app was designed to organize notes and review tasks."
+      },
+      {
+        "id": "55555555-5555-5555-5555-555555555553",
+        "prompt": "What did teachers like about the app?",
+        "options": ["It supported structure and revision", "It removed all homework", "It changed the weather", "It stopped reading practice"],
+        "answerIndex": 0,
+        "explanation": "Teachers liked that it supported structure, reflection, and revision."
+      }
+    ]
+  }
+]

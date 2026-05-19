@@ -1353,7 +1353,7 @@ struct SavedWordBankSheet: View {
         case .lookup:
             return items.filter { $0.source == .dictionary }
         case .vocab:
-            return items.filter { $0.source == .vocabulary }
+            return items.filter { $0.source == .vocabulary || $0.source == .news }
         }
     }
 
@@ -1434,7 +1434,7 @@ struct SavedWordBankSheet: View {
         case .lookup:
             return "Words you save from the Lookup page will appear in this tab."
         case .vocab:
-            return "Words you save from the Vocab page will appear in this tab."
+            return "Words you save from Vocab or News will appear in this tab."
         }
     }
 

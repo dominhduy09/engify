@@ -3,8 +3,13 @@ import SwiftUI
 struct NewsReadingView: View {
     @StateObject private var viewModel = NewsViewModel()
     @EnvironmentObject private var authManager: AuthenticationManager
+    @EnvironmentObject private var savedWordsManager: SavedWordsManager
+    @EnvironmentObject private var theme: ThemeManager
+    @EnvironmentObject private var learningSettings: LearningSettingsManager
     @State private var showSettingsSheet = false
     @State private var selectedArticle: Article?
+    @State private var savedToastWordTitle: String?
+    @State private var showSavedWordBank = false
 
     var body: some View {
         EngifyScreenScroll {
@@ -36,13 +41,29 @@ struct NewsReadingView: View {
                 articlesSection
             }
         }
+        .refreshable {
+            await viewModel.refreshArticles()
+        }
         .tabTransition()
+        .overlay(alignment: .top) {
+            if let savedToastWordTitle {
+                savedWordToast(wordTitle: savedToastWordTitle)
+                    .padding(.horizontal, Spacing.screenPadding)
+                    .padding(.top, 8)
+                    .transition(.move(edge: .top).combined(with: .scale(scale: 0.92)).combined(with: .opacity))
+                    .zIndex(10)
+            }
+        }
         .engifySettingsSheet(isPresented: $showSettingsSheet)
+        .sheet(isPresented: $showSavedWordBank) {
+            SavedWordBankSheet()
+                .environmentObject(savedWordsManager)
+        }
         .background(
             NavigationLink(
                 destination: Group {
                     if let selectedArticle {
-                        NewsArticleDetailView(article: selectedArticle)
+                        NewsArticleDetailView(article: selectedArticle, onSaveWord: handleSaveWord)
                     }
                 },
                 isActive: Binding(
@@ -74,6 +95,14 @@ struct NewsReadingView: View {
     }
     private var articlesSection: some View {
         VStack(spacing: Spacing.lg) {
+            if viewModel.isShowingFallbackContent {
+                EngifyStateCard(
+                    title: "Offline Lesson Mode",
+                    message: "Live feeds are unavailable right now, so Engify is showing bundled practice lessons instead of an empty news screen.",
+                    systemImage: "newspaper.fill"
+                )
+            }
+
             ForEach(viewModel.articles) { article in
                 Button {
                     guard authManager.requestGuestNewsArticleAccess(articleID: article.id) else { return }
@@ -113,9 +142,15 @@ struct NewsReadingView: View {
                     .fixedSize(horizontal: false, vertical: true)
 
                 HStack {
-                    Label(article.source, systemImage: "globe")
-                        .font(EngifyTypography.caption)
-                        .foregroundStyle(EngifyColors.textSecondary)
+                    VStack(alignment: .leading, spacing: Spacing.xxs) {
+                        Label(article.source, systemImage: "globe")
+                            .font(EngifyTypography.caption)
+                            .foregroundStyle(EngifyColors.textSecondary)
+
+                        Text(article.publishedDate)
+                            .font(.caption2.weight(.medium))
+                            .foregroundStyle(EngifyColors.textSecondary)
+                    }
 
                     Spacer(minLength: 0)
 
@@ -130,13 +165,92 @@ struct NewsReadingView: View {
             }
         }
     }
+
+    private func handleSaveWord(_ vocabulary: NewsVocabularyItem) {
+        let word = vocabulary.asWord
+        let wasSaved = savedWordsManager.isSaved(word: word)
+        withAnimation(EngifySpring.jellyRelease) {
+            savedWordsManager.toggleSaved(word: word)
+        }
+        EngifyFeedback.shared.play(.successPop, settings: learningSettings)
+        if !wasSaved, savedWordsManager.isSaved(word: word) {
+            showSavedWordToast(for: word.word)
+        }
+    }
+
+    private func showSavedWordToast(for wordTitle: String) {
+        withAnimation(EngifySpring.jellyRelease) {
+            savedToastWordTitle = wordTitle
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.4) {
+            guard savedToastWordTitle == wordTitle else { return }
+            withAnimation(.easeInOut(duration: 0.22)) {
+                savedToastWordTitle = nil
+            }
+        }
+    }
+
+    private func savedWordToast(wordTitle: String) -> some View {
+        Button {
+            withAnimation(EngifySpring.jellyRelease) {
+                savedToastWordTitle = nil
+                showSavedWordBank = true
+            }
+            EngifyFeedback.shared.play(.tabSwitch, settings: learningSettings)
+        } label: {
+            HStack(spacing: Spacing.md) {
+                ZStack {
+                    Circle()
+                        .fill(theme.accentColor.opacity(0.14))
+                        .frame(width: 42, height: 42)
+
+                    Image(systemName: "bookmark.circle.fill")
+                        .font(.title3.weight(.bold))
+                        .foregroundStyle(theme.accentColor)
+                }
+
+                VStack(alignment: .leading, spacing: Spacing.xxs) {
+                    Text("Saved to Word Bank")
+                        .font(EngifyTypography.bodyStrong)
+                        .foregroundStyle(EngifyColors.textPrimary)
+
+                    Text("\"\(wordTitle)\" is ready to review. Tap to open.")
+                        .font(EngifyTypography.caption)
+                        .foregroundStyle(EngifyColors.textSecondary)
+                        .lineLimit(2)
+                }
+
+                Spacer(minLength: 0)
+
+                Image(systemName: "arrow.up.right")
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(theme.accentColor)
+            }
+            .padding(.horizontal, Spacing.lg)
+            .padding(.vertical, Spacing.md)
+            .background(
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .fill(EngifyColors.surface.opacity(0.97))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .stroke(theme.accentColor.opacity(0.18), lineWidth: 1)
+            )
+            .shadow(color: EngifyColors.primary.opacity(0.12), radius: 18, x: 0, y: 10)
+        }
+        .buttonStyle(.plain)
+        .engifyJellyPress()
+    }
 }
 
 struct NewsArticleDetailView: View {
     let article: Article
+    let onSaveWord: (NewsVocabularyItem) -> Void
     @State private var selectedAnswers: [UUID: Int] = [:]
     @State private var showResult = false
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @EnvironmentObject private var savedWordsManager: SavedWordsManager
 
     private var score: Int {
         article.questions.reduce(into: 0) { result, question in
@@ -204,8 +318,10 @@ struct NewsArticleDetailView: View {
 
     private var contentSection: some View {
         articleDetailCard(title: "Article Content", icon: "doc.text", tint: EngifyColors.sky) {
-            Text(article.content)
-                .fixedSize(horizontal: false, vertical: true)
+            HighlightedArticleText(
+                text: article.content,
+                vocabulary: article.keyVocabulary
+            )
         }
     }
 
@@ -220,10 +336,18 @@ struct NewsArticleDetailView: View {
                     .font(EngifyTypography.caption)
                     .foregroundStyle(EngifyColors.textSecondary)
 
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: Spacing.sm) {
-                        ForEach(article.difficultWords, id: \.self) { word in
-                            ArticlePreviewTag(text: word)
+                if article.keyVocabulary.isEmpty {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: Spacing.sm) {
+                            ForEach(article.difficultWords, id: \.self) { word in
+                                ArticlePreviewTag(text: word)
+                            }
+                        }
+                    }
+                } else {
+                    VStack(spacing: Spacing.md) {
+                        ForEach(article.keyVocabulary) { word in
+                            vocabularyCard(word)
                         }
                     }
                 }
@@ -325,4 +449,153 @@ struct NewsArticleDetailView: View {
             }
         }
     }
+
+    private func vocabularyCard(_ item: NewsVocabularyItem) -> some View {
+        EngifyCard {
+            VStack(alignment: .leading, spacing: Spacing.md) {
+                HStack(alignment: .top, spacing: Spacing.md) {
+                    VStack(alignment: .leading, spacing: Spacing.xs) {
+                        Text(item.word)
+                            .font(EngifyTypography.headline)
+                            .foregroundStyle(EngifyColors.textPrimary)
+
+                        if !item.phonetic.isEmpty {
+                            Text(item.phonetic)
+                                .font(.system(.body, design: .monospaced))
+                                .foregroundStyle(EngifyColors.textSecondary)
+                        }
+                    }
+
+                    Spacer(minLength: 0)
+
+                    VStack(alignment: .trailing, spacing: Spacing.sm) {
+                        VocabularyBadge(text: item.partOfSpeech)
+
+                        Button {
+                            onSaveWord(item)
+                        } label: {
+                            HStack(spacing: Spacing.xs) {
+                                Image(systemName: savedWordsManager.isSaved(word: item.asWord) ? "bookmark.fill" : "bookmark")
+                                Text(savedWordsManager.isSaved(word: item.asWord) ? "Saved" : "Save")
+                            }
+                            .font(EngifyTypography.caption.weight(.semibold))
+                            .foregroundStyle(savedWordsManager.isSaved(word: item.asWord) ? EngifyColors.accent : EngifyColors.textSecondary)
+                            .padding(.horizontal, Spacing.md)
+                            .frame(minHeight: 38)
+                            .background((savedWordsManager.isSaved(word: item.asWord) ? EngifyColors.accent : EngifyColors.border).opacity(0.12))
+                            .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .engifyJellyPress()
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    Text("Vietnamese meaning")
+                        .font(EngifyTypography.caption)
+                        .foregroundStyle(EngifyColors.textSecondary)
+
+                    Text(item.vietnameseMeaning)
+                        .font(EngifyTypography.bodyStrong)
+                        .foregroundStyle(EngifyColors.textPrimary)
+                }
+
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    Text("Example")
+                        .font(EngifyTypography.caption)
+                        .foregroundStyle(EngifyColors.textSecondary)
+
+                    Text("“\(item.example)”")
+                        .font(.system(size: 16, weight: .regular, design: .serif))
+                        .foregroundStyle(EngifyColors.textPrimary)
+                }
+            }
+        }
+    }
+}
+
+private struct HighlightedArticleText: View {
+    let text: String
+    let vocabulary: [NewsVocabularyItem]
+
+    var body: some View {
+        composedText
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var composedText: Text {
+        highlightedSegments.reduce(Text("")) { partial, segment in
+            let piece = Text(segment.text)
+            if segment.isHighlighted {
+                return partial + piece.foregroundColor(EngifyColors.accent).underline()
+            } else {
+                return partial + piece
+            }
+        }
+    }
+
+    private var highlightedSegments: [HighlightedSegment] {
+        let candidates = vocabulary
+            .map(\.word)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .sorted { $0.count > $1.count }
+
+        guard !candidates.isEmpty else {
+            return [HighlightedSegment(text: text, isHighlighted: false)]
+        }
+
+        let nsText = text as NSString
+        let lowercaseText = text.lowercased() as NSString
+        var ranges: [NSRange] = []
+
+        for candidate in candidates {
+            let search = candidate.lowercased()
+            var location = 0
+
+            while location < lowercaseText.length {
+                let searchRange = NSRange(location: location, length: lowercaseText.length - location)
+                let foundRange = lowercaseText.range(of: search, options: [], range: searchRange)
+                if foundRange.location == NSNotFound { break }
+
+                let overlaps = ranges.contains { NSIntersectionRange($0, foundRange).length > 0 }
+                if !overlaps {
+                    ranges.append(foundRange)
+                }
+
+                location = foundRange.location + max(foundRange.length, 1)
+            }
+        }
+
+        let sortedRanges = ranges.sorted { $0.location < $1.location }
+        guard !sortedRanges.isEmpty else {
+            return [HighlightedSegment(text: text, isHighlighted: false)]
+        }
+
+        var segments: [HighlightedSegment] = []
+        var currentLocation = 0
+
+        for range in sortedRanges {
+            if range.location > currentLocation {
+                let prefix = nsText.substring(with: NSRange(location: currentLocation, length: range.location - currentLocation))
+                segments.append(HighlightedSegment(text: prefix, isHighlighted: false))
+            }
+
+            let highlighted = nsText.substring(with: range)
+            segments.append(HighlightedSegment(text: highlighted, isHighlighted: true))
+            currentLocation = range.location + range.length
+        }
+
+        if currentLocation < nsText.length {
+            let suffix = nsText.substring(with: NSRange(location: currentLocation, length: nsText.length - currentLocation))
+            segments.append(HighlightedSegment(text: suffix, isHighlighted: false))
+        }
+
+        return segments
+    }
+}
+
+private struct HighlightedSegment {
+    let text: String
+    let isHighlighted: Bool
 }

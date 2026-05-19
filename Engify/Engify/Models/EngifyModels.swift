@@ -57,15 +57,30 @@ struct Word: Identifiable, Codable, Hashable {
     let partOfSpeech: String
     let meaning: String
     let example: String
+    let source: WordSource
 
-    init(id: UUID = UUID(), word: String, pronunciation: String, partOfSpeech: String, meaning: String, example: String) {
+    init(
+        id: UUID = UUID(),
+        word: String,
+        pronunciation: String,
+        partOfSpeech: String,
+        meaning: String,
+        example: String,
+        source: WordSource = .vocabulary
+    ) {
         self.id = id
         self.word = word
         self.pronunciation = pronunciation
         self.partOfSpeech = partOfSpeech
         self.meaning = meaning
         self.example = example
+        self.source = source
     }
+}
+
+enum WordSource: String, Codable, Hashable {
+    case vocabulary
+    case news
 }
 
 /// A dictionary lookup result returned by DictionaryService from dictionaryapi.dev.
@@ -147,6 +162,7 @@ struct Article: Identifiable, Codable, Hashable {
     let summary: String
     let content: String
     let difficultWords: [String]
+    let keyVocabulary: [NewsVocabularyItem]
     let questions: [QuizQuestion]
     let url: URL?
 
@@ -160,6 +176,7 @@ struct Article: Identifiable, Codable, Hashable {
         summary: String,
         content: String,
         difficultWords: [String],
+        keyVocabulary: [NewsVocabularyItem] = [],
         questions: [QuizQuestion],
         url: URL? = nil
     ) {
@@ -172,8 +189,44 @@ struct Article: Identifiable, Codable, Hashable {
         self.summary = summary
         self.content = content
         self.difficultWords = difficultWords
+        self.keyVocabulary = keyVocabulary
         self.questions = questions
         self.url = url
+    }
+}
+
+struct NewsVocabularyItem: Identifiable, Codable, Hashable {
+    let id: String
+    let word: String
+    let partOfSpeech: String
+    let phonetic: String
+    let vietnameseMeaning: String
+    let example: String
+
+    init(
+        word: String,
+        partOfSpeech: String,
+        phonetic: String,
+        vietnameseMeaning: String,
+        example: String
+    ) {
+        self.id = word.lowercased()
+        self.word = word
+        self.partOfSpeech = partOfSpeech
+        self.phonetic = phonetic
+        self.vietnameseMeaning = vietnameseMeaning
+        self.example = example
+    }
+
+    var asWord: Word {
+        Word(
+            word: word,
+            pronunciation: phonetic,
+            partOfSpeech: partOfSpeech,
+            meaning: vietnameseMeaning,
+            example: example,
+            source: .news
+        )
     }
 }
 
