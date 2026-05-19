@@ -1,23 +1,10 @@
 import SwiftUI
 
 struct HomeView: View {
-    private enum HomeDestination: Identifiable {
-        case news
-        case practice
-
-        var id: String {
-            switch self {
-            case .news: return "news"
-            case .practice: return "practice"
-            }
-        }
-    }
-
     @Binding var selectedTab: EngifyTab
     @EnvironmentObject private var theme: ThemeManager
     @EnvironmentObject private var gamification: GamificationManager
     @State private var showSettingsSheet = false
-    @State private var activeDestination: HomeDestination?
 
     var body: some View {
         EngifyScreenScroll {
@@ -33,19 +20,6 @@ struct HomeView: View {
             if gamification.showLessonComplete {
                 LessonCompleteOverlay()
                     .environmentObject(gamification)
-            }
-        }
-        .sheet(item: $activeDestination) { destination in
-            NavigationView {
-                destinationView(for: destination)
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("Done") {
-                                activeDestination = nil
-                            }
-                        }
-                    }
             }
         }
     }
@@ -70,7 +44,7 @@ struct HomeView: View {
                 subtitle: "Open a compact reading session with approachable stories and useful vocabulary cues.",
                 systemImage: "newspaper.fill"
             ) {
-                activeDestination = .news
+                navigate(to: .news)
             }
         }
     }
@@ -87,14 +61,14 @@ struct HomeView: View {
                 subtitle: "Launch a short grammar and speaking session designed for a few focused minutes.",
                 systemImage: "sparkles"
             ) {
-                activeDestination = .practice
+                navigate(to: .practice)
             }
         }
     }
 
     private var continueLearningSection: some View {
         PrimaryButton(title: "Continue Learning", systemImage: "play.fill", action: {
-            selectedTab = .vocabulary
+            navigate(to: .vocabulary)
         })
         .environmentObject(theme)
     }
@@ -111,7 +85,7 @@ struct HomeView: View {
                 subtitle: "A focused session with practical words you can use right away.",
                 systemImage: "book.fill"
             ) {
-                selectedTab = .vocabulary
+                navigate(to: .vocabulary)
             }
         }
     }
@@ -168,13 +142,10 @@ struct HomeView: View {
         }
     }
 
-    @ViewBuilder
-    private func destinationView(for destination: HomeDestination) -> some View {
-        switch destination {
-        case .news:
-            NewsReadingView()
-        case .practice:
-            PracticeView()
+    private func navigate(to tab: EngifyTab) {
+        withAnimation(.spring(response: 0.36, dampingFraction: 0.76)) {
+            selectedTab = tab
         }
+        UIImpactFeedbackGenerator(style: .soft).impactOccurred()
     }
 }

@@ -11,7 +11,7 @@ struct AuthGateView: View {
             case .authenticated:
                 MainTabView()
             case .unauthenticated:
-                LoginView()
+                MainTabView()
             }
         }
     }
