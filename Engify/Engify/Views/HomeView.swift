@@ -2,8 +2,10 @@ import SwiftUI
 
 struct HomeView: View {
     @Binding var selectedTab: EngifyTab
+    @EnvironmentObject private var authManager: AuthenticationManager
     @EnvironmentObject private var theme: ThemeManager
     @EnvironmentObject private var gamification: GamificationManager
+    @EnvironmentObject private var learningSettings: LearningSettingsManager
     @State private var showSettingsSheet = false
 
     var body: some View {
@@ -68,8 +70,12 @@ struct HomeView: View {
 
     private var continueLearningSection: some View {
         PrimaryButton(title: "Continue Learning", systemImage: "play.fill", action: {
-            navigate(to: .vocabulary)
-        })
+            if authManager.isGuestMode {
+                authManager.presentAccountRequired(for: .vocabulary)
+            } else {
+                navigate(to: .vocabulary)
+            }
+        }, feedbackEvent: authManager.isGuestMode ? .errorBuzz : .tabSwitch)
         .environmentObject(theme)
     }
 
@@ -85,7 +91,11 @@ struct HomeView: View {
                 subtitle: "A focused session with practical words you can use right away.",
                 systemImage: "book.fill"
             ) {
-                navigate(to: .vocabulary)
+                if authManager.isGuestMode {
+                    authManager.presentAccountRequired(for: .vocabulary)
+                } else {
+                    navigate(to: .vocabulary)
+                }
             }
         }
     }
@@ -143,9 +153,9 @@ struct HomeView: View {
     }
 
     private func navigate(to tab: EngifyTab) {
-        withAnimation(.spring(response: 0.36, dampingFraction: 0.76)) {
+        withAnimation(EngifySpring.tabSlide) {
             selectedTab = tab
         }
-        UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+        EngifyFeedback.shared.play(.tabSwitch, settings: learningSettings)
     }
 }

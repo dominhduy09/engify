@@ -105,6 +105,7 @@ struct IntroView: View {
             .foregroundStyle(EngifyColors.textSecondary.opacity(0.75))
             .padding(.vertical, Spacing.sm)
             .contentShape(Rectangle())
+            .engifyJellyPress()
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
     }
@@ -166,11 +167,11 @@ struct IntroView: View {
         withAnimation(.interactiveSpring(response: 0.42, dampingFraction: 0.84)) {
             currentPage += 1
         }
-        UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+        EngifyFeedback.shared.play(.tabSwitch)
     }
 
     private func completeOnboarding() {
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        EngifyFeedback.shared.play(.successPop)
         onContinue()
     }
 }

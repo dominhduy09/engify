@@ -2,7 +2,9 @@ import SwiftUI
 
 struct NewsReadingView: View {
     @StateObject private var viewModel = NewsViewModel()
+    @EnvironmentObject private var authManager: AuthenticationManager
     @State private var showSettingsSheet = false
+    @State private var selectedArticle: Article?
 
     var body: some View {
         EngifyScreenScroll {
@@ -36,6 +38,26 @@ struct NewsReadingView: View {
         }
         .tabTransition()
         .engifySettingsSheet(isPresented: $showSettingsSheet)
+        .background(
+            NavigationLink(
+                destination: Group {
+                    if let selectedArticle {
+                        NewsArticleDetailView(article: selectedArticle)
+                    }
+                },
+                isActive: Binding(
+                    get: { selectedArticle != nil },
+                    set: { isActive in
+                        if !isActive {
+                            selectedArticle = nil
+                        }
+                    }
+                )
+            ) {
+                EmptyView()
+            }
+            .hidden()
+        )
         .task {
             if viewModel.articles.isEmpty {
                 await viewModel.loadArticles()
@@ -53,8 +75,9 @@ struct NewsReadingView: View {
     private var articlesSection: some View {
         VStack(spacing: Spacing.lg) {
             ForEach(viewModel.articles) { article in
-                NavigationLink {
-                    NewsArticleDetailView(article: article)
+                Button {
+                    guard authManager.requestGuestNewsArticleAccess(articleID: article.id) else { return }
+                    selectedArticle = article
                 } label: {
                     articleCard(article)
                 }

@@ -11,7 +11,11 @@ struct AuthGateView: View {
             case .authenticated:
                 MainTabView()
             case .unauthenticated:
-                MainTabView()
+                if authManager.isGuestMode {
+                    MainTabView()
+                } else {
+                    LoginView()
+                }
             }
         }
     }

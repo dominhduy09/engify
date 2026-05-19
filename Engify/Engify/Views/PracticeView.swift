@@ -1,22 +1,24 @@
 import SwiftUI
 
 struct PracticeView: View {
+    @State private var currentPracticeRoute: PracticeRoute = .dashboard
     @State private var selectedGrammarTopic = 0
     @State private var speakingHintVisible = false
     @State private var quizAnswers: [UUID: Int] = [:]
     @State private var showQuizResult = false
     @State private var currentQuizQuestions: [QuizQuestion] = []
+    @State private var navigationDirection: PracticeNavigationDirection = .forward
+    @EnvironmentObject private var authManager: AuthenticationManager
     @EnvironmentObject private var theme: ThemeManager
     @EnvironmentObject private var gamification: GamificationManager
+    @EnvironmentObject private var learningSettings: LearningSettingsManager
     @State private var showBadge = false
     @State private var showSettingsSheet = false
 
     var body: some View {
         EngifyScreenScroll {
             globalHeader
-            speakingSection
-            grammarSection
-            quizSection
+            routedContent
         }
         .tabTransition()
         .overlay {
@@ -38,210 +40,128 @@ struct PracticeView: View {
                 refreshQuiz()
             }
         }
+        .onChange(of: authManager.isGuestMode) { isGuestMode in
+            if isGuestMode {
+                currentPracticeRoute = .dashboard
+            }
+        }
     }
 
     private var globalHeader: some View {
         EngifyGlobalTabHeader(
-            title: "Practice",
-            subtitle: "Speaking, grammar, and quiz reps",
+            title: currentPracticeRoute.headerTitle,
+            subtitle: currentPracticeRoute.headerSubtitle,
             showSettings: $showSettingsSheet
         )
     }
-    private var speakingSection: some View {
-        EngifyCard(tint: theme.accentColor) {
-            VStack(alignment: .leading, spacing: Spacing.cardGap) {
-                HStack(spacing: Spacing.md) {
-                    EngifyIconBadge(systemImage: "mic.fill", tint: theme.accentColor)
-                    Text("Speaking Practice")
-                        .font(EngifyTypography.sectionTitle)
-                        .foregroundStyle(EngifyColors.textPrimary)
-                }
 
-                Text(EngifySampleData.speakingSentence)
-                    .font(.system(size: 22, weight: .medium, design: .rounded))
-                    .foregroundStyle(EngifyColors.textPrimary)
-                    .lineSpacing(4)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                SecondaryButton(
-                    title: "Start Speaking",
-                    systemImage: "waveform",
-                    action: { speakingHintVisible.toggle() }
-                )
-
-                if speakingHintVisible {
-                    HStack(alignment: .top, spacing: Spacing.md) {
-                        Image(systemName: "info.circle.fill")
-                            .foregroundStyle(theme.accentColor)
-
-                        Text("Microphone recording and pronunciation feedback will be available in a future update.")
-                            .font(EngifyTypography.caption)
-                            .foregroundStyle(EngifyColors.textSecondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .padding(Spacing.md)
-                    .background(theme.accentColor.opacity(0.08))
-                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                }
+    private var routedContent: some View {
+        ZStack {
+            if authManager.isGuestMode {
+                lockedPracticeExperience
+                    .transition(routeTransition)
+            } else {
+                routeView(for: currentPracticeRoute)
+                    .id(currentPracticeRoute)
+                    .transition(routeTransition)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .clipped()
+        .animation(EngifySpring.tabSlide, value: currentPracticeRoute)
     }
 
-    private var grammarSection: some View {
-        let topic = EngifySampleData.grammarTopics[selectedGrammarTopic]
-
-        return EngifyCard(tint: theme.accentColor) {
-            VStack(alignment: .leading, spacing: Spacing.cardGap) {
-                HStack(spacing: Spacing.md) {
-                    EngifyIconBadge(systemImage: "book.fill", tint: theme.accentColor)
-                    Text("Grammar Lesson")
-                        .font(EngifyTypography.sectionTitle)
-                        .foregroundStyle(EngifyColors.textPrimary)
-                }
-
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: Spacing.sm) {
-                        ForEach(EngifySampleData.grammarTopics.indices, id: \.self) { index in
-                            Button {
-                                withAnimation(.easeInOut(duration: 0.18)) {
-                                    selectedGrammarTopic = index
-                                }
-                            } label: {
-                                Text(EngifySampleData.grammarTopics[index].title)
-                                    .font(EngifyTypography.caption.weight(.semibold))
-                                    .lineLimit(1)
-                                    .fixedSize(horizontal: true, vertical: false)
-                                    .foregroundStyle(selectedGrammarTopic == index ? EngifyColors.textInverse : theme.accentColor)
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 6)
-                                    .background(selectedGrammarTopic == index ? theme.accentColor : theme.accentColor.opacity(0.10))
-                                    .clipShape(Capsule())
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
-
-                VStack(alignment: .leading, spacing: Spacing.sm) {
-                    Text(topic.title)
-                        .font(EngifyTypography.cardTitle)
-                        .foregroundStyle(EngifyColors.textPrimary)
-
-                    Text(topic.explanation)
-                        .font(EngifyTypography.body)
-                        .foregroundStyle(EngifyColors.textSecondary)
-
-                    VStack(alignment: .leading, spacing: Spacing.md) {
-                        ForEach(topic.examples, id: \.self) { example in
-                            HStack(alignment: .top, spacing: Spacing.md) {
-                                Image(systemName: "checkmark.seal.fill")
-                                    .foregroundStyle(theme.accentColor)
-
-                                Text(example)
-                                    .font(EngifyTypography.body)
-                                    .foregroundStyle(EngifyColors.textPrimary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private var quizSection: some View {
-        VStack(alignment: .leading, spacing: Spacing.lg) {
-            EngifySectionHeader(
-                title: "Quick Quiz",
-                subtitle: "Turn grammar and vocabulary into confident recall."
+    private var lockedPracticeExperience: some View {
+        ZStack {
+            PracticeDashboardSelectorGrid(
+                accentColor: theme.accentColor,
+                onSelect: { _ in }
             )
-
-            HStack(spacing: Spacing.md) {
-                Text("\(currentQuizQuestions.count) questions")
-                    .font(EngifyTypography.caption)
-                    .foregroundStyle(EngifyColors.textSecondary)
-                Spacer(minLength: 0)
-            }
-
-            ForEach(currentQuizQuestions) { question in
-                MultipleChoiceQuestionCard(
-                    question: question,
-                    selectedAnswer: quizAnswers[question.id],
-                    revealAnswer: showQuizResult && quizAnswers[question.id] != nil,
-                    onSelect: { [weak gamification] selected in
-                        quizAnswers[question.id] = selected
-                        if selected != question.answerIndex {
-                            gamification?.loseHeart()
-                        }
-                    }
-                )
-            }
+            .blur(radius: 7)
+            .allowsHitTesting(false)
 
             EngifyCard(tint: theme.accentColor) {
-                VStack(alignment: .leading, spacing: Spacing.lg) {
-                    PrimaryButton(title: "Check Score", systemImage: "checkmark.circle.fill", action: {
-                        showQuizResult = true
-                        let earnedXP = quizScore * 5
-                        if earnedXP > 0 {
-                            gamification.earnXP(earnedXP)
-                        }
-                        if quizScore == currentQuizQuestions.count {
-                            gamification.completeLesson(type: .practice, xpEarned: earnedXP, lingotsEarned: 1)
-                            showBadge = true
-                        }
-                    })
-                    .environmentObject(theme)
+                VStack(spacing: Spacing.lg) {
+                    EngifyIconBadge(systemImage: "lock.fill", tint: theme.accentColor, size: 64)
 
-                    if showQuizResult {
-                        VStack(alignment: .leading, spacing: Spacing.md) {
-                            HStack(alignment: .center, spacing: Spacing.md) {
-                                VStack(alignment: .leading, spacing: Spacing.xs) {
-                                    Text("Your Score")
-                                        .font(EngifyTypography.caption)
-                                        .foregroundStyle(EngifyColors.textSecondary)
+                    VStack(spacing: Spacing.sm) {
+                        Text("Practice Is Locked in Guest Mode")
+                            .font(EngifyTypography.sectionTitle)
+                            .foregroundStyle(EngifyColors.textPrimary)
+                            .multilineTextAlignment(.center)
 
-                                    Text("\(quizScore)/\(currentQuizQuestions.count)")
-                                        .font(EngifyTypography.cardTitle)
-                                        .foregroundStyle(EngifyColors.textPrimary)
-                                }
-
-                                Spacer(minLength: 0)
-                                scoreIndicator
-                            }
-
-                            Text(
-                                quizScore == currentQuizQuestions.count
-                                    ? "Perfect! You're mastering these concepts."
-                                    : "Keep practicing. Every attempt builds your skills."
-                            )
+                        Text("Sign in to unlock the Speaking Hub, Grammar Academy, and Quick Quiz Arena while saving every streak and score.")
                             .font(EngifyTypography.body)
                             .foregroundStyle(EngifyColors.textSecondary)
-
-                            SecondaryButton(title: "New Quiz", systemImage: "arrow.clockwise", action: refreshQuiz)
-                        }
+                            .multilineTextAlignment(.center)
                     }
+
+                    SecondaryButton(
+                        title: "Unlock Practice",
+                        systemImage: "lock.open.fill",
+                        action: {
+                            authManager.presentAccountRequired(for: .practice)
+                        },
+                        feedbackEvent: .errorBuzz
+                    )
                 }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, Spacing.md)
             }
+            .padding(.top, 72)
         }
     }
 
-    private var scoreIndicator: some View {
-        ZStack {
-            Circle()
-                .stroke(scoreColor.opacity(0.20), lineWidth: 6)
-                .frame(width: 68, height: 68)
+    @ViewBuilder
+    private func routeView(for route: PracticeRoute) -> some View {
+        switch route {
+        case .dashboard:
+            PracticeDashboardSelectorGrid(accentColor: theme.accentColor) { selectedRoute in
+                navigate(to: selectedRoute)
+            }
 
-            Circle()
-                .trim(from: 0, to: CGFloat(quizScore) / CGFloat(max(1, currentQuizQuestions.count)))
-                .stroke(scoreColor, style: StrokeStyle(lineWidth: 6, lineCap: .round))
-                .frame(width: 68, height: 68)
-                .rotationEffect(.degrees(-90))
+        case .speaking:
+            DedicatedSpeakingPracticeView(
+                accentColor: theme.accentColor,
+                speakingSentence: EngifySampleData.speakingSentence,
+                speakingHintVisible: $speakingHintVisible,
+                onBack: { navigate(to: .dashboard) }
+            )
 
-            Text("\(Int(Double(quizScore) / Double(max(1, currentQuizQuestions.count)) * 100))%")
-                .font(.caption.weight(.bold))
-                .foregroundStyle(scoreColor)
+        case .grammar:
+            DedicatedGrammarLessonView(
+                accentColor: theme.accentColor,
+                grammarTopics: EngifySampleData.grammarTopics,
+                selectedTopicIndex: $selectedGrammarTopic,
+                learningSettings: learningSettings,
+                onBack: { navigate(to: .dashboard) }
+            )
+
+        case .quiz:
+            DedicatedQuizView(
+                accentColor: theme.accentColor,
+                theme: theme,
+                questions: currentQuizQuestions,
+                quizAnswers: $quizAnswers,
+                showQuizResult: $showQuizResult,
+                quizScore: quizScore,
+                scoreColor: scoreColor,
+                onBack: { navigate(to: .dashboard) },
+                onSelectAnswer: selectAnswer,
+                onCheckScore: checkQuizScore,
+                onRefresh: refreshQuiz
+            )
         }
+    }
+
+    private var routeTransition: AnyTransition {
+        let insertionEdge: Edge = navigationDirection == .forward ? .trailing : .leading
+        let removalEdge: Edge = navigationDirection == .forward ? .leading : .trailing
+
+        return .asymmetric(
+            insertion: .move(edge: insertionEdge).combined(with: .opacity),
+            removal: .move(edge: removalEdge).combined(with: .opacity)
+        )
     }
 
     private var scoreColor: Color {
@@ -263,10 +183,618 @@ struct PracticeView: View {
         }
     }
 
+    private func navigate(to route: PracticeRoute) {
+        guard currentPracticeRoute != route else { return }
+
+        navigationDirection = route.rawValue > currentPracticeRoute.rawValue ? .forward : .backward
+        withAnimation(EngifySpring.tabSlide) {
+            currentPracticeRoute = route
+        }
+        EngifyFeedback.shared.play(.tabSwitch, settings: learningSettings)
+    }
+
+    private func selectAnswer(for question: QuizQuestion, selected index: Int) {
+        guard !showQuizResult else { return }
+
+        let previousSelection = quizAnswers[question.id]
+        quizAnswers[question.id] = index
+
+        if previousSelection == nil, index != question.answerIndex {
+            gamification.loseHeart()
+        }
+    }
+
+    private func checkQuizScore() {
+        showQuizResult = true
+        let earnedXP = quizScore * 5
+
+        if earnedXP > 0 {
+            gamification.earnXP(earnedXP)
+        }
+
+        if quizScore == currentQuizQuestions.count, !currentQuizQuestions.isEmpty {
+            gamification.completeLesson(type: .practice, xpEarned: earnedXP, lingotsEarned: 1)
+            showBadge = true
+        }
+    }
+
     private func refreshQuiz() {
         let questionCount = min(5, EngifySampleData.practiceQuizQuestions.count)
         currentQuizQuestions = EngifySampleData.practiceQuizQuestions.shuffled().prefix(questionCount).map { $0 }
         quizAnswers.removeAll()
         showQuizResult = false
+    }
+}
+
+private enum PracticeRoute: Int, Hashable {
+    case dashboard
+    case speaking
+    case grammar
+    case quiz
+
+    var headerTitle: String {
+        switch self {
+        case .dashboard:
+            return "Practice"
+        case .speaking:
+            return "Speaking Hub"
+        case .grammar:
+            return "Grammar Academy"
+        case .quiz:
+            return "Quick Quiz Arena"
+        }
+    }
+
+    var headerSubtitle: String {
+        switch self {
+        case .dashboard:
+            return "Choose your next focused workout"
+        case .speaking:
+            return "Train your pronunciation and verbal fluency"
+        case .grammar:
+            return "Master structures, tenses, and sentence building"
+        case .quiz:
+            return "Test your skills with rapid-fire reps"
+        }
+    }
+}
+
+private enum PracticeNavigationDirection {
+    case forward
+    case backward
+}
+
+private struct PracticeDashboardSelectorGrid: View {
+    let accentColor: Color
+    let onSelect: (PracticeRoute) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.xl) {
+            EngifyCard(tint: accentColor) {
+                VStack(alignment: .leading, spacing: Spacing.md) {
+                    Text("Choose your lane")
+                        .font(EngifyTypography.caption)
+                        .foregroundStyle(EngifyColors.textSecondary)
+                        .textCase(.uppercase)
+
+                    Text("Three focused practice zones, each with room to breathe.")
+                        .font(EngifyTypography.cardTitle)
+                        .foregroundStyle(EngifyColors.textPrimary)
+
+                    Text("Jump into speaking, zoom in on grammar, or run a fast quiz sprint without the root tab feeling overloaded.")
+                        .font(EngifyTypography.body)
+                        .foregroundStyle(EngifyColors.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            PracticeHubCard(
+                accentColor: accentColor,
+                eyebrow: "Section A • Speaking Hub",
+                title: "Speaking Practice",
+                subtitle: "Train your pronunciation and verbal fluency.",
+                systemImage: "mic.fill",
+                route: .speaking,
+                layout: .wide,
+                onSelect: onSelect
+            )
+
+            HStack(alignment: .top, spacing: Spacing.md) {
+                PracticeHubCard(
+                    accentColor: accentColor,
+                    eyebrow: "Section B • Grammar Academy",
+                    title: "Grammar Lessons",
+                    subtitle: "Master structures, tenses, and sentence building.",
+                    systemImage: "book.closed.fill",
+                    route: .grammar,
+                    layout: .compact,
+                    onSelect: onSelect
+                )
+
+                PracticeHubCard(
+                    accentColor: accentColor,
+                    eyebrow: "Section C • Quick Quiz Arena",
+                    title: "Interactive Quizzes",
+                    subtitle: "Test your skills with rapid-fire reps.",
+                    systemImage: "checklist.checked",
+                    route: .quiz,
+                    layout: .compact,
+                    onSelect: onSelect
+                )
+            }
+        }
+    }
+}
+
+private struct PracticeHubCard: View {
+    enum Layout {
+        case wide
+        case compact
+    }
+
+    let accentColor: Color
+    let eyebrow: String
+    let title: String
+    let subtitle: String
+    let systemImage: String
+    let route: PracticeRoute
+    let layout: Layout
+    let onSelect: (PracticeRoute) -> Void
+
+    var body: some View {
+        Button {
+            withAnimation(EngifySpring.jellyRelease) {
+                onSelect(route)
+            }
+        } label: {
+            ZStack(alignment: .topLeading) {
+                RoundedRectangle(cornerRadius: 28, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                accentColor.opacity(0.20),
+                                EngifyColors.surface.opacity(0.98)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 28, style: .continuous)
+                            .stroke(accentColor.opacity(0.18), lineWidth: 1)
+                    )
+
+                Image(systemName: systemImage)
+                    .font(.system(size: layout == .wide ? 74 : 58, weight: .black))
+                    .foregroundStyle(accentColor.opacity(0.14))
+                    .offset(
+                        x: layout == .wide ? 150 : 20,
+                        y: layout == .wide ? 10 : 26
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+
+                VStack(alignment: .leading, spacing: Spacing.md) {
+                    Text(eyebrow)
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .foregroundStyle(accentColor)
+                        .textCase(.uppercase)
+
+                    Text(title)
+                        .font(layout == .wide ? EngifyTypography.screenTitle : EngifyTypography.sectionTitle)
+                        .foregroundStyle(EngifyColors.textPrimary)
+                        .multilineTextAlignment(.leading)
+
+                    Text(subtitle)
+                        .font(EngifyTypography.body)
+                        .foregroundStyle(EngifyColors.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    HStack(spacing: Spacing.sm) {
+                        Text("Open")
+                            .font(EngifyTypography.caption.weight(.semibold))
+                        Image(systemName: "arrow.right")
+                            .font(.caption.weight(.bold))
+                    }
+                    .foregroundStyle(accentColor)
+                    .padding(.top, layout == .wide ? Spacing.sm : 0)
+                }
+                .padding(layout == .wide ? Spacing.xl : Spacing.lg)
+                .frame(maxWidth: .infinity, minHeight: layout == .wide ? 210 : 240, alignment: .topLeading)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .engifyJellyPress()
+    }
+}
+
+private struct PracticeDetailHeader: View {
+    let label: String
+    let title: String
+    let subtitle: String
+    let onBack: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.lg) {
+            Button {
+                withAnimation(EngifySpring.tabSlide) {
+                    onBack()
+                }
+            } label: {
+                HStack(spacing: Spacing.xs) {
+                    Image(systemName: "chevron.left")
+                    Text(label)
+                }
+                .font(EngifyTypography.caption.weight(.semibold))
+                .foregroundStyle(EngifyColors.textSecondary)
+                .padding(.horizontal, Spacing.md)
+                .padding(.vertical, Spacing.sm)
+                .background(
+                    Capsule()
+                        .fill(EngifyColors.surface.opacity(0.92))
+                )
+            }
+            .buttonStyle(.plain)
+            .engifyJellyPress()
+
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                Text(title)
+                    .font(EngifyTypography.screenTitle)
+                    .foregroundStyle(EngifyColors.textPrimary)
+
+                Text(subtitle)
+                    .font(EngifyTypography.body)
+                    .foregroundStyle(EngifyColors.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+}
+
+private struct DedicatedSpeakingPracticeView: View {
+    let accentColor: Color
+    let speakingSentence: String
+    @Binding var speakingHintVisible: Bool
+    let onBack: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.xl) {
+            PracticeDetailHeader(
+                label: "Practice",
+                title: "Speaking Practice",
+                subtitle: "Focus on one target phrase at a time and build calm, repeatable fluency.",
+                onBack: onBack
+            )
+
+            EngifyCard(tint: accentColor) {
+                VStack(alignment: .center, spacing: Spacing.xl) {
+                    VStack(alignment: .leading, spacing: Spacing.md) {
+                        Text("Target phrase")
+                            .font(EngifyTypography.caption.weight(.semibold))
+                            .foregroundStyle(accentColor)
+                            .textCase(.uppercase)
+
+                        Text(speakingSentence)
+                            .font(.system(size: 24, weight: .regular, design: .rounded))
+                            .foregroundStyle(EngifyColors.textPrimary)
+                            .lineSpacing(6)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+
+                    Spacer(minLength: 0)
+
+                    Button {
+                        withAnimation(EngifySpring.jellyRelease) {
+                            speakingHintVisible.toggle()
+                        }
+                    } label: {
+                        VStack(spacing: Spacing.sm) {
+                            ZStack {
+                                Circle()
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [EngifyColors.sage, accentColor],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
+                                    .frame(width: 150, height: 150)
+                                    .shadow(color: accentColor.opacity(0.28), radius: 18, x: 0, y: 14)
+
+                                Image(systemName: "mic.fill")
+                                    .font(.system(size: 48, weight: .bold))
+                                    .foregroundStyle(.white)
+                            }
+
+                            Text("Start Speaking")
+                                .font(EngifyTypography.sectionTitle)
+                                .foregroundStyle(EngifyColors.textPrimary)
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.plain)
+                    .engifyJellyPress()
+
+                    Spacer(minLength: 0)
+
+                    Group {
+                        if speakingHintVisible {
+                            HStack(alignment: .top, spacing: Spacing.md) {
+                                Image(systemName: "sparkles")
+                                    .foregroundStyle(accentColor)
+
+                                Text("Microphone recording and pronunciation feedback will be available in a future update.")
+                                    .font(EngifyTypography.caption)
+                                    .foregroundStyle(EngifyColors.textSecondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .padding(Spacing.md)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(accentColor.opacity(0.10))
+                            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                        } else {
+                            Text("Tap the microphone when you're ready for a focused speaking rep.")
+                                .font(EngifyTypography.caption)
+                                .foregroundStyle(EngifyColors.textSecondary)
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, minHeight: 460)
+            }
+        }
+    }
+}
+
+private struct DedicatedGrammarLessonView: View {
+    let accentColor: Color
+    let grammarTopics: [(title: String, explanation: String, examples: [String])]
+    @Binding var selectedTopicIndex: Int
+    let learningSettings: LearningSettingsManager
+    let onBack: () -> Void
+
+    private var topic: (title: String, explanation: String, examples: [String]) {
+        grammarTopics[selectedTopicIndex]
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.xl) {
+            PracticeDetailHeader(
+                label: "Practice",
+                title: "Grammar Lessons",
+                subtitle: "Browse a topic, settle into the rule, and give examples enough room to actually teach.",
+                onBack: onBack
+            )
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: Spacing.sm) {
+                    ForEach(grammarTopics.indices, id: \.self) { index in
+                        Button {
+                            withAnimation(EngifySpring.tabSlide) {
+                                selectedTopicIndex = index
+                            }
+                            EngifyFeedback.shared.play(.tabSwitch, settings: learningSettings)
+                        } label: {
+                            Text(grammarTopics[index].title)
+                                .font(EngifyTypography.caption.weight(.semibold))
+                                .lineLimit(1)
+                                .fixedSize(horizontal: true, vertical: false)
+                                .foregroundStyle(selectedTopicIndex == index ? EngifyColors.textInverse : accentColor)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 8)
+                                .background(selectedTopicIndex == index ? accentColor : accentColor.opacity(0.10))
+                                .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .engifyJellyPress()
+                    }
+                }
+            }
+
+            EngifyCard {
+                VStack(alignment: .leading, spacing: Spacing.xl) {
+                    VStack(alignment: .leading, spacing: Spacing.sm) {
+                        Text(topic.title)
+                            .font(EngifyTypography.screenTitle)
+                            .foregroundStyle(EngifyColors.textPrimary)
+
+                        Text(topic.explanation)
+                            .font(EngifyTypography.body)
+                            .foregroundStyle(EngifyColors.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    VStack(alignment: .leading, spacing: Spacing.md) {
+                        Text("Sentence blueprints")
+                            .font(EngifyTypography.headline)
+                            .foregroundStyle(EngifyColors.textPrimary)
+
+                        ForEach(topic.examples, id: \.self) { example in
+                            HStack(alignment: .top, spacing: Spacing.md) {
+                                Image(systemName: "checkmark.seal.fill")
+                                    .foregroundStyle(accentColor)
+
+                                Text(example)
+                                    .font(EngifyTypography.body)
+                                    .foregroundStyle(EngifyColors.textPrimary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: Spacing.md) {
+                        Text("Translation keys")
+                            .font(EngifyTypography.headline)
+                            .foregroundStyle(EngifyColors.textPrimary)
+
+                        ForEach(grammarTranslationKeys(for: topic.title), id: \.self) { key in
+                            Text(key)
+                                .font(EngifyTypography.body)
+                                .foregroundStyle(EngifyColors.textSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, minHeight: 420, alignment: .topLeading)
+            }
+        }
+    }
+
+    private func grammarTranslationKeys(for title: String) -> [String] {
+        switch title {
+        case "Present Simple":
+            return [
+                "habits = thoi quen",
+                "every day / usually / often = moi ngay / thuong / hay",
+                "he, she, it + verb-s = can ghi nho duoi -s"
+            ]
+        case "There is / There are":
+            return [
+                "there is = co (so it)",
+                "there are = co (so nhieu)",
+                "on the table / in the room = tren ban / trong phong"
+            ]
+        case "Past Simple":
+            return [
+                "yesterday / last night = hom qua / toi qua",
+                "verb-ed or irregular form = dong tu qua khu",
+                "finished action = hanh dong da hoan thanh"
+            ]
+        default:
+            return [
+                "main idea = y chinh cua cau truc",
+                "signal words = tu khoa nhan biet",
+                "build one sentence, then vary it = lap 1 cau mau roi bien doi"
+            ]
+        }
+    }
+}
+
+private struct DedicatedQuizView: View {
+    let accentColor: Color
+    let theme: ThemeManager
+    let questions: [QuizQuestion]
+    @Binding var quizAnswers: [UUID: Int]
+    @Binding var showQuizResult: Bool
+    let quizScore: Int
+    let scoreColor: Color
+    let onBack: () -> Void
+    let onSelectAnswer: (QuizQuestion, Int) -> Void
+    let onCheckScore: () -> Void
+    let onRefresh: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.xl) {
+            PracticeDetailHeader(
+                label: "Practice",
+                title: "Interactive Quizzes",
+                subtitle: "Run a tight set of rapid-fire questions, then see exactly how your recall held up.",
+                onBack: onBack
+            )
+
+            EngifyCard(tint: accentColor) {
+                HStack(alignment: .center, spacing: Spacing.md) {
+                    VStack(alignment: .leading, spacing: Spacing.xs) {
+                        Text("Quiz set")
+                            .font(EngifyTypography.caption)
+                            .foregroundStyle(EngifyColors.textSecondary)
+
+                        Text("\(questions.count) questions ready")
+                            .font(EngifyTypography.cardTitle)
+                            .foregroundStyle(EngifyColors.textPrimary)
+                    }
+
+                    Spacer(minLength: 0)
+
+                    SecondaryButton(
+                        title: "New Quiz",
+                        systemImage: "arrow.clockwise",
+                        action: onRefresh,
+                        feedbackEvent: .tabSwitch
+                    )
+                }
+            }
+
+            ForEach(questions) { question in
+                MultipleChoiceQuestionCard(
+                    question: question,
+                    selectedAnswer: quizAnswers[question.id],
+                    revealAnswer: showQuizResult && quizAnswers[question.id] != nil,
+                    onSelect: { selected in
+                        onSelectAnswer(question, selected)
+                    }
+                )
+            }
+
+            EngifyCard(tint: accentColor) {
+                VStack(alignment: .leading, spacing: Spacing.lg) {
+                    PrimaryButton(
+                        title: showQuizResult ? "Score Locked In" : "Check Score",
+                        systemImage: "checkmark.circle.fill",
+                        action: onCheckScore,
+                        isDisabled: showQuizResult,
+                        feedbackEvent: .successPop
+                    )
+                    .environmentObject(theme)
+
+                    if showQuizResult {
+                        VStack(alignment: .leading, spacing: Spacing.md) {
+                            HStack(alignment: .center, spacing: Spacing.md) {
+                                VStack(alignment: .leading, spacing: Spacing.xs) {
+                                    Text("Your Score")
+                                        .font(EngifyTypography.caption)
+                                        .foregroundStyle(EngifyColors.textSecondary)
+
+                                    Text("\(quizScore)/\(questions.count)")
+                                        .font(EngifyTypography.cardTitle)
+                                        .foregroundStyle(EngifyColors.textPrimary)
+                                }
+
+                                Spacer(minLength: 0)
+
+                                QuizScoreIndicator(
+                                    score: quizScore,
+                                    total: max(1, questions.count),
+                                    color: scoreColor
+                                )
+                            }
+
+                            Text(
+                                quizScore == questions.count
+                                    ? "Perfect! You're mastering these concepts."
+                                    : "Keep practicing. Every attempt builds your skills."
+                            )
+                            .font(EngifyTypography.body)
+                            .foregroundStyle(EngifyColors.textSecondary)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct QuizScoreIndicator: View {
+    let score: Int
+    let total: Int
+    let color: Color
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(color.opacity(0.20), lineWidth: 6)
+                .frame(width: 68, height: 68)
+
+            Circle()
+                .trim(from: 0, to: CGFloat(score) / CGFloat(total))
+                .stroke(color, style: StrokeStyle(lineWidth: 6, lineCap: .round))
+                .frame(width: 68, height: 68)
+                .rotationEffect(.degrees(-90))
+
+            Text("\(Int(Double(score) / Double(total) * 100))%")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(color)
+        }
     }
 }

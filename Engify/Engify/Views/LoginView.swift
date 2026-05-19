@@ -147,6 +147,7 @@ struct LoginView: View {
                 actionSection
                 dividerSection
                 socialSection
+                guestAccessSection
             }
         }
     }
@@ -328,6 +329,38 @@ struct LoginView: View {
                 authManager.errorMessage = "Apple sign-in is not enabled yet. Add Supabase OAuth callback wiring to turn it on safely."
             }
         }
+    }
+
+    private var guestAccessSection: some View {
+        VStack(spacing: Spacing.sm) {
+            Button {
+                withAnimation(.spring(response: 0.38, dampingFraction: 0.84)) {
+                    authManager.continueAsGuest()
+                }
+            } label: {
+                Text("Continue as Guest")
+                    .font(EngifyTypography.bodyStrong)
+                    .foregroundStyle(theme.accentColor.opacity(0.92))
+                    .frame(maxWidth: .infinity)
+                    .frame(minHeight: Spacing.controlHeight)
+                    .background(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .fill(Color.clear)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .stroke(theme.accentColor.opacity(0.34), lineWidth: 1)
+                    )
+            }
+            .buttonStyle(.plain)
+
+            Text("Explore the app with limited guest access before creating an account.")
+                .font(EngifyTypography.caption)
+                .foregroundStyle(EngifyColors.textSecondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
+        }
+        .padding(.top, Spacing.xs)
     }
 
     private var trustSection: some View {

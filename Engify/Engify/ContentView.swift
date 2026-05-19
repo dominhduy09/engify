@@ -28,15 +28,20 @@ struct ContentView: View {
     @AppStorage("engify_has_seen_intro") private var legacyHasSeenIntro = false
 
     var body: some View {
-        Group {
+        ZStack {
             if hasSeenOnboarding {
                 AuthGateView()
+                    .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity), removal: .opacity))
             } else {
                 IntroView {
-                    hasSeenOnboarding = true
+                    withAnimation(.spring(response: 0.42, dampingFraction: 0.86)) {
+                        hasSeenOnboarding = true
+                    }
                 }
+                .transition(.asymmetric(insertion: .opacity, removal: .move(edge: .leading).combined(with: .opacity)))
             }
         }
+        .animation(.spring(response: 0.42, dampingFraction: 0.86), value: hasSeenOnboarding)
         .onAppear {
             guard !hasSeenOnboarding, legacyHasSeenIntro else { return }
             hasSeenOnboarding = true

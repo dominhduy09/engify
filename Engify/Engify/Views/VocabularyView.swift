@@ -6,12 +6,14 @@ struct VocabularyView: View {
     @State private var cardRotation: Double = 0
     @State private var wordsReviewedThisSession = 0
     @State private var showLessonComplete = false
+    @State private var savedToastWordTitle: String?
     @EnvironmentObject private var savedWordsManager: SavedWordsManager
     @EnvironmentObject private var theme: ThemeManager
     @EnvironmentObject private var gamification: GamificationManager
     @EnvironmentObject private var learningSettings: LearningSettingsManager
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var showSettingsSheet = false
+    @State private var showSavedWordBank = false
 
     init() {
         let initialWord = EngifySampleData.vocabularyWords.randomElement()
@@ -50,7 +52,20 @@ struct VocabularyView: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
+        .overlay(alignment: .top) {
+            if let savedToastWordTitle {
+                savedWordToast(wordTitle: savedToastWordTitle)
+                    .padding(.horizontal, Spacing.screenPadding)
+                    .padding(.top, 8)
+                    .transition(.move(edge: .top).combined(with: .scale(scale: 0.92)).combined(with: .opacity))
+                    .zIndex(10)
+            }
+        }
         .engifySettingsSheet(isPresented: $showSettingsSheet)
+        .sheet(isPresented: $showSavedWordBank) {
+            SavedWordBankSheet()
+                .environmentObject(savedWordsManager)
+        }
     }
 
     private var globalHeader: some View {
@@ -123,8 +138,14 @@ struct VocabularyView: View {
 
     private var saveButton: some View {
         Button {
-            savedWordsManager.toggleSaved(word: currentWord)
-            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            let wasSaved = savedWordsManager.isSaved(word: currentWord)
+            withAnimation(EngifySpring.jellyRelease) {
+                savedWordsManager.toggleSaved(word: currentWord)
+            }
+            EngifyFeedback.shared.play(.successPop, settings: learningSettings)
+            if !wasSaved, savedWordsManager.isSaved(word: currentWord) {
+                showSavedWordToast(for: currentWord.word)
+            }
         } label: {
             HStack(spacing: Spacing.sm) {
                 Image(systemName: savedWordsManager.isSaved(word: currentWord) ? "bookmark.fill" : "bookmark")
@@ -136,8 +157,62 @@ struct VocabularyView: View {
             .frame(minHeight: 42)
             .background((savedWordsManager.isSaved(word: currentWord) ? theme.accentColor : EngifyColors.border).opacity(0.14))
             .clipShape(Capsule())
+            .drawingGroup()
         }
         .buttonStyle(.plain)
+        .engifyJellyPress()
+    }
+
+    private func savedWordToast(wordTitle: String) -> some View {
+        Button {
+            withAnimation(EngifySpring.jellyRelease) {
+                savedToastWordTitle = nil
+                showSavedWordBank = true
+            }
+            EngifyFeedback.shared.play(.tabSwitch, settings: learningSettings)
+        } label: {
+            HStack(spacing: Spacing.md) {
+                ZStack {
+                    Circle()
+                        .fill(theme.accentColor.opacity(0.14))
+                        .frame(width: 42, height: 42)
+
+                    Image(systemName: "bookmark.circle.fill")
+                        .font(.title3.weight(.bold))
+                        .foregroundStyle(theme.accentColor)
+                }
+
+                VStack(alignment: .leading, spacing: Spacing.xxs) {
+                    Text("Saved to Word Bank")
+                        .font(EngifyTypography.bodyStrong)
+                        .foregroundStyle(EngifyColors.textPrimary)
+
+                    Text("\"\(wordTitle)\" is ready to review. Tap to open.")
+                        .font(EngifyTypography.caption)
+                        .foregroundStyle(EngifyColors.textSecondary)
+                        .lineLimit(2)
+                }
+
+                Spacer(minLength: 0)
+
+                Image(systemName: "arrow.up.right")
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(theme.accentColor)
+            }
+            .padding(.horizontal, Spacing.lg)
+            .padding(.vertical, Spacing.md)
+            .background(
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .fill(EngifyColors.surface.opacity(0.97))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .stroke(theme.accentColor.opacity(0.18), lineWidth: 1)
+            )
+            .shadow(color: EngifyColors.primary.opacity(0.12), radius: 18, x: 0, y: 10)
+        }
+        .buttonStyle(.plain)
+        .engifyJellyPress()
     }
 
     private var progressIndicator: some View {
@@ -174,10 +249,10 @@ struct VocabularyView: View {
             }
 
             PrimaryButton(title: "Complete Lesson", systemImage: "checkmark.circle.fill", action: {
-                advanceWord()
                 gamification.completeLesson(type: .vocabulary, xpEarned: 10)
                 showLessonComplete = true
-            })
+                advanceWord(triggerFeedback: false)
+            }, feedbackEvent: .successPop)
             .environmentObject(theme)
         }
     }
@@ -195,13 +270,13 @@ struct VocabularyView: View {
         .environmentObject(theme)
     }
 
-    private func advanceWord() {
+    private func advanceWord(triggerFeedback: Bool = true) {
         wordsReviewedThisSession += 1
         if wordsReviewedThisSession % 5 == 0 {
             gamification.earnXP(5)
         }
 
-        withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
+        withAnimation(EngifySpring.tabSlide) {
             let availableWords = EngifySampleData.vocabularyWords.filter { !previousWords.contains($0.word) }
             let nextWord: Word
 
@@ -221,15 +296,34 @@ struct VocabularyView: View {
             cardRotation += 360
         }
 
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        if triggerFeedback {
+            EngifyFeedback.shared.play(.tabSwitch, settings: learningSettings)
+        }
     }
 
     private func skipWord() {
-        withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
+        withAnimation(EngifySpring.tabSlide) {
             currentWord = EngifySampleData.vocabularyWords.randomElement() ?? currentWord
             cardRotation += 360
         }
 
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        EngifyFeedback.shared.play(.tabSwitch, settings: learningSettings)
+    }
+
+    private func showSavedWordToast(for wordTitle: String) {
+        withAnimation(EngifySpring.jellyRelease) {
+            savedToastWordTitle = wordTitle
+        }
+
+        Task {
+            try? await Task.sleep(nanoseconds: 2_400_000_000)
+            guard savedToastWordTitle == wordTitle else { return }
+
+            await MainActor.run {
+                withAnimation(EngifySpring.settle) {
+                    savedToastWordTitle = nil
+                }
+            }
+        }
     }
 }

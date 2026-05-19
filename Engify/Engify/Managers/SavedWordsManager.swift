@@ -21,6 +21,7 @@ import Foundation
 final class SavedWordsManager: ObservableObject {
     @Published private(set) var savedDictionaryEntries: [DictionaryEntry] = []
     @Published private(set) var savedVocabularyWords: Set<String> = []
+    @Published private(set) var lastSavedWordEvent: SavedWordEvent?
 
     private let dictionaryStorageKey = "engify.saved.dictionary.entries"
     private let vocabularyStorageKey = "engify.saved.vocabulary.words"
@@ -43,6 +44,7 @@ final class SavedWordsManager: ObservableObject {
             }
         } else {
             savedDictionaryEntries.append(entry)
+            lastSavedWordEvent = .dictionary(entry)
         }
 
         saveSavedData()
@@ -58,9 +60,50 @@ final class SavedWordsManager: ObservableObject {
             savedVocabularyWords.remove(key)
         } else {
             savedVocabularyWords.insert(key)
+            lastSavedWordEvent = .vocabulary(word)
         }
 
         saveSavedData()
+    }
+
+    var savedWordBankItems: [SavedWordBankItem] {
+        let dictionaryItems = savedDictionaryEntries.map { entry in
+            SavedWordBankItem(
+                id: "dictionary:\(entry.id)",
+                title: entry.word,
+                subtitle: entry.partOfSpeech.capitalized,
+                phonetic: entry.phonetic,
+                detail: entry.vietnameseMeaning,
+                example: entry.example,
+                source: .dictionary,
+                createdAt: nil
+            )
+        }
+
+        let vocabularyItems: [SavedWordBankItem] = EngifySampleData.vocabularyWords.compactMap { word -> SavedWordBankItem? in
+            guard savedVocabularyWords.contains(word.word.lowercased()) else { return nil }
+
+            return SavedWordBankItem(
+                id: "vocabulary:\(word.word.lowercased())",
+                title: word.word,
+                subtitle: word.partOfSpeech.capitalized,
+                phonetic: word.pronunciation,
+                detail: word.meaning,
+                example: word.example,
+                source: .vocabulary,
+                createdAt: nil
+            )
+        }
+
+        return dictionaryItems + vocabularyItems.sorted {
+            $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
+        }
+    }
+
+    func consumeLastSavedWordEvent() -> SavedWordEvent? {
+        let event = lastSavedWordEvent
+        lastSavedWordEvent = nil
+        return event
     }
 
     private func loadSavedData() {
@@ -81,4 +124,43 @@ final class SavedWordsManager: ObservableObject {
 
         UserDefaults.standard.set(Array(savedVocabularyWords), forKey: vocabularyStorageKey)
     }
+}
+
+enum SavedWordEvent: Equatable {
+    case dictionary(DictionaryEntry)
+    case vocabulary(Word)
+
+    var displayTitle: String {
+        switch self {
+        case let .dictionary(entry):
+            return entry.word
+        case let .vocabulary(word):
+            return word.word
+        }
+    }
+}
+
+struct SavedWordBankItem: Identifiable, Equatable {
+    enum Source: Equatable {
+        case dictionary
+        case vocabulary
+
+        var label: String {
+            switch self {
+            case .dictionary:
+                return "Dictionary"
+            case .vocabulary:
+                return "Vocabulary"
+            }
+        }
+    }
+
+    let id: String
+    let title: String
+    let subtitle: String
+    let phonetic: String
+    let detail: String
+    let example: String
+    let source: Source
+    let createdAt: Date?
 }

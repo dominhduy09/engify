@@ -29,8 +29,7 @@ final class SupabaseManager: ObservableObject {
         let profile = UserProfile(
             id: userID,
             email: email,
-            displayName: displayName,
-            createdAt: Date()
+            displayName: displayName
         )
 
         try await configuredClient()
@@ -190,7 +189,30 @@ struct UserProfile: Codable {
     let id: String
     let email: String
     let displayName: String
-    let createdAt: Date
+    let createdAt: Date?
+    let updatedAt: Date?
+
+    init(
+        id: String,
+        email: String,
+        displayName: String,
+        createdAt: Date? = nil,
+        updatedAt: Date? = nil
+    ) {
+        self.id = id
+        self.email = email
+        self.displayName = displayName
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case email
+        case displayName = "display_name"
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+    }
 }
 
 struct UserProgressData: Codable {
@@ -205,7 +227,10 @@ struct UserProgressData: Codable {
 
     enum CodingKeys: String, CodingKey {
         case userId = "user_id"
-        case xp, level, streakDays, hearts, maxHearts, lingots, lastActiveDate
+        case xp, level, hearts, lingots
+        case streakDays = "streak_days"
+        case maxHearts = "max_hearts"
+        case lastActiveDate = "last_active_date"
     }
 }
 
@@ -222,7 +247,9 @@ struct SavedWordData: Codable {
     enum CodingKeys: String, CodingKey {
         case userId = "user_id"
         case wordId = "word_id"
-        case word, pronunciation, partOfSpeech, meaning, example, savedAt
+        case word, pronunciation, meaning, example
+        case partOfSpeech = "part_of_speech"
+        case savedAt = "saved_at"
     }
 }
 
@@ -237,7 +264,10 @@ struct LessonResultData: Codable {
     enum CodingKeys: String, CodingKey {
         case id
         case userId = "user_id"
-        case lessonType, xpEarned, lingotsEarned, completedAt
+        case lessonType = "lesson_type"
+        case xpEarned = "xp_earned"
+        case lingotsEarned = "lingots_earned"
+        case completedAt = "completed_at"
     }
 }
 

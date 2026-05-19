@@ -2,11 +2,28 @@ import SwiftUI
 
 struct MainTabView: View {
     @State private var selectedTab: EngifyTab = .home
+    @EnvironmentObject private var authManager: AuthenticationManager
+
+    private var tabSelection: Binding<EngifyTab> {
+        Binding(
+            get: { selectedTab },
+            set: { newTab in
+                if authManager.isGuestMode && newTab == .vocabulary {
+                    authManager.presentAccountRequired(for: .vocabulary)
+                    return
+                }
+
+                withAnimation(EngifySpring.tabSlide) {
+                    selectedTab = newTab
+                }
+            }
+        )
+    }
 
     var body: some View {
         NavigationView {
-            TabView(selection: $selectedTab) {
-                HomeView(selectedTab: $selectedTab)
+            TabView(selection: tabSelection) {
+                HomeView(selectedTab: tabSelection)
                     .tag(EngifyTab.home)
 
                 VocabularyView()
@@ -23,7 +40,7 @@ struct MainTabView: View {
             }
             .tint(EngifyColors.accent)
             .safeAreaInset(edge: .bottom) {
-                FloatingTabBar(selectedTab: $selectedTab)
+                FloatingTabBar(selectedTab: tabSelection)
                     .padding(.horizontal, Spacing.screenPadding)
                     .padding(.top, Spacing.sm)
                     .padding(.bottom, Spacing.floatingTabBarBottomPadding)
@@ -32,12 +49,33 @@ struct MainTabView: View {
             .ignoresSafeArea(.keyboard)
         }
         .navigationViewStyle(StackNavigationViewStyle())
+        .sheet(item: $authManager.accountRequiredContext) { context in
+            if #available(iOS 16.0, *) {
+                AccountRequiredSheet(
+                    context: context,
+                    onSignIn: {
+                        authManager.endGuestModeAndShowAuth(
+                            message: "Sign in or create an account to unlock full access and keep your progress."
+                        )
+                    },
+                    onMaybeLater: {
+                        authManager.dismissAccountRequired()
+                        selectedTab = .home
+                    }
+                )
+                .presentationDetents([.height(340)])
+                .presentationDragIndicator(.visible)
+            } else {
+                // Fallback on earlier versions
+            }
+        }
     }
 }
 
 struct FloatingTabBar: View {
     @Binding var selectedTab: EngifyTab
     @Environment(\.colorScheme) private var colorScheme
+    @Namespace private var activeTabNamespace
 
     private static let tabs: [(EngifyTab, String, String, String)] = [
         (.home, "house.fill", "Home", "Home"),
@@ -101,12 +139,13 @@ struct FloatingTabBar: View {
             compactTitle: compactTitle,
             icon: icon,
             isSelected: selectedTab == tab,
-            usesCompactLabel: usesCompactLabel
+            usesCompactLabel: usesCompactLabel,
+            namespace: activeTabNamespace
         ) {
-            withAnimation(.spring(response: 0.36, dampingFraction: 0.76)) {
+            withAnimation(EngifySpring.tabSlide) {
                 selectedTab = tab
             }
-            UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+            EngifyFeedback.shared.play(.tabSwitch)
         }
     }
 }
@@ -117,50 +156,39 @@ struct TabBarButton: View {
     let icon: String
     let isSelected: Bool
     let usesCompactLabel: Bool
+    let namespace: Namespace.ID
     let action: () -> Void
-
-    @State private var isPressed = false
 
     var body: some View {
         Button(action: action) {
-            VStack(spacing: Spacing.xxs) {
-                Image(systemName: icon)
-                    .font(.system(size: 15, weight: .semibold))
-
-                Text(usesCompactLabel ? compactTitle : title)
-                    .font(.system(size: 10, weight: .semibold, design: .rounded))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.72)
-            }
-            .foregroundStyle(isSelected ? EngifyColors.textInverse : EngifyColors.textSecondary)
-            .frame(maxWidth: .infinity)
-            .frame(minHeight: 52)
-            .padding(.horizontal, Spacing.xs)
-            .background(
-                Group {
-                    if isSelected {
-                        EngifyColors.accentGradient
-                    }
+            ZStack {
+                if isSelected {
+                    Capsule()
+                        .fill(EngifyColors.accentGradient)
+                        .matchedGeometryEffect(id: "active-tab-pill", in: namespace)
                 }
-            )
+
+                VStack(spacing: Spacing.xxs) {
+                    Image(systemName: icon)
+                        .font(.system(size: 15, weight: .semibold))
+
+                    Text(usesCompactLabel ? compactTitle : title)
+                        .font(.system(size: 10, weight: .semibold, design: .rounded))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.72)
+                }
+                .foregroundStyle(isSelected ? EngifyColors.textInverse : EngifyColors.textSecondary)
+                .frame(maxWidth: .infinity)
+                .frame(minHeight: 52)
+                .padding(.horizontal, Spacing.xs)
+            }
             .clipShape(Capsule())
-            .scaleEffect(isPressed ? 0.98 : 1)
+            .compositingGroup()
+            .drawingGroup()
         }
         .buttonStyle(.plain)
         .frame(minWidth: 58)
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in
-                    withAnimation(.easeInOut(duration: 0.12)) {
-                        isPressed = true
-                    }
-                }
-                .onEnded { _ in
-                    withAnimation(.spring(response: 0.24, dampingFraction: 0.72)) {
-                        isPressed = false
-                    }
-                }
-        )
+        .engifyJellyPress()
     }
 }
 

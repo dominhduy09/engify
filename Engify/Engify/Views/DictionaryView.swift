@@ -3,12 +3,15 @@ import SwiftUI
 
 struct DictionaryView: View {
     @StateObject private var viewModel = DictionaryViewModel()
+    @EnvironmentObject private var authManager: AuthenticationManager
     @EnvironmentObject private var savedWordsManager: SavedWordsManager
     @EnvironmentObject private var theme: ThemeManager
     @EnvironmentObject private var learningSettings: LearningSettingsManager
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var audioPlayer: AVPlayer?
     @State private var showSettingsSheet = false
+    @State private var savedToastWordTitle: String?
+    @State private var showSavedWordBank = false
 
     var body: some View {
         EngifyScreenScroll {
@@ -43,7 +46,20 @@ struct DictionaryView: View {
         }
         .tabTransition()
         .animation(.easeInOut(duration: 0.22), value: viewModel.showSuggestions)
+        .overlay(alignment: .top) {
+            if let savedToastWordTitle {
+                savedWordToast(wordTitle: savedToastWordTitle)
+                    .padding(.horizontal, Spacing.screenPadding)
+                    .padding(.top, 8)
+                    .transition(.move(edge: .top).combined(with: .scale(scale: 0.92)).combined(with: .opacity))
+                    .zIndex(10)
+            }
+        }
         .engifySettingsSheet(isPresented: $showSettingsSheet)
+        .sheet(isPresented: $showSavedWordBank) {
+            SavedWordBankSheet()
+                .environmentObject(savedWordsManager)
+        }
     }
 
     private var globalHeader: some View {
@@ -61,9 +77,15 @@ struct DictionaryView: View {
                     placeholder: "Search a word like happy, learn...",
                     isLoading: viewModel.isSuggestionsLoading,
                     onSubmit: {
-                        Task { await viewModel.search() }
+                        runSearchIfAllowed()
                     }
                 )
+
+                if authManager.isGuestMode {
+                    Label("Guest searches left this session: \(authManager.guestDictionarySearchesRemaining)", systemImage: "magnifyingglass")
+                        .font(EngifyTypography.caption)
+                        .foregroundStyle(EngifyColors.textSecondary)
+                }
 
                 if viewModel.showSuggestions {
                     suggestionsDropdown
@@ -97,6 +119,7 @@ struct DictionaryView: View {
             } else {
                 ForEach(viewModel.suggestions) { suggestion in
                     Button {
+                        guard requestSearchAllowanceIfNeeded() else { return }
                         withAnimation(.easeInOut(duration: 0.18)) {
                             viewModel.selectSuggestion(suggestion)
                         }
@@ -172,6 +195,7 @@ struct DictionaryView: View {
     private func recentSearchChip(term: String) -> some View {
         HStack(spacing: Spacing.xs) {
             Button {
+                guard requestSearchAllowanceIfNeeded() else { return }
                 viewModel.runSearch(for: term)
             } label: {
                 Text(term)
@@ -259,9 +283,32 @@ struct DictionaryView: View {
                 audioButton(url: entry.audioURL)
             }
 
-            ToggleSaveButton(entry: entry)
-                .environmentObject(savedWordsManager)
-                .environmentObject(theme)
+            if authManager.isGuestMode {
+                Button {
+                    authManager.presentAccountRequired(for: .saveWords)
+                } label: {
+                    HStack(spacing: Spacing.xs) {
+                        Image(systemName: "lock.fill")
+                        Text("Save")
+                    }
+                    .font(EngifyTypography.caption.weight(.semibold))
+                    .foregroundStyle(EngifyColors.textSecondary)
+                    .padding(.horizontal, Spacing.md)
+                    .frame(minHeight: 42)
+                    .background(EngifyColors.border.opacity(0.12))
+                    .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            } else {
+                ToggleSaveButton(
+                    entry: entry,
+                    onSaved: {
+                        showSavedWordToast(for: entry.word)
+                    }
+                )
+                    .environmentObject(savedWordsManager)
+                    .environmentObject(theme)
+            }
         }
     }
 
@@ -303,6 +350,75 @@ struct DictionaryView: View {
         audioPlayer?.play()
     }
 
+    private func savedWordToast(wordTitle: String) -> some View {
+        Button {
+            withAnimation(EngifySpring.jellyRelease) {
+                savedToastWordTitle = nil
+                showSavedWordBank = true
+            }
+            EngifyFeedback.shared.play(.tabSwitch, settings: learningSettings)
+        } label: {
+            HStack(spacing: Spacing.md) {
+                ZStack {
+                    Circle()
+                        .fill(theme.accentColor.opacity(0.14))
+                        .frame(width: 42, height: 42)
+
+                    Image(systemName: "bookmark.circle.fill")
+                        .font(.title3.weight(.bold))
+                        .foregroundStyle(theme.accentColor)
+                }
+
+                VStack(alignment: .leading, spacing: Spacing.xxs) {
+                    Text("Saved to Word Bank")
+                        .font(EngifyTypography.bodyStrong)
+                        .foregroundStyle(EngifyColors.textPrimary)
+
+                    Text("\"\(wordTitle)\" is ready to review. Tap to open.")
+                        .font(EngifyTypography.caption)
+                        .foregroundStyle(EngifyColors.textSecondary)
+                        .lineLimit(2)
+                }
+
+                Spacer(minLength: 0)
+
+                Image(systemName: "arrow.up.right")
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(theme.accentColor)
+            }
+            .padding(.horizontal, Spacing.lg)
+            .padding(.vertical, Spacing.md)
+            .background(
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .fill(EngifyColors.surface.opacity(0.97))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .stroke(theme.accentColor.opacity(0.18), lineWidth: 1)
+            )
+            .shadow(color: EngifyColors.primary.opacity(0.12), radius: 18, x: 0, y: 10)
+        }
+        .buttonStyle(.plain)
+        .engifyJellyPress()
+    }
+
+    private func showSavedWordToast(for wordTitle: String) {
+        withAnimation(EngifySpring.jellyRelease) {
+            savedToastWordTitle = wordTitle
+        }
+
+        Task {
+            try? await Task.sleep(nanoseconds: 2_400_000_000)
+            guard savedToastWordTitle == wordTitle else { return }
+
+            await MainActor.run {
+                withAnimation(EngifySpring.settle) {
+                    savedToastWordTitle = nil
+                }
+            }
+        }
+    }
+
     private func highlightedWordText(_ word: String, query: String) -> Text {
         let normalizedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
         var attributed = AttributedString(word)
@@ -314,6 +430,21 @@ struct DictionaryView: View {
         }
 
         return Text(attributed)
+    }
+
+    private func runSearchIfAllowed() {
+        guard !viewModel.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            Task { await viewModel.search() }
+            return
+        }
+
+        guard requestSearchAllowanceIfNeeded() else { return }
+
+        Task { await viewModel.search() }
+    }
+
+    private func requestSearchAllowanceIfNeeded() -> Bool {
+        !authManager.isGuestMode || authManager.requestGuestDictionarySearch()
     }
 }
 

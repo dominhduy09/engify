@@ -37,14 +37,16 @@ struct PrimaryButton: View {
     var isDisabled: Bool = false
     var size: EngifyButtonSize = .regular
     var fillsWidth: Bool = true
+    var feedbackEvent: EngifyFeedbackEvent? = nil
 
     @EnvironmentObject private var theme: ThemeManager
-    @State private var isPressed = false
 
     var body: some View {
         Button(action: {
             guard !isDisabled else { return }
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            if let feedbackEvent {
+                EngifyFeedback.shared.play(feedbackEvent)
+            }
             action()
         }) {
             HStack(spacing: Spacing.sm) {
@@ -68,24 +70,13 @@ struct PrimaryButton: View {
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .stroke(theme.accentColor.opacity(isDisabled ? 0 : 0.16), lineWidth: 1)
             )
-            .shadow(color: shadowColor, radius: isPressed ? 6 : 12, x: 0, y: isPressed ? 4 : 8)
-            .scaleEffect(isPressed ? 0.98 : 1)
+            .shadow(color: shadowColor, radius: 12, x: 0, y: 8)
+            .compositingGroup()
+            .drawingGroup()
         }
         .buttonStyle(.plain)
         .disabled(isDisabled)
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in
-                    withAnimation(.easeInOut(duration: 0.12)) {
-                        isPressed = true
-                    }
-                }
-                .onEnded { _ in
-                    withAnimation(.spring(response: 0.24, dampingFraction: 0.72)) {
-                        isPressed = false
-                    }
-                }
-        )
+        .engifyJellyPress(isDisabled: isDisabled)
     }
 
     private var backgroundFill: some ShapeStyle {
@@ -114,14 +105,16 @@ struct SecondaryButton: View {
     var isDisabled: Bool = false
     var size: EngifyButtonSize = .regular
     var fillsWidth: Bool = true
+    var feedbackEvent: EngifyFeedbackEvent? = nil
 
     @Environment(\.themeAccentColor) private var accentColor
-    @State private var isPressed = false
 
     var body: some View {
         Button(action: {
             guard !isDisabled else { return }
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            if let feedbackEvent {
+                EngifyFeedback.shared.play(feedbackEvent)
+            }
             action()
         }) {
             HStack(spacing: Spacing.sm) {
@@ -145,23 +138,12 @@ struct SecondaryButton: View {
                     .stroke(borderColor, lineWidth: 1)
             )
             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .scaleEffect(isPressed ? 0.98 : 1)
+            .compositingGroup()
+            .drawingGroup()
         }
         .buttonStyle(.plain)
         .disabled(isDisabled)
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in
-                    withAnimation(.easeInOut(duration: 0.12)) {
-                        isPressed = true
-                    }
-                }
-                .onEnded { _ in
-                    withAnimation(.spring(response: 0.24, dampingFraction: 0.72)) {
-                        isPressed = false
-                    }
-                }
-        )
+        .engifyJellyPress(isDisabled: isDisabled)
     }
 
     private var backgroundFill: Color {

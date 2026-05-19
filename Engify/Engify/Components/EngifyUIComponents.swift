@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 // MARK: - Design Tokens
 
@@ -92,6 +93,7 @@ struct EngifyScreenScroll<Content: View>: View {
     let spacing: CGFloat
     let bottomInset: CGFloat
     let content: Content
+    @StateObject private var overlayCoordinator = EngifyOverlayCoordinator()
 
     init(
         alignment: HorizontalAlignment = .leading,
@@ -119,6 +121,114 @@ struct EngifyScreenScroll<Content: View>: View {
                 .frame(maxWidth: .infinity, alignment: .topLeading)
             }
         }
+        .coordinateSpace(name: EngifyOverlayCoordinator.coordinateSpaceName)
+        .environmentObject(overlayCoordinator)
+        .overlay(alignment: .topLeading) {
+            if let presentation = overlayCoordinator.profileMenuPresentation {
+                GeometryReader { proxy in
+                    ZStack(alignment: .topLeading) {
+                        Color.black.opacity(0.001)
+                            .ignoresSafeArea()
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                withAnimation(EngifySpring.settle) {
+                                    overlayCoordinator.dismissProfileMenu()
+                                }
+                            }
+                            .zIndex(998)
+
+                        EngifyProfileMenu(
+                            showSettings: presentation.showSettings,
+                            showProfileSheet: presentation.showProfileSheet,
+                            showSavedWordBank: presentation.showSavedWordBank,
+                            isPresented: Binding(
+                                get: { overlayCoordinator.profileMenuPresentation != nil },
+                                set: { isPresented in
+                                    if !isPresented {
+                                        overlayCoordinator.dismissProfileMenu()
+                                    }
+                                }
+                            )
+                        )
+                        .offset(
+                            x: min(
+                                max(Spacing.screenPadding, presentation.anchorFrame.minX),
+                                max(Spacing.screenPadding, proxy.size.width - EngifyProfileMenu.menuWidth - Spacing.screenPadding)
+                            ),
+                            y: presentation.anchorFrame.maxY + Spacing.xs
+                        )
+                        .transition(
+                            .asymmetric(
+                                insertion: .scale(scale: 0.82, anchor: .topLeading).combined(with: .opacity),
+                                removal: .scale(scale: 0.92, anchor: .topLeading).combined(with: .opacity)
+                            )
+                        )
+                        .zIndex(999)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .zIndex(999)
+                }
+            }
+        }
+    }
+}
+
+@MainActor
+private final class EngifyOverlayCoordinator: ObservableObject {
+    static let coordinateSpaceName = "EngifyScreenOverlaySpace"
+
+    @Published var profileMenuPresentation: EngifyProfileMenuPresentation?
+    @Published var isProfileMenuInteractive = false
+
+    func presentProfileMenu(
+        anchorFrame: CGRect,
+        showSettings: Binding<Bool>,
+        showProfileSheet: Binding<Bool>,
+        showSavedWordBank: Binding<Bool>
+    ) {
+        isProfileMenuInteractive = false
+        profileMenuPresentation = EngifyProfileMenuPresentation(
+            anchorFrame: anchorFrame,
+            showSettings: showSettings,
+            showProfileSheet: showProfileSheet,
+            showSavedWordBank: showSavedWordBank
+        )
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.profileMenuPresentation != nil else { return }
+            self.isProfileMenuInteractive = true
+        }
+    }
+
+    func updateProfileMenuAnchor(_ anchorFrame: CGRect) {
+        guard let presentation = profileMenuPresentation else { return }
+
+        profileMenuPresentation = EngifyProfileMenuPresentation(
+            anchorFrame: anchorFrame,
+            showSettings: presentation.showSettings,
+            showProfileSheet: presentation.showProfileSheet,
+            showSavedWordBank: presentation.showSavedWordBank
+        )
+    }
+
+    func dismissProfileMenu() {
+        isProfileMenuInteractive = false
+        profileMenuPresentation = nil
+    }
+}
+
+private struct EngifyProfileMenuPresentation {
+    let anchorFrame: CGRect
+    let showSettings: Binding<Bool>
+    let showProfileSheet: Binding<Bool>
+    let showSavedWordBank: Binding<Bool>
+}
+
+private struct EngifyProfileButtonFramePreferenceKey: PreferenceKey {
+    static var defaultValue: CGRect = .zero
+
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
+        value = nextValue()
     }
 }
 
@@ -482,6 +592,7 @@ struct EngifyFeatureButton: View {
             }
         }
         .buttonStyle(.plain)
+        .engifyJellyPress()
     }
 }
 
@@ -523,14 +634,57 @@ struct ArticlePreviewTag: View {
 
 struct EngifyTopMetricsBar: View {
     @EnvironmentObject private var gamification: GamificationManager
+    @EnvironmentObject private var authManager: AuthenticationManager
+    @State private var showGamificationInfoSheet = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.md) {
             ProgressBar()
             HStack(spacing: Spacing.md) {
-                StreakCounter(streakDays: gamification.progress.streakDays)
-                PointsCounter(count: gamification.progress.lingots)
+                Button {
+                    showGamificationInfoSheet = true
+                    EngifyFeedback.shared.play(.tabSwitch)
+                } label: {
+                    StreakCounter(
+                        streakDays: authManager.isGuestMode ? 0 : gamification.progress.streakDays,
+                        isLocked: authManager.isGuestMode
+                    )
+                }
+                .buttonStyle(.plain)
+                .engifyJellyPress()
+                .accessibilityLabel("Daily streak")
+                .accessibilityHint("Opens information about streaks and rewards")
+
+                Button {
+                    showGamificationInfoSheet = true
+                    EngifyFeedback.shared.play(.tabSwitch)
+                } label: {
+                    PointsCounter(
+                        count: authManager.isGuestMode ? 0 : gamification.progress.lingots,
+                        isLocked: authManager.isGuestMode
+                    )
+                }
+                .buttonStyle(.plain)
+                .engifyJellyPress()
+                .accessibilityLabel("Experience points and stars")
+                .accessibilityHint("Opens information about XP, stars, and badges")
+
                 Spacer(minLength: 0)
+            }
+
+            if authManager.isGuestMode {
+                Label("Sign in to track progress", systemImage: "lock.fill")
+                .font(EngifyTypography.caption)
+                .foregroundStyle(EngifyColors.textSecondary)
+            }
+        }
+        .sheet(isPresented: $showGamificationInfoSheet) {
+            if #available(iOS 16.0, *) {
+                GamificationInfoSheet()
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
+            } else {
+                GamificationInfoSheet()
             }
         }
     }
@@ -539,8 +693,13 @@ struct EngifyTopMetricsBar: View {
 struct EngifyProfileAvatar: View {
     let style: EngifyAvatarStyle
     var size: CGFloat = 42
+    var isGuestPlaceholder = false
 
     private var ringColor: Color {
+        if isGuestPlaceholder {
+            return EngifyColors.textSecondary
+        }
+
         switch style {
         case .meadow:
             return EngifyColors.accent
@@ -554,6 +713,10 @@ struct EngifyProfileAvatar: View {
     }
 
     private var secondaryColor: Color {
+        if isGuestPlaceholder {
+            return EngifyColors.border
+        }
+
         switch style {
         case .meadow:
             return Color(red: 0.63, green: 0.84, blue: 0.45)
@@ -567,6 +730,10 @@ struct EngifyProfileAvatar: View {
     }
 
     private var accentSymbol: String {
+        if isGuestPlaceholder {
+            return "person.crop.circle"
+        }
+
         switch style {
         case .meadow:
             return "leaf.fill"
@@ -653,42 +820,45 @@ struct EngifyGlobalTabHeader: View {
 struct EngifyProfileMenuButton: View {
     @Binding var showSettings: Bool
     @EnvironmentObject private var authManager: AuthenticationManager
+    @EnvironmentObject private var overlayCoordinator: EngifyOverlayCoordinator
+    @EnvironmentObject private var savedWordsManager: SavedWordsManager
     @Environment(\.themeAccentColor) private var accentColor
+    @State private var buttonFrame: CGRect = .zero
     @State private var showProfileSheet = false
+    @State private var showSavedWordBank = false
+
+    private var isMenuPresented: Bool {
+        overlayCoordinator.profileMenuPresentation != nil
+    }
 
     var body: some View {
-        Menu {
-            Button {
-                showProfileSheet = true
-            } label: {
-                Label("My Profile", systemImage: "person.crop.circle")
-            }
-
-            Button {
-                showSettings = true
-            } label: {
-                Label("Settings", systemImage: "gearshape.fill")
-            }
-
-            if authManager.isAuthenticated {
-                Divider()
-
-                Button(role: .destructive) {
-                    Task { await authManager.signOut() }
-                } label: {
-                    Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
+        Button {
+            withAnimation(EngifySpring.jellyRelease) {
+                if isMenuPresented {
+                    overlayCoordinator.dismissProfileMenu()
+                } else {
+                    overlayCoordinator.presentProfileMenu(
+                        anchorFrame: buttonFrame,
+                        showSettings: $showSettings,
+                        showProfileSheet: $showProfileSheet,
+                        showSavedWordBank: $showSavedWordBank
+                    )
                 }
             }
+            EngifyFeedback.shared.play(.tabSwitch)
         } label: {
             HStack(spacing: Spacing.xs) {
                 EngifyProfileAvatar(
                     style: authManager.currentUser?.avatarStyle ?? .meadow,
-                    size: 30
+                    size: 30,
+                    isGuestPlaceholder: authManager.isGuestMode
                 )
 
                 Image(systemName: "chevron.down")
                     .font(.caption2.weight(.bold))
                     .foregroundStyle(EngifyColors.textSecondary)
+                    .rotationEffect(.degrees(isMenuPresented ? 180 : 0))
+                    .animation(EngifySpring.settle, value: isMenuPresented)
             }
             .padding(.horizontal, Spacing.md)
             .frame(minWidth: 52, minHeight: 46)
@@ -702,11 +872,171 @@ struct EngifyProfileMenuButton: View {
             )
         }
         .buttonStyle(.plain)
+        .engifyJellyPress()
+        .background(
+            GeometryReader { proxy in
+                Color.clear
+                    .preference(
+                        key: EngifyProfileButtonFramePreferenceKey.self,
+                        value: proxy.frame(in: .named(EngifyOverlayCoordinator.coordinateSpaceName))
+                    )
+            }
+        )
+        .onPreferenceChange(EngifyProfileButtonFramePreferenceKey.self) { frame in
+            buttonFrame = frame
+
+            if isMenuPresented {
+                overlayCoordinator.updateProfileMenuAnchor(frame)
+            }
+        }
         .accessibilityLabel("Profile options")
         .sheet(isPresented: $showProfileSheet) {
-            EngifyProfileSheet(showSettings: $showSettings)
-                .environmentObject(authManager)
+            if !authManager.isGuestMode {
+                EngifyProfileSheet(showSettings: $showSettings)
+                    .environmentObject(authManager)
+            }
         }
+        .sheet(isPresented: $showSavedWordBank) {
+            SavedWordBankSheet()
+                .environmentObject(savedWordsManager)
+        }
+    }
+}
+
+private struct EngifyProfileMenu: View {
+    static let menuWidth: CGFloat = 240
+
+    @Binding var showSettings: Bool
+    @Binding var showProfileSheet: Bool
+    @Binding var showSavedWordBank: Bool
+    @Binding var isPresented: Bool
+    @EnvironmentObject private var authManager: AuthenticationManager
+    @EnvironmentObject private var learningSettings: LearningSettingsManager
+    @Environment(\.themeAccentColor) private var accentColor
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            if authManager.isGuestMode {
+                popoverAction(title: "Sign In / Register", systemImage: "person.crop.circle.badge.plus") {
+                    isPresented = false
+                    authManager.presentAccountRequired(for: .accountMenu)
+                }
+            } else {
+                popoverAction(title: "My Profile", systemImage: "person.crop.circle") {
+                    isPresented = false
+                    showProfileSheet = true
+                }
+            }
+
+            popoverAction(title: "Saved Word Bank", systemImage: "books.vertical.fill") {
+                isPresented = false
+                showSavedWordBank = true
+            }
+
+            popoverAction(title: "Settings", systemImage: "gearshape.fill") {
+                isPresented = false
+                showSettings = true
+            }
+
+            Divider()
+                .padding(.vertical, Spacing.xxs)
+
+            profileMenuToggle(
+                title: "Sound effects",
+                systemImage: learningSettings.soundEffectsEnabled ? "speaker.wave.2.fill" : "speaker.slash.fill",
+                subtitle: learningSettings.soundEffectsEnabled ? "On" : "Off",
+                isOn: $learningSettings.soundEffectsEnabled
+            )
+
+            if authManager.isAuthenticated {
+                Divider()
+                    .padding(.vertical, Spacing.xxs)
+
+                popoverAction(
+                    title: "Sign Out",
+                    systemImage: "rectangle.portrait.and.arrow.right",
+                    tint: EngifyColors.coral
+                ) {
+                    isPresented = false
+                    Task { await authManager.signOut() }
+                }
+            }
+        }
+        .padding(Spacing.sm)
+        .frame(width: Self.menuWidth, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(EngifyColors.surface.opacity(0.98))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .stroke(accentColor.opacity(0.18), lineWidth: 1)
+        )
+        .shadow(color: EngifyColors.primary.opacity(0.14), radius: 20, x: 0, y: 12)
+        .zIndex(999)
+    }
+
+    private func popoverAction(title: String, systemImage: String, tint: Color? = nil, action: @escaping () -> Void) -> some View {
+        let foreground = tint ?? EngifyColors.textPrimary
+
+        return Button {
+            withAnimation(EngifySpring.settle) {
+                action()
+            }
+        } label: {
+            HStack(spacing: Spacing.sm) {
+                Image(systemName: systemImage)
+                    .font(.subheadline.weight(.semibold))
+                Text(title)
+                    .font(EngifyTypography.bodyStrong)
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(foreground)
+            .padding(.horizontal, Spacing.md)
+            .padding(.vertical, Spacing.md)
+            .frame(minHeight: 56)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill((tint ?? accentColor).opacity(0.08))
+            )
+        }
+        .buttonStyle(.plain)
+        .engifyJellyPress()
+    }
+
+    private func profileMenuToggle(title: String, systemImage: String, subtitle: String, isOn: Binding<Bool>) -> some View {
+        HStack(alignment: .center, spacing: Spacing.sm) {
+            HStack(alignment: .center, spacing: Spacing.sm) {
+                Image(systemName: systemImage)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(EngifyColors.textPrimary)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(EngifyTypography.bodyStrong)
+                        .foregroundStyle(EngifyColors.textPrimary)
+
+                    Text(subtitle)
+                        .font(EngifyTypography.caption)
+                        .foregroundStyle(EngifyColors.textSecondary)
+                }
+            }
+
+            Spacer(minLength: 0)
+
+            Toggle("", isOn: isOn)
+                .labelsHidden()
+                .tint(accentColor)
+        }
+        .padding(.horizontal, Spacing.md)
+        .padding(.vertical, Spacing.md)
+        .frame(minHeight: 64)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(accentColor.opacity(0.08))
+        )
     }
 }
 
@@ -883,7 +1213,8 @@ struct EngifyProfileSheet: View {
                     title: authManager.isLoading ? "Saving..." : "Save Profile",
                     systemImage: "checkmark.circle.fill",
                     action: saveProfile,
-                    isDisabled: authManager.isLoading
+                    isDisabled: authManager.isLoading,
+                    feedbackEvent: .successPop
                 )
             }
         }
@@ -970,6 +1301,7 @@ struct EngifyProfileSheet: View {
             )
         }
         .buttonStyle(.plain)
+        .engifyJellyPress()
     }
 
     private func saveProfile() {
@@ -1003,6 +1335,180 @@ private struct EngifySettingsSheetModifier: ViewModifier {
                 .environmentObject(learningSettings)
         }
     }
+}
+
+struct SavedWordBankSheet: View {
+    @EnvironmentObject private var savedWordsManager: SavedWordsManager
+    @Environment(\.themeAccentColor) private var accentColor
+    @State private var selectedFilter: SavedWordBankFilter = .all
+
+    private var items: [SavedWordBankItem] {
+        savedWordsManager.savedWordBankItems
+    }
+
+    private var filteredItems: [SavedWordBankItem] {
+        switch selectedFilter {
+        case .all:
+            return items
+        case .lookup:
+            return items.filter { $0.source == .dictionary }
+        case .vocab:
+            return items.filter { $0.source == .vocabulary }
+        }
+    }
+
+    var body: some View {
+        NavigationView {
+            ZStack {
+                EngifyAppBackground()
+
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: Spacing.xl) {
+                        summaryCard
+                        filterTabs
+
+                        if filteredItems.isEmpty {
+                            EmptyStateView(
+                                title: emptyStateTitle,
+                                message: emptyStateMessage,
+                                systemImage: "books.vertical"
+                            )
+                        } else {
+                            ForEach(filteredItems) { item in
+                                savedWordCard(item)
+                            }
+                        }
+                    }
+                    .padding(Spacing.screenPadding)
+                    .padding(.bottom, Spacing.xxl)
+                }
+            }
+            .navigationTitle("Saved Word Bank")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+    }
+
+    private var summaryCard: some View {
+        EngifyCard(tint: accentColor) {
+            VStack(alignment: .leading, spacing: Spacing.md) {
+                Text("Your personal study vault")
+                    .font(EngifyTypography.cardTitle)
+                    .foregroundStyle(EngifyColors.textPrimary)
+
+                Text("Jump back into saved vocabulary, review dictionary finds, and keep your strongest words close.")
+                    .font(EngifyTypography.body)
+                    .foregroundStyle(EngifyColors.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                HStack(spacing: Spacing.sm) {
+                    VocabularyBadge(text: "\(filteredItems.count) shown")
+                    VocabularyBadge(text: "\(items.count) total saved", tint: accentColor)
+                }
+            }
+        }
+    }
+
+    private var filterTabs: some View {
+        HStack(spacing: Spacing.sm) {
+            filterTab(.all, title: "All")
+            filterTab(.lookup, title: "Lookup")
+            filterTab(.vocab, title: "Vocab")
+        }
+    }
+
+    private var emptyStateTitle: String {
+        switch selectedFilter {
+        case .all:
+            return "No Saved Words Yet"
+        case .lookup:
+            return "No Lookup Saves Yet"
+        case .vocab:
+            return "No Vocab Saves Yet"
+        }
+    }
+
+    private var emptyStateMessage: String {
+        switch selectedFilter {
+        case .all:
+            return "Save a word from Vocabulary or Dictionary and it will land here instantly."
+        case .lookup:
+            return "Words you save from the Lookup page will appear in this tab."
+        case .vocab:
+            return "Words you save from the Vocab page will appear in this tab."
+        }
+    }
+
+    private func filterTab(_ filter: SavedWordBankFilter, title: String) -> some View {
+        Button {
+            withAnimation(EngifySpring.tabSlide) {
+                selectedFilter = filter
+            }
+        } label: {
+            Text(title)
+                .font(EngifyTypography.caption.weight(.semibold))
+                .foregroundStyle(selectedFilter == filter ? EngifyColors.textInverse : accentColor)
+                .padding(.horizontal, Spacing.lg)
+                .padding(.vertical, Spacing.sm)
+                .background(selectedFilter == filter ? accentColor : accentColor.opacity(0.10))
+                .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .engifyJellyPress()
+    }
+
+    private func savedWordCard(_ item: SavedWordBankItem) -> some View {
+        EngifyCard {
+            VStack(alignment: .leading, spacing: Spacing.md) {
+                HStack(alignment: .top, spacing: Spacing.md) {
+                    VStack(alignment: .leading, spacing: Spacing.xs) {
+                        Text(item.title)
+                            .font(EngifyTypography.cardTitle)
+                            .foregroundStyle(EngifyColors.textPrimary)
+
+                        if !item.phonetic.isEmpty {
+                            Text(item.phonetic)
+                                .font(.system(.body, design: .monospaced))
+                                .foregroundStyle(EngifyColors.textSecondary)
+                        }
+                    }
+
+                    Spacer(minLength: 0)
+
+                    VStack(alignment: .trailing, spacing: Spacing.xs) {
+                        VocabularyBadge(text: item.subtitle)
+                        VocabularyBadge(text: item.source.label, tint: accentColor)
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    Text("Meaning")
+                        .font(EngifyTypography.caption)
+                        .foregroundStyle(EngifyColors.textSecondary)
+
+                    Text(item.detail)
+                        .font(EngifyTypography.bodyStrong)
+                        .foregroundStyle(EngifyColors.textPrimary)
+                }
+
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    Text("Example")
+                        .font(EngifyTypography.caption)
+                        .foregroundStyle(EngifyColors.textSecondary)
+
+                    Text("“\(item.example)”")
+                        .font(.system(size: 16, weight: .regular, design: .serif))
+                        .foregroundStyle(EngifyColors.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+    }
+}
+
+private enum SavedWordBankFilter {
+    case all
+    case lookup
+    case vocab
 }
 
 extension View {
@@ -1154,7 +1660,9 @@ struct MultipleChoiceQuestionCard: View {
                     let isCorrect = question.answerIndex == index
 
                     Button {
-                        onSelect(index)
+                        withAnimation(EngifySpring.jellyRelease) {
+                            onSelect(index)
+                        }
                     } label: {
                         HStack(spacing: Spacing.md) {
                             Text(question.options[index])
@@ -1180,6 +1688,7 @@ struct MultipleChoiceQuestionCard: View {
                         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                     }
                     .buttonStyle(.plain)
+                    .engifyJellyPress()
                 }
 
                 if revealAnswer, let selectedAnswer {

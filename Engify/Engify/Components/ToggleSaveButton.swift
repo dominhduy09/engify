@@ -17,23 +17,19 @@ import SwiftUI
 struct ToggleSaveButton: View {
     @EnvironmentObject private var savedWordsManager: SavedWordsManager
     @EnvironmentObject private var theme: ThemeManager
-    
+
     let entry: DictionaryEntry
-    @State private var isAnimating = false
+    var onSaved: (() -> Void)? = nil
 
     var body: some View {
         Button(action: {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-                isAnimating = true
+            let wasSaved = savedWordsManager.isSaved(entry)
+            withAnimation(EngifySpring.jellyRelease) {
                 savedWordsManager.toggleSaved(entry)
             }
-            
-            // Haptic feedback
-            let impact = UIImpactFeedbackGenerator(style: .light)
-            impact.impactOccurred()
-            
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                isAnimating = false
+            EngifyFeedback.shared.play(.successPop)
+            if !wasSaved, savedWordsManager.isSaved(entry) {
+                onSaved?()
             }
         }) {
             HStack(spacing: Spacing.xs) {
@@ -46,9 +42,10 @@ struct ToggleSaveButton: View {
             .frame(minHeight: 42)
             .background((savedWordsManager.isSaved(entry) ? theme.accentColor : EngifyColors.border).opacity(0.12))
             .clipShape(Capsule())
-            .scaleEffect(isAnimating ? 1.06 : 1.0)
+            .drawingGroup()
         }
         .buttonStyle(.plain)
+        .engifyJellyPress()
     }
 }
 

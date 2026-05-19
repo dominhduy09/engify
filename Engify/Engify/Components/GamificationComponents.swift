@@ -4,11 +4,12 @@ import SwiftUI
 
 struct ProgressBar: View {
     @EnvironmentObject private var gamification: GamificationManager
+    @EnvironmentObject private var authManager: AuthenticationManager
     @Environment(\.themeAccentColor) private var accentColor
 
     var body: some View {
         HStack(spacing: Spacing.sm) {
-            LevelBadge(level: gamification.progress.level)
+            LevelBadge(level: authManager.isGuestMode ? 0 : gamification.progress.level, isLocked: authManager.isGuestMode)
 
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
@@ -19,20 +20,22 @@ struct ProgressBar: View {
                     Capsule()
                         .fill(
                             LinearGradient(
-                                colors: [accentColor, accentColor.opacity(0.72)],
+                                colors: authManager.isGuestMode
+                                    ? [EngifyColors.textSecondary.opacity(0.28), EngifyColors.textSecondary.opacity(0.18)]
+                                    : [accentColor, accentColor.opacity(0.72)],
                                 startPoint: .leading,
                                 endPoint: .trailing
                             )
                         )
                         .frame(
-                            width: max(12, geometry.size.width * gamification.progress.levelProgress),
+                            width: max(12, geometry.size.width * (authManager.isGuestMode ? 0.04 : gamification.progress.levelProgress)),
                             height: 10
                         )
                 }
             }
             .frame(height: 10)
 
-            Text("Lv \(gamification.progress.level)")
+            Text(authManager.isGuestMode ? "Lv 0" : "Lv \(gamification.progress.level)")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(EngifyColors.textSecondary)
                 .lineLimit(1)
@@ -43,31 +46,41 @@ struct ProgressBar: View {
 
 struct LevelBadge: View {
     let level: Int
+    var isLocked = false
     @Environment(\.themeAccentColor) private var accentColor
 
     var body: some View {
         Circle()
-            .fill(accentColor)
+            .fill(isLocked ? EngifyColors.textSecondary.opacity(0.55) : accentColor)
             .frame(width: 34, height: 34)
             .overlay(
-                Text("\(level)")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(EngifyColors.textInverse)
+                Group {
+                    if isLocked {
+                        Image(systemName: "lock.fill")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(EngifyColors.textInverse)
+                    } else {
+                        Text("\(level)")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(EngifyColors.textInverse)
+                    }
+                }
             )
     }
 }
 
 struct StreakCounter: View {
     let streakDays: Int
+    var isLocked = false
     @Environment(\.themeAccentColor) private var accentColor
 
     var body: some View {
         HStack(spacing: Spacing.xs) {
             Image(systemName: "flame.fill")
                 .font(.subheadline.weight(.bold))
-                .foregroundStyle(streakDays > 0 ? accentColor : EngifyColors.textSecondary)
+                .foregroundStyle(isLocked ? EngifyColors.textSecondary : (streakDays > 0 ? accentColor : EngifyColors.textSecondary))
 
-            Text("\(streakDays)")
+            Text("\(isLocked ? 0 : streakDays)")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(EngifyColors.textPrimary)
         }
@@ -84,20 +97,21 @@ struct StreakCounter: View {
 
 struct PointsCounter: View {
     let count: Int
+    var isLocked = false
     @Environment(\.themeAccentColor) private var accentColor
 
     var body: some View {
         HStack(spacing: Spacing.xs) {
             Circle()
-                .fill(accentColor)
+                .fill(isLocked ? EngifyColors.textSecondary.opacity(0.55) : accentColor)
                 .frame(width: 24, height: 24)
                 .overlay(
-                    Image(systemName: "star.fill")
+                    Image(systemName: isLocked ? "lock.fill" : "star.fill")
                         .font(.caption2.weight(.bold))
                         .foregroundStyle(EngifyColors.textInverse)
                 )
 
-            Text("\(count)")
+            Text("\(isLocked ? 0 : count)")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(EngifyColors.textPrimary)
         }
@@ -135,7 +149,10 @@ struct SolidButtonStyle: ButtonStyle {
                 )
             )
             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+            .scaleEffect(configuration.isPressed ? 0.95 : 1)
+            .animation(configuration.isPressed ? EngifySpring.tapDown : EngifySpring.jellyRelease, value: configuration.isPressed)
+            .compositingGroup()
+            .drawingGroup()
     }
 }
 
