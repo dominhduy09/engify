@@ -21,34 +21,17 @@ struct MainTabView: View {
     }
 
     var body: some View {
-        NavigationView {
-            TabView(selection: tabSelection) {
-                HomeView(selectedTab: tabSelection)
-                    .tag(EngifyTab.home)
-
-                VocabularyView()
-                    .tag(EngifyTab.vocabulary)
-
-                DictionaryView()
-                    .tag(EngifyTab.dictionary)
-
-                NewsReadingView()
-                    .tag(EngifyTab.news)
-
-                PracticeView()
-                    .tag(EngifyTab.practice)
-            }
-            .tint(EngifyColors.accent)
-            .safeAreaInset(edge: .bottom) {
-                FloatingTabBar(selectedTab: tabSelection)
-                    .padding(.horizontal, Spacing.screenPadding)
-                    .padding(.top, Spacing.sm)
-                    .padding(.bottom, Spacing.floatingTabBarBottomPadding)
-                    .background(Color.clear)
-            }
-            .ignoresSafeArea(.keyboard)
+        ZStack {
+            currentTabContent
         }
-        .navigationViewStyle(StackNavigationViewStyle())
+        .safeAreaInset(edge: .bottom) {
+            FloatingTabBar(selectedTab: tabSelection)
+                .padding(.horizontal, Spacing.screenPadding)
+                .padding(.top, Spacing.xxs)
+                .padding(.bottom, Spacing.floatingTabBarBottomPadding)
+                .background(Color.clear)
+        }
+        .ignoresSafeArea(.keyboard)
         .sheet(item: $authManager.accountRequiredContext) { context in
             if #available(iOS 16.0, *) {
                 AccountRequiredSheet(
@@ -68,6 +51,27 @@ struct MainTabView: View {
             } else {
                 // Fallback on earlier versions
             }
+        }
+    }
+
+    @ViewBuilder
+    private var currentTabContent: some View {
+        switch selectedTab {
+        case .home:
+            HomeView(selectedTab: tabSelection)
+                .transition(.opacity)
+        case .vocabulary:
+            VocabularyView()
+                .transition(.opacity)
+        case .dictionary:
+            DictionaryView()
+                .transition(.opacity)
+        case .news:
+            NewsReadingView()
+                .transition(.opacity)
+        case .practice:
+            PracticeView()
+                .transition(.opacity)
         }
     }
 }

@@ -3,11 +3,21 @@ import SwiftUI
 import UIKit
 
 enum EngifySpring {
-    static let tapDown = Animation.spring(response: 0.20, dampingFraction: 0.88, blendDuration: 0)
-    static let jellyRelease = Animation.spring(response: 0.35, dampingFraction: 0.50, blendDuration: 0)
-    static let settle = Animation.spring(response: 0.28, dampingFraction: 0.74, blendDuration: 0)
-    static let cascade = Animation.spring(response: 0.46, dampingFraction: 0.62, blendDuration: 0)
-    static let tabSlide = Animation.spring(response: 0.40, dampingFraction: 0.68, blendDuration: 0)
+    private static var reducedMotionEnabled: Bool {
+        UserDefaults.standard.bool(forKey: "engify.settings.reduced_motion")
+    }
+
+    private static func spring(response: Double, dampingFraction: Double) -> Animation {
+        reducedMotionEnabled
+            ? .easeOut(duration: 0.01)
+            : .spring(response: response, dampingFraction: dampingFraction, blendDuration: 0)
+    }
+
+    static var tapDown: Animation { spring(response: 0.20, dampingFraction: 0.88) }
+    static var jellyRelease: Animation { spring(response: 0.35, dampingFraction: 0.50) }
+    static var settle: Animation { spring(response: 0.28, dampingFraction: 0.74) }
+    static var cascade: Animation { spring(response: 0.46, dampingFraction: 0.62) }
+    static var tabSlide: Animation { spring(response: 0.40, dampingFraction: 0.68) }
 }
 
 private enum EngifyPressPhase {

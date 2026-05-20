@@ -87,14 +87,14 @@ struct HomeView: View {
             )
 
             EngifyFeatureButton(
-                title: "Travel Vocabulary",
-                subtitle: "A focused session with practical words you can use right away.",
-                systemImage: "book.fill"
+                title: recommendedFeature.title,
+                subtitle: recommendedFeature.subtitle,
+                systemImage: recommendedFeature.systemImage
             ) {
-                if authManager.isGuestMode {
+                if authManager.isGuestMode, recommendedFeature.requiresAccount {
                     authManager.presentAccountRequired(for: .vocabulary)
                 } else {
-                    navigate(to: .vocabulary)
+                    navigate(to: recommendedFeature.tab)
                 }
             }
         }
@@ -157,5 +157,50 @@ struct HomeView: View {
             selectedTab = tab
         }
         EngifyFeedback.shared.play(.tabSwitch, settings: learningSettings)
+    }
+
+    private var recommendedFeature: (title: String, subtitle: String, systemImage: String, tab: EngifyTab, requiresAccount: Bool) {
+        switch learningSettings.learningGoal {
+        case "travel":
+            return (
+                title: "Travel Vocabulary",
+                subtitle: "A focused session with practical words you can use right away.",
+                systemImage: "airplane",
+                tab: .vocabulary,
+                requiresAccount: true
+            )
+        case "work":
+            return (
+                title: "Workplace Reading",
+                subtitle: "Practice with current articles and vocabulary that feels useful at work.",
+                systemImage: "briefcase.fill",
+                tab: .news,
+                requiresAccount: false
+            )
+        case "study":
+            return (
+                title: "Dictionary Deep Dive",
+                subtitle: "Look up precise meanings and examples to support stronger reading.",
+                systemImage: "text.book.closed.fill",
+                tab: .dictionary,
+                requiresAccount: false
+            )
+        case "exam":
+            return (
+                title: "Quick Quiz Arena",
+                subtitle: "Train accuracy and response speed with short exam-style checks.",
+                systemImage: "checklist.checked",
+                tab: .practice,
+                requiresAccount: true
+            )
+        default:
+            return (
+                title: "Daily Vocabulary",
+                subtitle: "A compact word session that matches your everyday communication goal.",
+                systemImage: "book.fill",
+                tab: .vocabulary,
+                requiresAccount: true
+            )
+        }
     }
 }

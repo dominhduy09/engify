@@ -40,6 +40,6 @@ struct Spacing {
     static let cardGap: CGFloat = 20
     static let cardPadding: CGFloat = 20
     static let controlHeight: CGFloat = 56
-    static let floatingTabBarBottomPadding: CGFloat = 12
+    static let floatingTabBarBottomPadding: CGFloat = 6
     static let floatingTabBarHeight: CGFloat = 72
 }

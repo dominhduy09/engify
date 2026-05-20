@@ -151,16 +151,13 @@ struct DictionaryView: View {
                     if suggestion.id != viewModel.suggestions.last?.id {
                         Divider()
                             .padding(.leading, Spacing.lg)
+                            .overlay(EngifyColors.border.opacity(0.22))
                     }
                 }
             }
         }
-        .background(EngifyColors.surface)
-        .overlay(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(EngifyColors.border.opacity(0.8), lineWidth: 1)
-        )
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .engifyGlassPanel(cornerRadius: 20, tint: theme.accentColor, shadowOpacity: 0.12)
     }
 
     private var recentSearchesSection: some View {

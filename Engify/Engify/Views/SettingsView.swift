@@ -28,6 +28,7 @@ struct SettingsView: View {
     @State private var requestingNotificationPermission = false
     @State private var requestingMicrophonePermission = false
     @State private var showStorageWarning = false
+    private let betaTag = "Beta"
 
     var body: some View {
         NavigationView {
@@ -67,15 +68,12 @@ struct SettingsView: View {
     private var overviewCard: some View {
         EngifyCard(tint: theme.accentColor) {
             HStack(alignment: .center, spacing: Spacing.lg) {
-                ZStack {
-                    Circle()
-                        .fill(theme.accentColor.opacity(0.15))
-                        .frame(width: 56, height: 56)
-
-                    Image(systemName: "slider.horizontal.3")
-                        .font(.title2.weight(.bold))
-                        .foregroundStyle(theme.accentColor)
-                }
+                Image("EngifyBrandLogo")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 64, height: 64)
+                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .shadow(color: theme.accentColor.opacity(0.16), radius: 10, x: 0, y: 6)
 
                 VStack(alignment: .leading, spacing: Spacing.xs) {
                     Text("Learning preferences")
@@ -90,14 +88,11 @@ struct SettingsView: View {
 
                 Spacer()
 
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(theme.accentColor)
+                Image("EngifyBrandLogo")
+                    .resizable()
+                    .scaledToFit()
                     .frame(width: 42, height: 42)
-                    .overlay(
-                        Image(systemName: "sparkles")
-                            .font(.headline)
-                            .foregroundStyle(.white)
-                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
         }
     }
@@ -167,7 +162,8 @@ struct SettingsView: View {
 
         return EngifySettingsSection(
             title: "AI tutor customization",
-            subtitle: "Tune how much help and how strongly the tutor corrects you."
+            subtitle: "Tune how much help and how strongly the tutor corrects you.",
+            tag: betaTag
         ) {
             VStack(alignment: .leading, spacing: Spacing.lg) {
                 VStack(alignment: .leading, spacing: Spacing.sm) {
@@ -207,12 +203,14 @@ struct SettingsView: View {
                 EngifySettingToggleRow(
                     title: "Show example sentences",
                     subtitle: "Display more examples when you tap a difficult word.",
+                    tag: betaTag,
                     isOn: $settings.generateExtraExamples
                 )
 
                 EngifySettingToggleRow(
                     title: "Show grammar corrections",
                     subtitle: "Inline hints for grammar and usage mistakes.",
+                    tag: betaTag,
                     isOn: $settings.showGrammarCorrections
                 )
             }
@@ -234,7 +232,8 @@ struct SettingsView: View {
 
         return EngifySettingsSection(
             title: "Speaking practice",
-            subtitle: "Customize pronunciation feedback and audio settings."
+            subtitle: "Customize pronunciation feedback and audio settings.",
+            tag: betaTag
         ) {
             VStack(alignment: .leading, spacing: Spacing.lg) {
                 HStack(spacing: Spacing.md) {
@@ -256,14 +255,19 @@ struct SettingsView: View {
 
                     Spacer()
 
-                    if settings.microphonePermissionStatus == .denied {
-                        Button("Request") {
+                    Toggle("", isOn: $settings.microphoneEnabled)
+                        .labelsHidden()
+                        .tint(theme.accentColor)
+
+                    if settings.microphonePermissionStatus != .granted {
+                        Button(requestingMicrophonePermission ? "Requesting..." : "Request") {
                             requestingMicrophonePermission = true
                             Task {
-                                let granted = await settings.requestMicrophonePermission()
+                                _ = await settings.requestMicrophonePermission()
                                 requestingMicrophonePermission = false
                             }
                         }
+                        .disabled(requestingMicrophonePermission)
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(EngifyColors.coral)
                     }
@@ -306,18 +310,21 @@ struct SettingsView: View {
                 EngifySettingToggleRow(
                     title: "Pronunciation feedback",
                     subtitle: "Show transcript and scoring after you speak.",
+                    tag: betaTag,
                     isOn: $settings.speechFeedbackEnabled
                 )
 
                 EngifySettingToggleRow(
                     title: "Show transcript",
                     subtitle: "Display the typed version of your speech for comparison.",
+                    tag: betaTag,
                     isOn: $settings.transcriptVisible
                 )
 
                 EngifySettingToggleRow(
                     title: "Repeat pronunciation",
                     subtitle: "Automatically replay word audio after each phrase.",
+                    tag: betaTag,
                     isOn: $settings.repeatPronunciation
                 )
             }
@@ -346,6 +353,7 @@ struct SettingsView: View {
                 EngifySettingSliderRow(
                     title: "Review limit per day",
                     subtitle: "Caps how many review items before Engify suggests a break.",
+                    tag: betaTag,
                     value: Binding(
                         get: { Double(settings.reviewLimitPerDay) },
                         set: { settings.reviewLimitPerDay = Int($0) }
@@ -359,6 +367,7 @@ struct SettingsView: View {
                 EngifySettingToggleRow(
                     title: "Difficulty lock",
                     subtitle: "Prevent jumping to harder levels without mastering current level.",
+                    tag: betaTag,
                     isOn: $settings.difficultyLock
                 )
             }
@@ -390,20 +399,26 @@ struct SettingsView: View {
 
                     Spacer()
 
-                    if settings.notificationPermissionStatus == .denied {
-                        Button("Request") {
+                    Toggle("", isOn: $settings.notificationsEnabled)
+                        .labelsHidden()
+                        .tint(theme.accentColor)
+                        .disabled(settings.notificationPermissionStatus != .granted)
+
+                    if settings.notificationPermissionStatus != .granted {
+                        Button(requestingNotificationPermission ? "Requesting..." : "Request") {
                             requestingNotificationPermission = true
                             Task {
-                                let granted = await settings.requestNotificationPermission()
+                                _ = await settings.requestNotificationPermission()
                                 requestingNotificationPermission = false
                             }
                         }
+                        .disabled(requestingNotificationPermission)
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(EngifyColors.coral)
                     }
                 }
 
-                if settings.notificationPermissionStatus == .granted {
+                if settings.notificationPermissionStatus == .granted && settings.notificationsEnabled {
                     VStack(alignment: .leading, spacing: Spacing.md) {
                         EngifySettingToggleRow(
                             title: "Daily reminder",
@@ -433,6 +448,7 @@ struct SettingsView: View {
                         EngifySettingToggleRow(
                             title: "Streak protection reminder",
                             subtitle: "Warn you when a streak is at risk of breaking.",
+                            tag: betaTag,
                             isOn: $settings.streakReminderEnabled
                         )
 
@@ -441,9 +457,14 @@ struct SettingsView: View {
                         EngifySettingToggleRow(
                             title: "Weekly progress summary",
                             subtitle: "Get a recap of wins, weak areas, and next steps.",
+                            tag: betaTag,
                             isOn: $settings.weeklySummaryEnabled
                         )
                     }
+                } else if settings.notificationPermissionStatus == .granted {
+                    Text("Turn on notifications to enable reminders.")
+                        .font(.caption)
+                        .foregroundStyle(EngifyColors.textSecondary)
                 }
             }
         }
@@ -458,6 +479,7 @@ struct SettingsView: View {
                 EngifySettingToggleRow(
                     title: "Show definitions by default",
                     subtitle: "Automatically expand word details in the Dictionary tab.",
+                    tag: betaTag,
                     isOn: $settings.showDefinitionsByDefault
                 )
 
@@ -582,7 +604,8 @@ struct SettingsView: View {
     private var privacySection: some View {
         EngifySettingsSection(
             title: "Privacy",
-            subtitle: "Voice and learning history stay on-device unless you add cloud sync."
+            subtitle: "Voice and learning history stay on-device unless you add cloud sync.",
+            tag: betaTag
         ) {
             VStack(alignment: .leading, spacing: Spacing.md) {
                 HStack(spacing: Spacing.md) {

@@ -77,22 +77,28 @@ final class LearningSettingsManager: ObservableObject {
     
     @Published var notificationsEnabled: Bool {
         didSet { 
+            guard notificationsEnabled != oldValue else { return }
             save("notifications_enabled", notificationsEnabled)
-            Task { await updateNotificationPermission() }
+            Task {
+                await updateNotificationPermission()
+                await syncNotificationSettings()
+            }
         }
     }
     
     @Published var dailyReminderEnabled: Bool {
         didSet { 
+            guard dailyReminderEnabled != oldValue else { return }
             save("daily_reminder", dailyReminderEnabled)
-            Task { await scheduleDailyReminder() }
+            Task { await syncNotificationSettings() }
         }
     }
     
     @Published var dailyReminderTime: Date {
         didSet { 
+            guard dailyReminderTime != oldValue else { return }
             save("daily_reminder_time", dailyReminderTime.timeIntervalSince1970)
-            Task { await scheduleDailyReminder() }
+            Task { await syncNotificationSettings() }
         }
     }
     
@@ -108,8 +114,19 @@ final class LearningSettingsManager: ObservableObject {
     
     @Published var microphoneEnabled: Bool {
         didSet { 
+            guard microphoneEnabled != oldValue else { return }
             save("microphone_enabled", microphoneEnabled)
-            Task { await updateMicrophonePermission() }
+            Task {
+                if microphoneEnabled && microphonePermissionStatus != .granted {
+                    let granted = await requestMicrophonePermission()
+                    if !granted {
+                        await MainActor.run {
+                            self.microphoneEnabled = false
+                        }
+                    }
+                }
+                await updateMicrophonePermission()
+            }
         }
     }
     
@@ -231,12 +248,19 @@ final class LearningSettingsManager: ObservableObject {
             let granted = try await center.requestAuthorization(options: [.alert, .sound, .badge])
             await MainActor.run {
                 self.notificationPermissionStatus = granted ? .granted : .denied
+                if !granted {
+                    self.notificationsEnabled = false
+                    self.dailyReminderEnabled = false
+                }
             }
+            await syncNotificationSettings()
             return granted
         } catch {
             logError("Notification permission request failed", error)
             await MainActor.run {
                 self.notificationPermissionStatus = .denied
+                self.notificationsEnabled = false
+                self.dailyReminderEnabled = false
             }
             return false
         }
@@ -247,13 +271,21 @@ final class LearningSettingsManager: ObservableObject {
         
         switch status {
         case .authorized:
+            await MainActor.run {
+                self.microphonePermissionStatus = .granted
+            }
             return true
         case .denied, .restricted:
+            await MainActor.run {
+                self.microphonePermissionStatus = .denied
+                self.microphoneEnabled = false
+            }
             return false
         case .notDetermined:
             let granted = await AVCaptureDevice.requestAccess(for: .audio)
             await MainActor.run {
                 self.microphonePermissionStatus = granted ? .granted : .denied
+                self.microphoneEnabled = granted
             }
             return granted
         @unknown default:
@@ -276,6 +308,10 @@ final class LearningSettingsManager: ObservableObject {
         
         await MainActor.run {
             self.notificationPermissionStatus = permissionStatus
+            if permissionStatus != .granted {
+                self.notificationsEnabled = false
+                self.dailyReminderEnabled = false
+            }
         }
     }
     
@@ -293,16 +329,29 @@ final class LearningSettingsManager: ObservableObject {
         
         await MainActor.run {
             self.microphonePermissionStatus = permissionStatus
+            if permissionStatus != .granted {
+                self.microphoneEnabled = false
+            }
         }
     }
     
     private func checkPermissions() async {
         await updateNotificationPermission()
         await updateMicrophonePermission()
+        await syncNotificationSettings()
+    }
+
+    private func syncNotificationSettings() async {
+        guard notificationsEnabled, notificationPermissionStatus == .granted else {
+            UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["daily_reminder"])
+            return
+        }
+
+        await scheduleDailyReminder()
     }
     
     private func scheduleDailyReminder() async {
-        if !dailyReminderEnabled {
+        if !notificationsEnabled || !dailyReminderEnabled {
             UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["daily_reminder"])
             return
         }

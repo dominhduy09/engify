@@ -4,6 +4,10 @@ import Combine
 // MARK: - Design Tokens
 
 enum EngifyColors {
+    private static var isHighContrastEnabled: Bool {
+        UserDefaults.standard.bool(forKey: "engify.settings.high_contrast")
+    }
+
     static let primary = Color(red: 0.11, green: 0.12, blue: 0.16)
     static let primaryLight = Color(red: 0.20, green: 0.22, blue: 0.28)
 
@@ -16,17 +20,41 @@ enum EngifyColors {
     static let coral = Color(red: 0.87, green: 0.36, blue: 0.32)
     static let warning = Color(red: 0.86, green: 0.59, blue: 0.19)
 
-    static let canvas = Color(red: 0.98, green: 0.97, blue: 0.95)
-    static let canvasRaised = Color(red: 0.95, green: 0.94, blue: 0.91)
-    static let surface = Color(red: 1.00, green: 0.99, blue: 0.98)
-    static let surfaceMuted = Color(red: 0.95, green: 0.94, blue: 0.92)
+    static var canvas: Color {
+        isHighContrastEnabled ? Color.white : Color(red: 0.98, green: 0.97, blue: 0.95)
+    }
+
+    static var canvasRaised: Color {
+        isHighContrastEnabled ? Color(red: 0.94, green: 0.94, blue: 0.92) : Color(red: 0.95, green: 0.94, blue: 0.91)
+    }
+
+    static var surface: Color {
+        isHighContrastEnabled ? Color.white : Color(red: 1.00, green: 0.99, blue: 0.98)
+    }
+
+    static var surfaceMuted: Color {
+        isHighContrastEnabled ? Color(red: 0.93, green: 0.94, blue: 0.95) : Color(red: 0.95, green: 0.94, blue: 0.92)
+    }
+
     static let surfaceDark = Color(red: 0.12, green: 0.13, blue: 0.17)
     static let surfaceDarkRaised = Color(red: 0.16, green: 0.17, blue: 0.22)
-    static let border = Color(red: 0.87, green: 0.84, blue: 0.80)
-    static let borderDark = Color(red: 0.26, green: 0.27, blue: 0.34)
 
-    static let textPrimary = Color(red: 0.14, green: 0.14, blue: 0.18)
-    static let textSecondary = Color(red: 0.46, green: 0.47, blue: 0.54)
+    static var border: Color {
+        isHighContrastEnabled ? Color(red: 0.58, green: 0.56, blue: 0.52) : Color(red: 0.87, green: 0.84, blue: 0.80)
+    }
+
+    static var borderDark: Color {
+        isHighContrastEnabled ? Color(red: 0.48, green: 0.50, blue: 0.56) : Color(red: 0.26, green: 0.27, blue: 0.34)
+    }
+
+    static var textPrimary: Color {
+        isHighContrastEnabled ? Color.black : Color(red: 0.14, green: 0.14, blue: 0.18)
+    }
+
+    static var textSecondary: Color {
+        isHighContrastEnabled ? Color(red: 0.22, green: 0.24, blue: 0.28) : Color(red: 0.46, green: 0.47, blue: 0.54)
+    }
+
     static let textInverse = Color.white
 
     static let accentGradient = LinearGradient(
@@ -37,14 +65,27 @@ enum EngifyColors {
 }
 
 enum EngifyTypography {
-    static let hero = Font.system(size: 32, weight: .bold, design: .rounded)
-    static let screenTitle = Font.system(size: 28, weight: .bold, design: .rounded)
-    static let cardTitle = Font.system(size: 22, weight: .bold, design: .rounded)
-    static let sectionTitle = Font.system(size: 20, weight: .bold, design: .rounded)
-    static let headline = Font.system(size: 17, weight: .semibold, design: .rounded)
-    static let body = Font.system(size: 16, weight: .regular, design: .default)
-    static let bodyStrong = Font.system(size: 16, weight: .semibold, design: .default)
-    static let caption = Font.system(size: 13, weight: .medium, design: .default)
+    private static var baseFontSize: CGFloat {
+        let storedSize = UserDefaults.standard.double(forKey: "engify_font_size")
+        return storedSize > 0 ? CGFloat(storedSize) : 16
+    }
+
+    private static func scaledFont(
+        offset: CGFloat,
+        weight: Font.Weight,
+        design: Font.Design
+    ) -> Font {
+        Font.system(size: max(12, baseFontSize + offset), weight: weight, design: design)
+    }
+
+    static var hero: Font { scaledFont(offset: 16, weight: .bold, design: .rounded) }
+    static var screenTitle: Font { scaledFont(offset: 12, weight: .bold, design: .rounded) }
+    static var cardTitle: Font { scaledFont(offset: 6, weight: .bold, design: .rounded) }
+    static var sectionTitle: Font { scaledFont(offset: 4, weight: .bold, design: .rounded) }
+    static var headline: Font { scaledFont(offset: 1, weight: .semibold, design: .rounded) }
+    static var body: Font { scaledFont(offset: 0, weight: .regular, design: .default) }
+    static var bodyStrong: Font { scaledFont(offset: 0, weight: .semibold, design: .default) }
+    static var caption: Font { scaledFont(offset: -3, weight: .medium, design: .default) }
 }
 
 // MARK: - Background / Screen Shell
@@ -170,6 +211,74 @@ struct EngifyScreenScroll<Content: View>: View {
                 }
             }
         }
+    }
+}
+
+struct EngifyGlassPanelModifier: ViewModifier {
+    let cornerRadius: CGFloat
+    let tint: Color
+    let shadowOpacity: Double
+
+    func body(content: Content) -> some View {
+        content
+            .background {
+                ZStack {
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .fill(.ultraThinMaterial)
+
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(0.32),
+                                    tint.opacity(0.10),
+                                    Color.white.opacity(0.08)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(0.24),
+                                    Color.clear,
+                                    tint.opacity(0.10)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                }
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .stroke(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.72),
+                                tint.opacity(0.22),
+                                Color.white.opacity(0.16)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1
+                    )
+            }
+            .shadow(color: EngifyColors.primary.opacity(shadowOpacity), radius: 24, x: 0, y: 14)
+    }
+}
+
+extension View {
+    func engifyGlassPanel(
+        cornerRadius: CGFloat = 24,
+        tint: Color,
+        shadowOpacity: Double = 0.16
+    ) -> some View {
+        modifier(EngifyGlassPanelModifier(cornerRadius: cornerRadius, tint: tint, shadowOpacity: shadowOpacity))
     }
 }
 
@@ -964,15 +1073,7 @@ private struct EngifyProfileMenu: View {
         }
         .padding(Spacing.sm)
         .frame(width: Self.menuWidth, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(EngifyColors.surface.opacity(0.98))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .stroke(accentColor.opacity(0.18), lineWidth: 1)
-        )
-        .shadow(color: EngifyColors.primary.opacity(0.14), radius: 20, x: 0, y: 12)
+        .engifyGlassPanel(cornerRadius: 24, tint: accentColor, shadowOpacity: 0.18)
         .zIndex(999)
     }
 
@@ -998,7 +1099,16 @@ private struct EngifyProfileMenu: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill((tint ?? accentColor).opacity(0.08))
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.16),
+                                (tint ?? accentColor).opacity(0.12)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
             )
         }
         .buttonStyle(.plain)
@@ -1035,7 +1145,16 @@ private struct EngifyProfileMenu: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(accentColor.opacity(0.08))
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(0.16),
+                            accentColor.opacity(0.12)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
         )
     }
 }
@@ -1522,36 +1641,83 @@ extension View {
 struct EngifySettingsSection<Content: View>: View {
     let title: String
     let subtitle: String
+    let tag: String?
     let content: Content
 
-    init(title: String, subtitle: String, @ViewBuilder content: () -> Content) {
+    init(title: String, subtitle: String, tag: String? = nil, @ViewBuilder content: () -> Content) {
         self.title = title
         self.subtitle = subtitle
+        self.tag = tag
         self.content = content()
     }
 
     var body: some View {
         EngifyCard {
             VStack(alignment: .leading, spacing: Spacing.lg) {
-                EngifySectionHeader(title: title, subtitle: subtitle)
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    HStack(alignment: .center, spacing: Spacing.sm) {
+                        Text(title)
+                            .font(EngifyTypography.headline)
+                            .foregroundStyle(EngifyColors.textPrimary)
+
+                        if let tag {
+                            EngifySettingsBadge(text: tag)
+                        }
+
+                        Spacer(minLength: 0)
+                    }
+
+                    Text(subtitle)
+                        .font(EngifyTypography.caption)
+                        .foregroundStyle(EngifyColors.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 content
             }
         }
     }
 }
 
+struct EngifySettingsBadge: View {
+    let text: String
+
+    var body: some View {
+        Text(text.uppercased())
+            .font(.system(size: 10, weight: .bold, design: .rounded))
+            .foregroundStyle(EngifyColors.warning)
+            .padding(.horizontal, Spacing.sm)
+            .padding(.vertical, 5)
+            .background(EngifyColors.warning.opacity(0.14))
+            .clipShape(Capsule())
+    }
+}
+
 struct EngifySettingToggleRow: View {
     let title: String
     let subtitle: String
+    let tag: String?
     @Binding var isOn: Bool
     @Environment(\.themeAccentColor) private var accentColor
+
+    init(title: String, subtitle: String, tag: String? = nil, isOn: Binding<Bool>) {
+        self.title = title
+        self.subtitle = subtitle
+        self.tag = tag
+        self._isOn = isOn
+    }
 
     var body: some View {
         Toggle(isOn: $isOn) {
             VStack(alignment: .leading, spacing: Spacing.xs) {
-                Text(title)
-                    .font(EngifyTypography.bodyStrong)
-                    .foregroundStyle(EngifyColors.textPrimary)
+                HStack(alignment: .center, spacing: Spacing.sm) {
+                    Text(title)
+                        .font(EngifyTypography.bodyStrong)
+                        .foregroundStyle(EngifyColors.textPrimary)
+
+                    if let tag {
+                        EngifySettingsBadge(text: tag)
+                    }
+                }
 
                 Text(subtitle)
                     .font(EngifyTypography.caption)
@@ -1566,19 +1732,44 @@ struct EngifySettingToggleRow: View {
 struct EngifySettingSliderRow: View {
     let title: String
     let subtitle: String
+    let tag: String?
     let value: Binding<Double>
     let range: ClosedRange<Double>
     let step: Double
     let valueLabel: (Double) -> String
     @Environment(\.themeAccentColor) private var accentColor
 
+    init(
+        title: String,
+        subtitle: String,
+        tag: String? = nil,
+        value: Binding<Double>,
+        range: ClosedRange<Double>,
+        step: Double,
+        valueLabel: @escaping (Double) -> String
+    ) {
+        self.title = title
+        self.subtitle = subtitle
+        self.tag = tag
+        self.value = value
+        self.range = range
+        self.step = step
+        self.valueLabel = valueLabel
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
             HStack(alignment: .top, spacing: Spacing.md) {
                 VStack(alignment: .leading, spacing: Spacing.xs) {
-                    Text(title)
-                        .font(EngifyTypography.bodyStrong)
-                        .foregroundStyle(EngifyColors.textPrimary)
+                    HStack(alignment: .center, spacing: Spacing.sm) {
+                        Text(title)
+                            .font(EngifyTypography.bodyStrong)
+                            .foregroundStyle(EngifyColors.textPrimary)
+
+                        if let tag {
+                            EngifySettingsBadge(text: tag)
+                        }
+                    }
 
                     Text(subtitle)
                         .font(EngifyTypography.caption)

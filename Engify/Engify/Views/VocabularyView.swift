@@ -218,16 +218,20 @@ struct VocabularyView: View {
     private var progressIndicator: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
             HStack {
-                Text("Unlimited Vocabulary")
+                Text("Daily Goal")
                     .font(EngifyTypography.caption.weight(.semibold))
                     .foregroundStyle(theme.accentColor)
                 Spacer(minLength: 0)
-                Image(systemName: "infinity")
-                    .font(.caption)
+                Text("\(min(wordsReviewedThisSession, learningSettings.newWordsPerDay))/\(learningSettings.newWordsPerDay)")
+                    .font(EngifyTypography.caption.weight(.semibold))
                     .foregroundStyle(theme.accentColor)
+                    .padding(.horizontal, Spacing.md)
+                    .padding(.vertical, Spacing.sm)
+                    .background(theme.accentColor.opacity(0.12))
+                    .clipShape(Capsule())
             }
 
-            Text("Tap next to keep exploring fresh words without losing your rhythm.")
+            Text(goalProgressSubtitle)
                 .font(EngifyTypography.caption)
                 .foregroundStyle(EngifyColors.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -255,6 +259,15 @@ struct VocabularyView: View {
             }, feedbackEvent: .successPop)
             .environmentObject(theme)
         }
+    }
+
+    private var goalProgressSubtitle: String {
+        if wordsReviewedThisSession >= learningSettings.newWordsPerDay {
+            return "You reached today’s vocabulary target. Keep going if you want extra practice."
+        }
+
+        let remaining = max(0, learningSettings.newWordsPerDay - wordsReviewedThisSession)
+        return "\(remaining) more word\(remaining == 1 ? "" : "s") to reach today’s target."
     }
 
     private var skipButton: some View {
