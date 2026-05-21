@@ -167,8 +167,7 @@ struct TabBarButton: View {
         Button(action: action) {
             ZStack {
                 if isSelected {
-                    Capsule()
-                        .fill(EngifyColors.accentGradient)
+                    EngifyGelCapsuleSurface(tint: EngifyColors.accent)
                         .matchedGeometryEffect(id: "active-tab-pill", in: namespace)
                 }
 

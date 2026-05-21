@@ -200,7 +200,7 @@ struct EngifyScreenScroll<Content: View>: View {
                         )
                         .transition(
                             .asymmetric(
-                                insertion: .scale(scale: 0.82, anchor: .topLeading).combined(with: .opacity),
+                                insertion: .identity,
                                 removal: .scale(scale: 0.92, anchor: .topLeading).combined(with: .opacity)
                             )
                         )
@@ -279,6 +279,181 @@ extension View {
         shadowOpacity: Double = 0.16
     ) -> some View {
         modifier(EngifyGlassPanelModifier(cornerRadius: cornerRadius, tint: tint, shadowOpacity: shadowOpacity))
+    }
+}
+
+struct EngifyLiquidGlassCardModifier: ViewModifier {
+    let cornerRadius: CGFloat
+    let tint: Color
+    let shadowOpacity: Double
+
+    func body(content: Content) -> some View {
+        content
+            .background {
+                ZStack {
+                    cardShape
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(0.94),
+                                    tint.opacity(0.10),
+                                    tint.opacity(0.18)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+
+                    cardShape
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(0.56),
+                                    Color.white.opacity(0.12),
+                                    Color.clear
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+
+                    Ellipse()
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(0.42),
+                                    Color.white.opacity(0.04)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .frame(height: highlightHeight)
+                        .offset(y: highlightOffset)
+                        .blur(radius: highlightBlur)
+                }
+                .clipShape(cardShape)
+            }
+            .overlay {
+                cardShape
+                    .stroke(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.96),
+                                tint.opacity(0.20),
+                                Color.white.opacity(0.18)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1
+                    )
+            }
+            .shadow(color: EngifyColors.primary.opacity(shadowOpacity), radius: 22, x: 0, y: 12)
+    }
+
+    private var cardShape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+    }
+
+    private var highlightHeight: CGFloat {
+        min(92, max(68, cornerRadius * 4.5))
+    }
+
+    private var highlightOffset: CGFloat {
+        -(highlightHeight * 0.52)
+    }
+
+    private var highlightBlur: CGFloat {
+        cornerRadius <= 18 ? 1.2 : 1.6
+    }
+}
+
+struct EngifyLiquidGlassInputModifier: ViewModifier {
+    let cornerRadius: CGFloat
+    let tint: Color
+    let isFocused: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .background {
+                ZStack {
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(isFocused ? 0.96 : 0.92),
+                                    tint.opacity(isFocused ? 0.14 : 0.07),
+                                    tint.opacity(isFocused ? 0.18 : 0.10)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(isFocused ? 0.58 : 0.46),
+                                    Color.white.opacity(isFocused ? 0.16 : 0.10),
+                                    Color.clear
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+
+                    Ellipse()
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(isFocused ? 0.44 : 0.30),
+                                    Color.white.opacity(0.03)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .frame(height: 48)
+                        .offset(y: -22)
+                        .blur(radius: 1.2)
+                }
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .stroke(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.98),
+                                tint.opacity(isFocused ? 0.46 : 0.16),
+                                Color.white.opacity(0.18)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: isFocused ? 1.8 : 1
+                    )
+            }
+            .shadow(color: tint.opacity(isFocused ? 0.18 : 0.08), radius: isFocused ? 14 : 8, x: 0, y: 6)
+    }
+}
+
+extension View {
+    func engifyLiquidGlassCard(
+        cornerRadius: CGFloat = 24,
+        tint: Color,
+        shadowOpacity: Double = 0.16
+    ) -> some View {
+        modifier(EngifyLiquidGlassCardModifier(cornerRadius: cornerRadius, tint: tint, shadowOpacity: shadowOpacity))
+    }
+
+    func engifyLiquidGlassInput(
+        cornerRadius: CGFloat = 18,
+        tint: Color,
+        isFocused: Bool
+    ) -> some View {
+        modifier(EngifyLiquidGlassInputModifier(cornerRadius: cornerRadius, tint: tint, isFocused: isFocused))
     }
 }
 
@@ -1013,71 +1188,76 @@ struct EngifyProfileMenuButton: View {
 }
 
 private struct EngifyProfileMenu: View {
-    static let menuWidth: CGFloat = 240
+    static let menuWidth: CGFloat = 192
 
     @Binding var showSettings: Bool
     @Binding var showProfileSheet: Bool
     @Binding var showSavedWordBank: Bool
     @Binding var isPresented: Bool
     @EnvironmentObject private var authManager: AuthenticationManager
-    @EnvironmentObject private var learningSettings: LearningSettingsManager
     @Environment(\.themeAccentColor) private var accentColor
+    @State private var menuScale: CGFloat = 0.8
+    @State private var menuOpacity = 0.0
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.xs) {
-            if authManager.isGuestMode {
-                popoverAction(title: "Sign In / Register", systemImage: "person.crop.circle.badge.plus") {
+        VStack(alignment: .leading, spacing: 0) {
+            compactMenuAction(title: "Profile", systemImage: "person.crop.circle") {
+                if authManager.isGuestMode {
                     isPresented = false
                     authManager.presentAccountRequired(for: .accountMenu)
-                }
-            } else {
-                popoverAction(title: "My Profile", systemImage: "person.crop.circle") {
+                } else {
                     isPresented = false
                     showProfileSheet = true
                 }
             }
 
-            popoverAction(title: "Saved Word Bank", systemImage: "books.vertical.fill") {
+            menuDivider()
+
+            compactMenuAction(title: "Saved", systemImage: "bookmark.fill") {
                 isPresented = false
                 showSavedWordBank = true
             }
 
-            popoverAction(title: "Settings", systemImage: "gearshape.fill") {
+            menuDivider()
+
+            compactMenuAction(title: "Settings", systemImage: "gearshape.fill") {
                 isPresented = false
                 showSettings = true
             }
 
-            Divider()
-                .padding(.vertical, Spacing.xxs)
-
-            profileMenuToggle(
-                title: "Sound effects",
-                systemImage: learningSettings.soundEffectsEnabled ? "speaker.wave.2.fill" : "speaker.slash.fill",
-                subtitle: learningSettings.soundEffectsEnabled ? "On" : "Off",
-                isOn: $learningSettings.soundEffectsEnabled
-            )
-
             if authManager.isAuthenticated {
-                Divider()
-                    .padding(.vertical, Spacing.xxs)
+                menuDivider(topPadding: Spacing.xs)
 
-                popoverAction(
+                compactMenuAction(
                     title: "Sign Out",
                     systemImage: "rectangle.portrait.and.arrow.right",
-                    tint: EngifyColors.coral
+                    tint: EngifyColors.coral,
+                    showsDisclosure: false
                 ) {
                     isPresented = false
                     Task { await authManager.signOut() }
                 }
             }
         }
-        .padding(Spacing.sm)
+        .padding(Spacing.xs)
         .frame(width: Self.menuWidth, alignment: .leading)
-        .engifyGlassPanel(cornerRadius: 24, tint: accentColor, shadowOpacity: 0.18)
+        .fixedSize(horizontal: false, vertical: true)
+        .scaleEffect(menuScale, anchor: .topLeading)
+        .opacity(menuOpacity)
+        .engifyLiquidGlassCard(cornerRadius: 24, tint: accentColor, shadowOpacity: 0.18)
+        .onAppear {
+            animateMenuAppearance()
+        }
         .zIndex(999)
     }
 
-    private func popoverAction(title: String, systemImage: String, tint: Color? = nil, action: @escaping () -> Void) -> some View {
+    private func compactMenuAction(
+        title: String,
+        systemImage: String,
+        tint: Color? = nil,
+        showsDisclosure: Bool = true,
+        action: @escaping () -> Void
+    ) -> some View {
         let foreground = tint ?? EngifyColors.textPrimary
 
         return Button {
@@ -1086,76 +1266,105 @@ private struct EngifyProfileMenu: View {
             }
         } label: {
             HStack(spacing: Spacing.sm) {
-                Image(systemName: systemImage)
-                    .font(.subheadline.weight(.semibold))
+                menuIcon(systemImage: systemImage, tint: tint)
+
                 Text(title)
                     .font(EngifyTypography.bodyStrong)
+
                 Spacer(minLength: 0)
+
+                if showsDisclosure {
+                    Image(systemName: "arrow.right")
+                        .font(.caption.weight(.bold))
+                }
             }
             .foregroundStyle(foreground)
             .padding(.horizontal, Spacing.md)
-            .padding(.vertical, Spacing.md)
-            .frame(minHeight: 56)
+            .padding(.vertical, 11)
+            .frame(minHeight: 50)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
+            .fixedSize(horizontal: false, vertical: true)
+            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .background {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .fill(
                         LinearGradient(
                             colors: [
                                 Color.white.opacity(0.16),
-                                (tint ?? accentColor).opacity(0.12)
+                                (tint ?? accentColor).opacity(0.03),
+                                Color.clear
                             ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
+                            startPoint: .top,
+                            endPoint: .bottom
                         )
                     )
-            )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .stroke(Color.white.opacity(0.14), lineWidth: 0.75)
+                    )
+            }
         }
         .buttonStyle(.plain)
         .engifyJellyPress()
     }
 
-    private func profileMenuToggle(title: String, systemImage: String, subtitle: String, isOn: Binding<Bool>) -> some View {
-        HStack(alignment: .center, spacing: Spacing.sm) {
-            HStack(alignment: .center, spacing: Spacing.sm) {
-                Image(systemName: systemImage)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(EngifyColors.textPrimary)
+    private func animateMenuAppearance() {
+        menuScale = 0.8
+        menuOpacity = 0
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(EngifyTypography.bodyStrong)
-                        .foregroundStyle(EngifyColors.textPrimary)
-
-                    Text(subtitle)
-                        .font(EngifyTypography.caption)
-                        .foregroundStyle(EngifyColors.textSecondary)
-                }
-            }
-
-            Spacer(minLength: 0)
-
-            Toggle("", isOn: isOn)
-                .labelsHidden()
-                .tint(accentColor)
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.52, blendDuration: 0)) {
+            menuScale = 1.03
+            menuOpacity = 1
         }
-        .padding(.horizontal, Spacing.md)
-        .padding(.vertical, Spacing.md)
-        .frame(minHeight: 64)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            Color.white.opacity(0.16),
-                            accentColor.opacity(0.12)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+            withAnimation(.spring(response: 0.24, dampingFraction: 0.78, blendDuration: 0)) {
+                menuScale = 1
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func menuDivider(topPadding: CGFloat = 0) -> some View {
+        Rectangle()
+            .fill(
+                LinearGradient(
+                    colors: [
+                        Color.white.opacity(0.04),
+                        accentColor.opacity(0.18),
+                        Color.white.opacity(0.04)
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
                 )
-        )
+            )
+            .frame(height: 1)
+            .padding(.top, topPadding)
+            .padding(.horizontal, Spacing.md)
+    }
+
+    private func menuIcon(systemImage: String, tint: Color?) -> some View {
+        RoundedRectangle(cornerRadius: 10, style: .continuous)
+            .fill(
+                LinearGradient(
+                    colors: [
+                        Color.white.opacity(0.42),
+                        (tint ?? accentColor).opacity(0.14)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            .frame(width: 28, height: 28)
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(Color.white.opacity(0.34), lineWidth: 0.8)
+            )
+            .overlay(
+                Image(systemName: systemImage)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(tint ?? accentColor)
+            )
     }
 }
 

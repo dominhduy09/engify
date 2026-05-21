@@ -28,6 +28,9 @@ struct SettingsView: View {
     @State private var requestingNotificationPermission = false
     @State private var requestingMicrophonePermission = false
     @State private var showStorageWarning = false
+    @State private var showSaveConfirmation = false
+    @State private var saveConfirmationTask: DispatchWorkItem?
+    @State private var settingsSnapshot = ""
     private let betaTag = "Beta"
 
     var body: some View {
@@ -37,12 +40,18 @@ struct SettingsView: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: Spacing.xl) {
+                        if showSaveConfirmation {
+                            saveConfirmationBanner
+                                .transition(.move(edge: .top).combined(with: .opacity))
+                        }
+
                         overviewCard
                         learningGoalSection
                         aiTutorSection
                         speakingSection
                         practiceSection
                         notificationSection
+                        appPreferencesSection
                         advancedLearningSection
                         accessibilitySection
                         appearanceSection
@@ -55,6 +64,18 @@ struct SettingsView: View {
             .navigationTitle("Settings")
         }
         .navigationViewStyle(StackNavigationViewStyle())
+        .animation(.spring(response: 0.3, dampingFraction: 0.82), value: showSaveConfirmation)
+        .onAppear {
+            settingsSnapshot = currentSettingsSnapshot
+        }
+        .onChange(of: currentSettingsSnapshot) { newSnapshot in
+            guard !settingsSnapshot.isEmpty, newSnapshot != settingsSnapshot else { return }
+            settingsSnapshot = newSnapshot
+            showChangesSaved()
+        }
+        .onDisappear {
+            saveConfirmationTask?.cancel()
+        }
         .alert("Storage Warning", isPresented: $showStorageWarning) {
             Button("Delete", role: .destructive) {
                 settings.voiceHistoryEnabled = false
@@ -486,19 +507,24 @@ struct SettingsView: View {
                 Divider()
 
                 EngifySettingToggleRow(
-                    title: "Sound effects",
-                    subtitle: "Play sounds for correct/incorrect answers and achievements.",
-                    isOn: $settings.soundEffectsEnabled
-                )
-
-                Divider()
-
-                EngifySettingToggleRow(
                     title: "Haptic feedback",
                     subtitle: "Device vibration for interactions (saves battery if disabled).",
                     isOn: $settings.hapticFeedbackEnabled
                 )
             }
+        }
+    }
+
+    private var appPreferencesSection: some View {
+        EngifySettingsSection(
+            title: "App preferences",
+            subtitle: "Control the little interface touches that shape how Engify feels day to day."
+        ) {
+            EngifySettingToggleRow(
+                title: "App Audio / Sounds",
+                subtitle: "Mute interactive sound effects and click chimes.",
+                isOn: $settings.soundEffectsEnabled
+            )
         }
     }
 
@@ -596,9 +622,91 @@ struct SettingsView: View {
 
     // MARK: - Helpers
 
+    private var currentSettingsSnapshot: String {
+        [
+            settings.learningGoal,
+            settings.explanationDepth,
+            settings.correctionStyle,
+            settings.generateExtraExamples.description,
+            settings.speechFeedbackEnabled.description,
+            settings.transcriptVisible.description,
+            settings.speakingSpeed,
+            settings.pronunciationModel,
+            String(settings.newWordsPerDay),
+            String(settings.reviewLimitPerDay),
+            settings.notificationsEnabled.description,
+            settings.dailyReminderEnabled.description,
+            String(settings.dailyReminderTime.timeIntervalSince1970),
+            settings.streakReminderEnabled.description,
+            settings.weeklySummaryEnabled.description,
+            settings.microphoneEnabled.description,
+            settings.voiceHistoryEnabled.description,
+            settings.soundEffectsEnabled.description,
+            settings.hapticFeedbackEnabled.description,
+            settings.showDefinitionsByDefault.description,
+            settings.showGrammarCorrections.description,
+            settings.repeatPronunciation.description,
+            settings.difficultyLock.description,
+            settings.reducedMotionEnabled.description,
+            settings.highContrastEnabled.description,
+            theme.accent.rawValue,
+            theme.appearance.rawValue,
+            String(format: "%.2f", Double(theme.fontSize))
+        ]
+        .joined(separator: "|")
+    }
+
     private func formatBytes(_ bytes: Int) -> String {
         let mb = Double(bytes) / (1024 * 1024)
         return String(format: "%.1f MB", mb)
+    }
+
+    private var saveConfirmationBanner: some View {
+        HStack(spacing: Spacing.sm) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(EngifyColors.sage)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Changes saved")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(EngifyColors.textPrimary)
+
+                Text("Your settings were updated successfully.")
+                    .font(.caption)
+                    .foregroundStyle(EngifyColors.textSecondary)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, Spacing.md)
+        .padding(.vertical, Spacing.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(EngifyColors.sage.opacity(0.12))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(EngifyColors.sage.opacity(0.22), lineWidth: 1)
+        )
+    }
+
+    private func showChangesSaved() {
+        saveConfirmationTask?.cancel()
+
+        withAnimation {
+            showSaveConfirmation = true
+        }
+
+        let hideTask = DispatchWorkItem {
+            withAnimation {
+                showSaveConfirmation = false
+            }
+        }
+
+        saveConfirmationTask = hideTask
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.8, execute: hideTask)
     }
 
     private var privacySection: some View {

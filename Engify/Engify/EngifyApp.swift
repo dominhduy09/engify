@@ -41,7 +41,6 @@ struct EngifyApp: App {
                 .environment(\.themeAccentColor, themeManager.accentColor)
                 .accentColor(themeManager.accentColor)
                 .preferredColorScheme(themeManager.preferredColorScheme)
-                .id("\(themeManager.accent)_\(themeManager.appearance)_\(themeManager.fontSize)")
         }
     }
 }
