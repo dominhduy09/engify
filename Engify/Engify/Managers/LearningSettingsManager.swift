@@ -185,6 +185,12 @@ final class LearningSettingsManager: ObservableObject {
     @Published private(set) var notificationPermissionStatus: PermissionStatus = .notRequested
     @Published private(set) var microphonePermissionStatus: PermissionStatus = .notRequested
     
+    // MARK: - Active Preset Tracking
+    
+    @Published var activePreset: SettingsPreset {
+        didSet { save("active_preset", activePreset.rawValue) }
+    }
+    
     // MARK: - Constants
     
     private static let validLearningGoals = ["daily", "travel", "work", "study", "exam"]
@@ -232,6 +238,9 @@ final class LearningSettingsManager: ObservableObject {
         
         self.reducedMotionEnabled = Self.loadBool("reduced_motion", default: false)
         self.highContrastEnabled = Self.loadBool("high_contrast", default: false)
+        
+        let presetRaw = Self.loadValidated("active_preset", default: "default") { SettingsPreset.allCases.map(\.rawValue).contains($0) }
+        self.activePreset = SettingsPreset(rawValue: presetRaw) ?? .default
         
         // Check permissions asynchronously
         Task {
@@ -495,6 +504,221 @@ final class LearningSettingsManager: ObservableObject {
         print("[DEBUG] \(message)")
         #endif
     }
+    
+    // MARK: - Preset Management
+    
+    /// Applies a settings preset, updating all learning-related settings to curated values.
+    /// Permission-gated settings (notifications, microphone) are not modified by presets.
+    func applyPreset(_ preset: SettingsPreset) {
+        let values = preset.values
+        
+        learningGoal = values.learningGoal
+        explanationDepth = values.explanationDepth
+        correctionStyle = values.correctionStyle
+        generateExtraExamples = values.generateExtraExamples
+        
+        speechFeedbackEnabled = values.speechFeedbackEnabled
+        transcriptVisible = values.transcriptVisible
+        speakingSpeed = values.speakingSpeed
+        pronunciationModel = values.pronunciationModel
+        repeatPronunciation = values.repeatPronunciation
+        
+        newWordsPerDay = values.newWordsPerDay
+        reviewLimitPerDay = values.reviewLimitPerDay
+        difficultyLock = values.difficultyLock
+        
+        showDefinitionsByDefault = values.showDefinitionsByDefault
+        showGrammarCorrections = values.showGrammarCorrections
+        
+        soundEffectsEnabled = values.soundEffectsEnabled
+        hapticFeedbackEnabled = values.hapticFeedbackEnabled
+        
+        activePreset = preset
+        logAnalytics("settings_preset_applied", ["preset": preset.rawValue])
+    }
+    
+    /// Resets all settings to the Engify Default preset.
+    func resetToDefaults() {
+        applyPreset(.default)
+    }
+}
+
+// MARK: - Settings Preset
+
+/// Pre-configured settings profiles that users can quickly apply.
+///
+/// Each preset defines a curated combination of learning settings optimized for
+/// a specific use case. Permission-gated settings (notifications, microphone)
+/// are intentionally excluded from presets.
+enum SettingsPreset: String, CaseIterable, Identifiable {
+    case `default` = "default"
+    case casual = "casual"
+    case intensive = "intensive"
+    case examPrep = "exam_prep"
+    case minimal = "minimal"
+    
+    var id: String { rawValue }
+    
+    var title: String {
+        switch self {
+        case .default: return "Engify Default"
+        case .casual: return "Casual Learner"
+        case .intensive: return "Intensive Study"
+        case .examPrep: return "Exam Prep"
+        case .minimal: return "Minimal"
+        }
+    }
+    
+    var subtitle: String {
+        switch self {
+        case .default: return "Balanced settings for everyday learning."
+        case .casual: return "Relaxed pace with gentle corrections."
+        case .intensive: return "Maximum practice with detailed feedback."
+        case .examPrep: return "Strict corrections, high volume, exam focus."
+        case .minimal: return "Stripped-down experience, fewer distractions."
+        }
+    }
+    
+    var icon: String {
+        switch self {
+        case .default: return "star.fill"
+        case .casual: return "leaf.fill"
+        case .intensive: return "flame.fill"
+        case .examPrep: return "graduationcap.fill"
+        case .minimal: return "circle.dotted"
+        }
+    }
+    
+    var tintColor: Color {
+        switch self {
+        case .default: return EngifyColors.accent
+        case .casual: return EngifyColors.sky
+        case .intensive: return EngifyColors.coral
+        case .examPrep: return EngifyColors.warning
+        case .minimal: return EngifyColors.textSecondary
+        }
+    }
+    
+    /// The curated setting values for this preset.
+    var values: SettingsPresetValues {
+        switch self {
+        case .default:
+            return SettingsPresetValues(
+                learningGoal: "daily",
+                explanationDepth: "balanced",
+                correctionStyle: "gentle",
+                generateExtraExamples: true,
+                speechFeedbackEnabled: true,
+                transcriptVisible: true,
+                speakingSpeed: "normal",
+                pronunciationModel: "us_english",
+                repeatPronunciation: false,
+                newWordsPerDay: 8,
+                reviewLimitPerDay: 15,
+                difficultyLock: false,
+                showDefinitionsByDefault: false,
+                showGrammarCorrections: true,
+                soundEffectsEnabled: true,
+                hapticFeedbackEnabled: true
+            )
+        case .casual:
+            return SettingsPresetValues(
+                learningGoal: "daily",
+                explanationDepth: "simple",
+                correctionStyle: "gentle",
+                generateExtraExamples: false,
+                speechFeedbackEnabled: true,
+                transcriptVisible: true,
+                speakingSpeed: "slow",
+                pronunciationModel: "us_english",
+                repeatPronunciation: false,
+                newWordsPerDay: 3,
+                reviewLimitPerDay: 8,
+                difficultyLock: false,
+                showDefinitionsByDefault: true,
+                showGrammarCorrections: false,
+                soundEffectsEnabled: true,
+                hapticFeedbackEnabled: true
+            )
+        case .intensive:
+            return SettingsPresetValues(
+                learningGoal: "study",
+                explanationDepth: "detailed",
+                correctionStyle: "balanced",
+                generateExtraExamples: true,
+                speechFeedbackEnabled: true,
+                transcriptVisible: true,
+                speakingSpeed: "normal",
+                pronunciationModel: "us_english",
+                repeatPronunciation: true,
+                newWordsPerDay: 15,
+                reviewLimitPerDay: 30,
+                difficultyLock: true,
+                showDefinitionsByDefault: true,
+                showGrammarCorrections: true,
+                soundEffectsEnabled: true,
+                hapticFeedbackEnabled: true
+            )
+        case .examPrep:
+            return SettingsPresetValues(
+                learningGoal: "exam",
+                explanationDepth: "detailed",
+                correctionStyle: "strict",
+                generateExtraExamples: true,
+                speechFeedbackEnabled: true,
+                transcriptVisible: false,
+                speakingSpeed: "fast",
+                pronunciationModel: "uk_english",
+                repeatPronunciation: true,
+                newWordsPerDay: 20,
+                reviewLimitPerDay: 40,
+                difficultyLock: true,
+                showDefinitionsByDefault: false,
+                showGrammarCorrections: true,
+                soundEffectsEnabled: false,
+                hapticFeedbackEnabled: true
+            )
+        case .minimal:
+            return SettingsPresetValues(
+                learningGoal: "daily",
+                explanationDepth: "simple",
+                correctionStyle: "gentle",
+                generateExtraExamples: false,
+                speechFeedbackEnabled: false,
+                transcriptVisible: false,
+                speakingSpeed: "normal",
+                pronunciationModel: "us_english",
+                repeatPronunciation: false,
+                newWordsPerDay: 5,
+                reviewLimitPerDay: 10,
+                difficultyLock: false,
+                showDefinitionsByDefault: false,
+                showGrammarCorrections: false,
+                soundEffectsEnabled: false,
+                hapticFeedbackEnabled: false
+            )
+        }
+    }
+}
+
+/// The concrete values for a settings preset.
+struct SettingsPresetValues {
+    let learningGoal: String
+    let explanationDepth: String
+    let correctionStyle: String
+    let generateExtraExamples: Bool
+    let speechFeedbackEnabled: Bool
+    let transcriptVisible: Bool
+    let speakingSpeed: String
+    let pronunciationModel: String
+    let repeatPronunciation: Bool
+    let newWordsPerDay: Int
+    let reviewLimitPerDay: Int
+    let difficultyLock: Bool
+    let showDefinitionsByDefault: Bool
+    let showGrammarCorrections: Bool
+    let soundEffectsEnabled: Bool
+    let hapticFeedbackEnabled: Bool
 }
 
 // MARK: - Permission Status

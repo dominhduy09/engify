@@ -96,7 +96,7 @@ final class DictionaryViewModel: ObservableObject {
 
     private func bindSearchText() {
         $searchText
-            .debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)
+            .debounce(for: .milliseconds(200), scheduler: DispatchQueue.main)
             .removeDuplicates()
             .sink { [weak self] text in
                 guard let self else { return }
@@ -109,27 +109,40 @@ final class DictionaryViewModel: ObservableObject {
             .store(in: &cancellables)
     }
 
+    private var activeSuggestionTask: Task<Void, Never>?
+
     private func fetchSuggestions(for query: String) async {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        guard trimmed.count >= 2 else {
+        guard trimmed.count >= 1 else {
             suggestions = []
             showSuggestions = false
             isSuggestionsLoading = false
             return
         }
 
-        isSuggestionsLoading = true
+        // Cancel any in-flight suggestion request to avoid stale results
+        activeSuggestionTask?.cancel()
 
-        do {
-            suggestions = try await service.suggestWords(for: trimmed)
-            showSuggestions = !suggestions.isEmpty
-        } catch {
-            suggestions = []
-            showSuggestions = false
+        let task = Task {
+            isSuggestionsLoading = true
+
+            do {
+                let results = try await service.suggestWords(for: trimmed)
+                guard !Task.isCancelled else { return }
+                suggestions = results
+                showSuggestions = !results.isEmpty
+            } catch {
+                guard !Task.isCancelled else { return }
+                suggestions = []
+                showSuggestions = false
+            }
+
+            isSuggestionsLoading = false
         }
 
-        isSuggestionsLoading = false
+        activeSuggestionTask = task
+        await task.value
     }
 
     private func loadRecentSearches() {

@@ -31,6 +31,8 @@ struct SettingsView: View {
     @State private var showSaveConfirmation = false
     @State private var saveConfirmationTask: DispatchWorkItem?
     @State private var settingsSnapshot = ""
+    @State private var showPresetConfirmation = false
+    @State private var pendingPreset: SettingsPreset?
     private let betaTag = "Beta"
 
     var body: some View {
@@ -46,6 +48,7 @@ struct SettingsView: View {
                         }
 
                         overviewCard
+                        settingsPresetSection
                         learningGoalSection
                         aiTutorSection
                         speakingSection
@@ -56,6 +59,7 @@ struct SettingsView: View {
                         accessibilitySection
                         appearanceSection
                         privacySection
+                        resetSection
                     }
                     .padding()
                     .padding(.bottom, 100)
@@ -83,6 +87,21 @@ struct SettingsView: View {
             Button("Cancel", role: .cancel) { }
         } message: {
             Text("Voice history is using \(formatBytes(settings.voiceHistoryStorageUsage)). Delete to free space?")
+        }
+        .alert("Apply Preset", isPresented: $showPresetConfirmation) {
+            Button("Apply", role: .destructive) {
+                if let preset = pendingPreset {
+                    settings.applyPreset(preset)
+                    pendingPreset = nil
+                }
+            }
+            Button("Cancel", role: .cancel) {
+                pendingPreset = nil
+            }
+        } message: {
+            if let preset = pendingPreset {
+                Text("This will replace your current settings with the \"\(preset.title)\" preset. Notification and microphone settings won't change.")
+            }
         }
     }
 
@@ -114,6 +133,71 @@ struct SettingsView: View {
                     .scaledToFit()
                     .frame(width: 42, height: 42)
                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+        }
+    }
+
+    private var settingsPresetSection: some View {
+        EngifySettingsSection(
+            title: "Quick setup",
+            subtitle: "Apply a curated preset to configure all settings at once, or customize below."
+        ) {
+            VStack(alignment: .leading, spacing: Spacing.md) {
+                ForEach(Array(SettingsPreset.allCases.enumerated()), id: \.element.id) { index, preset in
+                    Button {
+                        if settings.activePreset == preset {
+                            // Already active — no action needed
+                        } else {
+                            pendingPreset = preset
+                            showPresetConfirmation = true
+                        }
+                    } label: {
+                        HStack(spacing: Spacing.md) {
+                            Image(systemName: preset.icon)
+                                .font(.title3.weight(.semibold))
+                                .foregroundStyle(preset.tintColor)
+                                .frame(width: 36, height: 36)
+                                .background(preset.tintColor.opacity(0.12))
+                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                            VStack(alignment: .leading, spacing: Spacing.xxs) {
+                                HStack(spacing: Spacing.sm) {
+                                    Text(preset.title)
+                                        .font(.subheadline.weight(.semibold))
+                                        .foregroundStyle(EngifyColors.textPrimary)
+
+                                    if settings.activePreset == preset {
+                                        Text("Active")
+                                            .font(.caption2.weight(.bold))
+                                            .foregroundStyle(.white)
+                                            .padding(.horizontal, 8)
+                                            .padding(.vertical, 2)
+                                            .background(preset.tintColor)
+                                            .clipShape(Capsule())
+                                    }
+                                }
+
+                                Text(preset.subtitle)
+                                    .font(.caption)
+                                    .foregroundStyle(EngifyColors.textSecondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+
+                            Spacer()
+
+                            Image(systemName: settings.activePreset == preset ? "checkmark.circle.fill" : "circle")
+                                .font(.title3)
+                                .foregroundStyle(settings.activePreset == preset ? preset.tintColor : EngifyColors.textSecondary.opacity(0.4))
+                        }
+                        .padding(.vertical, Spacing.sm)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+
+                    if index < SettingsPreset.allCases.count - 1 {
+                        Divider()
+                    }
+                }
             }
         }
     }
@@ -707,6 +791,64 @@ struct SettingsView: View {
 
         saveConfirmationTask = hideTask
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.8, execute: hideTask)
+    }
+
+    @State private var showResetConfirmation = false
+
+    private var resetSection: some View {
+        EngifySettingsSection(
+            title: "Reset",
+            subtitle: "Restore all learning settings to their original values."
+        ) {
+            VStack(alignment: .leading, spacing: Spacing.md) {
+                Button {
+                    showResetConfirmation = true
+                } label: {
+                    HStack(spacing: Spacing.md) {
+                        Image(systemName: "arrow.counterclockwise")
+                            .font(.title3.weight(.semibold))
+                            .foregroundStyle(EngifyColors.coral)
+                            .frame(width: 36, height: 36)
+                            .background(EngifyColors.coral.opacity(0.12))
+                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                        VStack(alignment: .leading, spacing: Spacing.xxs) {
+                            Text("Reset to defaults")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(EngifyColors.coral)
+
+                            Text("Revert all settings to \"Engify Default\". Notifications and microphone won't change.")
+                                .font(.caption)
+                                .foregroundStyle(EngifyColors.textSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+
+                        Spacer()
+
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(EngifyColors.textSecondary.opacity(0.5))
+                    }
+                    .padding(.vertical, Spacing.sm)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
+                Text("Engify v1.0 · Made with 💚")
+                    .font(.caption2)
+                    .foregroundStyle(EngifyColors.textSecondary.opacity(0.6))
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.top, Spacing.sm)
+            }
+        }
+        .alert("Reset Settings", isPresented: $showResetConfirmation) {
+            Button("Reset", role: .destructive) {
+                settings.resetToDefaults()
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("This will reset all learning settings to the Engify Default preset. This cannot be undone.")
+        }
     }
 
     private var privacySection: some View {

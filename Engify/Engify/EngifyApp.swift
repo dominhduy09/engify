@@ -7,7 +7,7 @@
 //
 //  WHAT IT DOES:
 //  - Marks EngifyApp as the @main application delegate.
-//  - Creates three app-wide StateObject managers on creation.
+//  - Creates five app-wide StateObject managers on creation.
 //  - Injects those managers as environment objects so every view in the app can access them.
 //
 //  WHEN IT RUNS:
@@ -18,7 +18,9 @@
 //  - AuthenticationManager: manages login/guest session state across the app.
 //  - SavedWordsManager: persists bookmarked words to UserDefaults.
 //  - ThemeManager: stores accent color, light/dark mode, and font size preferences.
-//  - .accentColor() and .preferredColorScheme() propagate theme settings to the entire view tree.
+//  - GamificationManager: manages XP, streaks, lingots, and level progress.
+//  - LearningSettingsManager: manages all learning preferences with validation and persistence.
+//  - .tint() and .preferredColorScheme() propagate theme settings to the entire view tree.
 
 import SwiftUI
 
@@ -39,7 +41,7 @@ struct EngifyApp: App {
                 .environmentObject(gamificationManager)
                 .environmentObject(learningSettingsManager)
                 .environment(\.themeAccentColor, themeManager.accentColor)
-                .accentColor(themeManager.accentColor)
+                .tint(themeManager.accentColor)
                 .preferredColorScheme(themeManager.preferredColorScheme)
         }
     }

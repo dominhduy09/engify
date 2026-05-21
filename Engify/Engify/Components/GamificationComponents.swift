@@ -278,46 +278,50 @@ struct CompletionView: View {
 struct CelebrationView: View {
     let isActive: Bool
     @State private var dots: [DotParticle] = []
+    @State private var animationProgress: CGFloat = 0
 
     var body: some View {
-        Canvas { context, _ in
-            for dot in dots {
-                var copy = context
-                copy.opacity = dot.opacity
-                copy.fill(
-                    Path(ellipseIn: CGRect(x: dot.x - 4, y: dot.y - 4, width: 8, height: 8)),
-                    with: .color(dot.color)
-                )
+        GeometryReader { geo in
+            Canvas { context, size in
+                let progress = Double(animationProgress)
+                for dot in dots {
+                    var copy = context
+                    let currentOpacity = max(0, dot.opacity * (1 - progress))
+                    copy.opacity = currentOpacity
+                    let currentY = dot.y + (300 * progress)
+                    copy.fill(
+                        Path(ellipseIn: CGRect(x: dot.x - 4, y: currentY - 4, width: 8, height: 8)),
+                        with: .color(dot.color)
+                    )
+                }
             }
-        }
-        .onAppear {
-            if isActive {
-                spawnDots()
+            .onAppear {
+                if isActive {
+                    spawnDots(width: geo.size.width, height: geo.size.height)
+                }
             }
-        }
-        .onChange(of: isActive) { isNowActive in
-            if isNowActive {
-                spawnDots()
+            .onChange(of: isActive) { isNowActive in
+                if isNowActive {
+                    spawnDots(width: geo.size.width, height: geo.size.height)
+                }
             }
         }
     }
 
-    private func spawnDots() {
+    private func spawnDots(width: CGFloat, height: CGFloat) {
         let colors: [Color] = [EngifyColors.accent, EngifyColors.sky, EngifyColors.sage, EngifyColors.coral]
+        animationProgress = 0
         dots = (0..<20).map { _ in
             DotParticle(
-                x: CGFloat.random(in: 0...400),
-                y: CGFloat.random(in: -50...100),
+                x: CGFloat.random(in: 0...max(width, 100)),
+                y: CGFloat.random(in: -50...max(height * 0.25, 100)),
                 color: colors.randomElement() ?? EngifyColors.accent,
                 opacity: 1
             )
         }
 
-        for index in dots.indices {
-            withAnimation(.easeOut(duration: 1.2)) {
-                dots[index].y += 300
-                dots[index].opacity = 0
-            }
+        withAnimation(.easeOut(duration: 1.2)) {
+            animationProgress = 1
         }
     }
 }

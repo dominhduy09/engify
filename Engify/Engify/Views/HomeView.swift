@@ -7,10 +7,14 @@ struct HomeView: View {
     @EnvironmentObject private var gamification: GamificationManager
     @EnvironmentObject private var learningSettings: LearningSettingsManager
     @State private var showSettingsSheet = false
+    @State private var dailyQuote: QuoteService.DailyQuote?
+    @State private var dailyTip: LearningTip = LearningTip.tipOfTheDay()
 
     var body: some View {
         EngifyScreenScroll {
             globalHeader
+            dailyQuoteCard
+            dailyTipCard
             continueLearningSection
             newsAndReadingSection
             practiceSection
@@ -18,6 +22,10 @@ struct HomeView: View {
             recentActivitySection
         }
         .engifySettingsSheet(isPresented: $showSettingsSheet)
+        .task {
+            let service = QuoteService()
+            dailyQuote = await service.fetchDailyQuote()
+        }
         .overlay {
             if gamification.showLessonComplete {
                 LessonCompleteOverlay()
@@ -157,6 +165,114 @@ struct HomeView: View {
             selectedTab = tab
         }
         EngifyFeedback.shared.play(.tabSwitch, settings: learningSettings)
+    }
+
+    // MARK: - Daily Quote Card
+
+    private var dailyQuoteCard: some View {
+        Group {
+            if let quote = dailyQuote {
+                EngifyCard(tint: EngifyColors.sky) {
+                    VStack(alignment: .leading, spacing: Spacing.md) {
+                        HStack(spacing: Spacing.sm) {
+                            Image(systemName: "quote.opening")
+                                .font(.title3.weight(.bold))
+                                .foregroundStyle(EngifyColors.sky)
+
+                            Text("Quote of the Day")
+                                .font(EngifyTypography.headline)
+                                .foregroundStyle(EngifyColors.textPrimary)
+
+                            Spacer()
+
+                            Text("Daily")
+                                .font(.caption2.weight(.bold))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(EngifyColors.sky)
+                                .clipShape(Capsule())
+                        }
+
+                        if #available(iOS 16.0, *) {
+                            Text("\u{201C}\(quote.text)\u{201D}")
+                                .font(.system(size: 16, weight: .regular, design: .serif))
+                                .foregroundStyle(EngifyColors.textPrimary)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .italic()
+                        } else {
+                            // Fallback on earlier versions
+                        }
+
+                        Text("\u{2014} \(quote.author)")
+                            .font(EngifyTypography.caption.weight(.semibold))
+                            .foregroundStyle(EngifyColors.textSecondary)
+                    }
+                }
+            } else {
+                // Shimmer placeholder while loading
+                EngifyCard(tint: EngifyColors.sky) {
+                    VStack(alignment: .leading, spacing: Spacing.md) {
+                        HStack(spacing: Spacing.sm) {
+                            Image(systemName: "quote.opening")
+                                .font(.title3.weight(.bold))
+                                .foregroundStyle(EngifyColors.sky)
+
+                            Text("Quote of the Day")
+                                .font(EngifyTypography.headline)
+                                .foregroundStyle(EngifyColors.textPrimary)
+
+                            Spacer()
+                        }
+
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(EngifyColors.border.opacity(0.3))
+                            .frame(height: 44)
+
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(EngifyColors.border.opacity(0.2))
+                            .frame(width: 120, height: 14)
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Daily Tip Card
+
+    private var dailyTipCard: some View {
+        EngifyCard(tint: EngifyColors.sage) {
+            VStack(alignment: .leading, spacing: Spacing.md) {
+                HStack(spacing: Spacing.sm) {
+                    Image(systemName: dailyTip.icon)
+                        .font(.title3.weight(.bold))
+                        .foregroundStyle(EngifyColors.sage)
+
+                    Text("Tip of the Day")
+                        .font(EngifyTypography.headline)
+                        .foregroundStyle(EngifyColors.textPrimary)
+
+                    Spacer()
+
+                    Text(dailyTip.category)
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(EngifyColors.sage)
+                        .clipShape(Capsule())
+                }
+
+                Text(dailyTip.title)
+                    .font(EngifyTypography.bodyStrong)
+                    .foregroundStyle(EngifyColors.textPrimary)
+
+                Text(dailyTip.body)
+                    .font(EngifyTypography.body)
+                    .foregroundStyle(EngifyColors.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
     }
 
     private var recommendedFeature: (title: String, subtitle: String, systemImage: String, tab: EngifyTab, requiresAccount: Bool) {

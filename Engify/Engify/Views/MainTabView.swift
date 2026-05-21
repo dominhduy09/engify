@@ -32,6 +32,9 @@ struct MainTabView: View {
                 .background(Color.clear)
         }
         .ignoresSafeArea(.keyboard)
+        .overlay {
+            LevelUpOverlay()
+        }
         .sheet(item: $authManager.accountRequiredContext) { context in
             if #available(iOS 16.0, *) {
                 AccountRequiredSheet(

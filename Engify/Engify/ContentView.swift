@@ -45,6 +45,7 @@ struct ContentView: View {
         .onAppear {
             guard !hasSeenOnboarding, legacyHasSeenIntro else { return }
             hasSeenOnboarding = true
+            legacyHasSeenIntro = false  // Clean up legacy key after migration
         }
     }
 }
@@ -55,4 +56,5 @@ struct ContentView: View {
         .environmentObject(SavedWordsManager())
         .environmentObject(ThemeManager())
         .environmentObject(GamificationManager())
+        .environmentObject(LearningSettingsManager())
 }

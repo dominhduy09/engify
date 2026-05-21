@@ -2,7 +2,7 @@ import SwiftUI
 
 struct VocabularyView: View {
     @State private var currentWord: Word
-    @State private var previousWords: [String] = []
+    @State private var previousWords: Set<String> = []
     @State private var cardRotation: Double = 0
     @State private var wordsReviewedThisSession = 0
     @State private var showLessonComplete = false
@@ -300,13 +300,13 @@ struct VocabularyView: View {
                 nextWord = availableWords.randomElement() ?? currentWord
             }
 
-            previousWords.append(currentWord.word)
+            previousWords.insert(currentWord.word)
             if previousWords.count > 10 {
-                previousWords.removeFirst()
+                previousWords.remove(previousWords.randomElement()!)
             }
 
             currentWord = nextWord
-            cardRotation += 360
+            cardRotation = cardRotation == 0 ? 360 : 0  // Clamp rotation to avoid unbounded growth
         }
 
         if triggerFeedback {
@@ -316,8 +316,24 @@ struct VocabularyView: View {
 
     private func skipWord() {
         withAnimation(EngifySpring.tabSlide) {
-            currentWord = EngifySampleData.vocabularyWords.randomElement() ?? currentWord
-            cardRotation += 360
+            // Track skipped words to prevent seeing the same word again
+            let availableWords = EngifySampleData.vocabularyWords.filter {
+                !previousWords.contains($0.word) && $0.word != currentWord.word
+            }
+            
+            previousWords.insert(currentWord.word)
+            if previousWords.count > 10 {
+                previousWords.remove(previousWords.randomElement()!)
+            }
+
+            if let next = availableWords.randomElement() {
+                currentWord = next
+            } else {
+                previousWords.removeAll()
+                currentWord = EngifySampleData.vocabularyWords.randomElement() ?? currentWord
+            }
+
+            cardRotation = cardRotation == 0 ? 360 : 0  // Clamp rotation
         }
 
         EngifyFeedback.shared.play(.tabSwitch, settings: learningSettings)

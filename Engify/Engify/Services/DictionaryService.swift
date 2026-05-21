@@ -49,7 +49,7 @@ struct DictionaryService {
         let meaning = first.meanings.first
         let definition = meaning?.definitions.first
         let phonetic = first.phonetic ?? first.phonetics.compactMap { $0.text }.first ?? ""
-        let audioURL = first.phonetics.compactMap { URL(string: $0.audio) }.first
+        let audioURL = first.phonetics.compactMap { $0.audio.flatMap { URL(string: $0) } }.first
 
         return DictionaryEntry(
             word: first.word,
@@ -82,7 +82,7 @@ struct DictionaryService {
 
         let results = try JSONDecoder().decode([DatamuseSuggestionResponse].self, from: data)
         return results.map { response in
-            DictionarySuggestion(word: response.word, hint: response.tags.first)
+            DictionarySuggestion(word: response.word, hint: response.tags?.first)
         }
     }
 }
@@ -113,7 +113,7 @@ private struct DictionaryAPIResponse: Decodable {
 
 private struct DictionaryPhonetic: Decodable {
     let text: String?
-    let audio: String
+    let audio: String?
 }
 
 private struct DictionaryMeaning: Decodable {
@@ -129,5 +129,5 @@ private struct DictionaryDefinition: Decodable {
 private struct DatamuseSuggestionResponse: Decodable {
     let word: String
     let score: Int?
-    let tags: [String]
+    let tags: [String]?
 }
