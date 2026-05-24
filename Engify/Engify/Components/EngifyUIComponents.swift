@@ -843,6 +843,146 @@ struct EngifySectionHeader: View {
     }
 }
 
+struct EngifyChipSection<Content: View, Trailing: View>: View {
+    let title: String
+    let systemImage: String
+    private let trailing: Trailing
+    private let content: Content
+
+    init(
+        title: String,
+        systemImage: String,
+        @ViewBuilder trailing: () -> Trailing,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.title = title
+        self.systemImage = systemImage
+        self.trailing = trailing()
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.md) {
+            HStack(spacing: Spacing.sm) {
+                Image(systemName: systemImage)
+                    .foregroundStyle(EngifyColors.textSecondary)
+
+                Text(title)
+                    .font(EngifyTypography.headline)
+                    .foregroundStyle(EngifyColors.textPrimary)
+
+                Spacer(minLength: 0)
+
+                trailing
+            }
+
+            content
+        }
+    }
+}
+
+extension EngifyChipSection where Trailing == EmptyView {
+    init(
+        title: String,
+        systemImage: String,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.init(title: title, systemImage: systemImage, trailing: { EmptyView() }, content: content)
+    }
+}
+
+struct WrapChipsView<Item: Hashable, Chip: View>: View {
+    let items: [Item]
+    let chip: (Item) -> Chip
+
+    var body: some View {
+        FlexibleChipsLayout(items: items, chip: chip)
+    }
+}
+
+private struct FlexibleChipsLayout<Item: Hashable, Chip: View>: View {
+    let items: [Item]
+    let chip: (Item) -> Chip
+    @State private var itemSizes: [Int: CGSize] = [:]
+    @State private var availableWidth: CGFloat = 0
+
+    private let horizontalSpacing = Spacing.xs
+    private let verticalSpacing = Spacing.xs
+
+    var body: some View {
+        GeometryReader { proxy in
+            let layout = layout(for: proxy.size.width)
+
+            ZStack(alignment: .topLeading) {
+                ForEach(Array(items.enumerated()), id: \.offset) { index, item in
+                    chip(item)
+                        .fixedSize()
+                        .background(sizeReader(for: index))
+                        .offset(
+                            x: layout.positions[index]?.x ?? 0,
+                            y: layout.positions[index]?.y ?? 0
+                        )
+                }
+            }
+            .frame(width: proxy.size.width, height: max(layout.height, 1), alignment: .topLeading)
+            .onAppear {
+                availableWidth = proxy.size.width
+            }
+            .onChange(of: proxy.size.width) { newWidth in
+                availableWidth = newWidth
+            }
+        }
+        .frame(height: max(layout(for: availableWidth).height, 1))
+        .onPreferenceChange(FlexibleChipSizePreferenceKey.self) { itemSizes = $0 }
+    }
+
+    private func layout(for availableWidth: CGFloat) -> (positions: [Int: CGPoint], height: CGFloat) {
+        guard availableWidth > 0, !items.isEmpty else {
+            return ([:], 0)
+        }
+
+        var positions: [Int: CGPoint] = [:]
+        var currentX: CGFloat = 0
+        var currentY: CGFloat = 0
+        var rowHeight: CGFloat = 0
+
+        for index in items.indices {
+            let size = itemSizes[index] ?? .zero
+            let chipWidth = size.width
+            let chipHeight = size.height
+
+            if currentX > 0, currentX + chipWidth > availableWidth {
+                currentX = 0
+                currentY += rowHeight + verticalSpacing
+                rowHeight = 0
+            }
+
+            positions[index] = CGPoint(x: currentX, y: currentY)
+            currentX += chipWidth + horizontalSpacing
+            rowHeight = max(rowHeight, chipHeight)
+        }
+
+        return (positions, currentY + rowHeight)
+    }
+
+    private func sizeReader(for index: Int) -> some View {
+        GeometryReader { proxy in
+            Color.clear.preference(
+                key: FlexibleChipSizePreferenceKey.self,
+                value: [index: proxy.size]
+            )
+        }
+    }
+}
+
+private struct FlexibleChipSizePreferenceKey: PreferenceKey {
+    static var defaultValue: [Int: CGSize] = [:]
+
+    static func reduce(value: inout [Int: CGSize], nextValue: () -> [Int: CGSize]) {
+        value.merge(nextValue(), uniquingKeysWith: { $1 })
+    }
+}
+
 struct EngifyFeatureButton: View {
     let title: String
     let subtitle: String

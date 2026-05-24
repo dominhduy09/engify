@@ -62,9 +62,23 @@ struct NewsService {
                 allItems.append(contentsOf: items)
             }
 
-            return allItems.sorted { lhs, rhs in
+            let sortedItems = allItems.sorted { lhs, rhs in
                 lhs.date ?? .distantPast > rhs.date ?? .distantPast
             }
+
+            var seenKeys = Set<String>()
+            var uniqueItems: [RSSFeedItem] = []
+
+            for item in sortedItems {
+                let key = item.link?.absoluteString.lowercased()
+                    ?? "\(item.source.publisherName)|\(item.title)".lowercased()
+
+                if seenKeys.insert(key).inserted {
+                    uniqueItems.append(item)
+                }
+            }
+
+            return uniqueItems
         }
     }
 
@@ -394,18 +408,37 @@ struct NewsService {
 
 enum NewsFeedSource: CaseIterable {
     case bbcLearningEnglish
+    case bbcWorld
     case nasaBreakingNews
+    case guardianTopStories
+    case guardianWorld
+    case guardianScience
+    case guardianTechnology
+    case guardianSport
+    case alJazeeraWorld
     case reutersWorld
 
     var urlString: String {
         switch self {
         case .bbcLearningEnglish:
             return "https://feeds.bbci.co.uk/learningenglish/english/features/6-minute-english/rss"
+        case .bbcWorld:
+            return "https://feeds.bbci.co.uk/news/world/rss.xml"
         case .nasaBreakingNews:
             return "https://www.nasa.gov/rss/dyn/breaking_news.rss"
+        case .guardianTopStories:
+            return "https://www.theguardian.com/rss"
+        case .guardianWorld:
+            return "https://www.theguardian.com/world/rss"
+        case .guardianScience:
+            return "https://www.theguardian.com/science/rss"
+        case .guardianTechnology:
+            return "https://www.theguardian.com/technology/rss"
+        case .guardianSport:
+            return "https://www.theguardian.com/sport/rss"
+        case .alJazeeraWorld:
+            return "https://www.aljazeera.com/xml/rss/all.xml"
         case .reutersWorld:
-            // Reuters science feed URL in the request is not a valid RSS endpoint.
-            // This public Reuters feed keeps the free RSS pipeline functional.
             return "https://feeds.reuters.com/Reuters/worldNews"
         }
     }
@@ -414,8 +447,14 @@ enum NewsFeedSource: CaseIterable {
         switch self {
         case .bbcLearningEnglish:
             return "BBC Learning English"
+        case .bbcWorld:
+            return "BBC News"
         case .nasaBreakingNews:
             return "NASA"
+        case .guardianTopStories, .guardianWorld, .guardianScience, .guardianTechnology, .guardianSport:
+            return "The Guardian"
+        case .alJazeeraWorld:
+            return "Al Jazeera"
         case .reutersWorld:
             return "Reuters"
         }
@@ -425,10 +464,16 @@ enum NewsFeedSource: CaseIterable {
         switch self {
         case .bbcLearningEnglish:
             return "Learning"
+        case .bbcWorld, .guardianTopStories, .guardianWorld, .reutersWorld, .alJazeeraWorld:
+            return "World"
         case .nasaBreakingNews:
             return "Space"
-        case .reutersWorld:
-            return "General"
+        case .guardianScience:
+            return "Science"
+        case .guardianTechnology:
+            return "Technology"
+        case .guardianSport:
+            return "Sports"
         }
     }
 }

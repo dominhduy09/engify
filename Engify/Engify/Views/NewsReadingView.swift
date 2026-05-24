@@ -10,10 +10,10 @@ struct NewsReadingView: View {
     @State private var selectedArticle: Article?
     @State private var savedToastWordTitle: String?
     @State private var showSavedWordBank = false
-
     var body: some View {
         EngifyScreenScroll {
             globalHeader
+            filterBar
 
             if viewModel.isLoading {
                 EngifyLoadingCard(
@@ -31,10 +31,10 @@ struct NewsReadingView: View {
                         Task { await viewModel.loadArticles() }
                     }
                 )
-            } else if viewModel.articles.isEmpty {
+            } else if viewModel.filteredArticles.isEmpty {
                 EngifyStateCard(
-                    title: "No Articles Yet",
-                    message: "The app uses sample articles when the news API key is still set to the placeholder.",
+                    title: "No Articles Match",
+                    message: "Try clearing filters or broadening the search.",
                     systemImage: "newspaper"
                 )
             } else {
@@ -59,26 +59,12 @@ struct NewsReadingView: View {
             SavedWordBankSheet()
                 .environmentObject(savedWordsManager)
         }
-        .background(
-            NavigationLink(
-                destination: Group {
-                    if let selectedArticle {
-                        NewsArticleDetailView(article: selectedArticle, onSaveWord: handleSaveWord)
-                    }
-                },
-                isActive: Binding(
-                    get: { selectedArticle != nil },
-                    set: { isActive in
-                        if !isActive {
-                            selectedArticle = nil
-                        }
-                    }
-                )
-            ) {
-                EmptyView()
+        .sheet(item: $selectedArticle) { article in
+            NavigationView {
+                NewsArticleDetailView(article: article, onSaveWord: handleSaveWord)
             }
-            .hidden()
-        )
+            .navigationViewStyle(StackNavigationViewStyle())
+        }
         .task {
             if viewModel.articles.isEmpty {
                 await viewModel.loadArticles()
@@ -103,7 +89,7 @@ struct NewsReadingView: View {
                 )
             }
 
-            ForEach(viewModel.articles) { article in
+            ForEach(viewModel.filteredArticles) { article in
                 Button {
                     guard authManager.requestGuestNewsArticleAccess(articleID: article.id) else { return }
                     selectedArticle = article
@@ -117,6 +103,104 @@ struct NewsReadingView: View {
                 Task { await viewModel.loadMoreArticles() }
             })
         }
+    }
+
+    private var filterBar: some View {
+        CardView(tint: EngifyColors.sky) {
+            VStack(alignment: .leading, spacing: Spacing.lg) {
+                SearchBar(
+                    text: Binding(
+                        get: { viewModel.filters.searchText },
+                        set: { viewModel.updateSearchText($0) }
+                    ),
+                    placeholder: "Search topics like space, AI, health...",
+                    onSubmit: {}
+                )
+
+                if viewModel.filters.isActive {
+                    HStack(spacing: Spacing.sm) {
+                        Label("\(viewModel.filteredArticles.count) articles match", systemImage: "line.3.horizontal.decrease.circle")
+                            .font(EngifyTypography.caption)
+                            .foregroundStyle(EngifyColors.textSecondary)
+
+                        Spacer(minLength: 0)
+
+                        Button("Clear All") {
+                            withAnimation(.easeInOut(duration: 0.18)) {
+                                viewModel.clearFilters()
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .font(EngifyTypography.caption.weight(.semibold))
+                        .foregroundStyle(theme.accentColor)
+                    }
+                }
+
+                filterSection(
+                    title: "Sources",
+                    systemImage: "antenna.radiowaves.left.and.right",
+                    titles: NewsViewModel.NewsSourceFilter.allCases.map(\.rawValue),
+                    selected: viewModel.filters.selectedSources.map(\.rawValue),
+                    onToggle: { title in
+                        guard let filter = NewsViewModel.NewsSourceFilter.allCases.first(where: { $0.rawValue == title }) else { return }
+                        withAnimation(.easeInOut(duration: 0.18)) {
+                            viewModel.toggleSourceFilter(filter)
+                        }
+                    }
+                )
+
+                filterSection(
+                    title: "Categories",
+                    systemImage: "square.grid.2x2",
+                    titles: NewsViewModel.NewsCategoryFilter.allCases.map(\.rawValue),
+                    selected: viewModel.filters.selectedCategories.map(\.rawValue),
+                    onToggle: { title in
+                        guard let filter = NewsViewModel.NewsCategoryFilter.allCases.first(where: { $0.rawValue == title }) else { return }
+                        withAnimation(.easeInOut(duration: 0.18)) {
+                            viewModel.toggleCategoryFilter(filter)
+                        }
+                    }
+                )
+            }
+        }
+    }
+
+    private func filterSection(
+        title: String,
+        systemImage: String,
+        titles: [String],
+        selected: [String],
+        onToggle: @escaping (String) -> Void
+    ) -> some View {
+        EngifyChipSection(title: title, systemImage: systemImage) {
+            WrapChipsView(items: titles) { item in
+                filterChip(title: item, isSelected: selected.contains(item), onTap: {
+                    onToggle(item)
+                })
+            }
+        }
+    }
+
+    private func filterChip(title: String, isSelected: Bool, onTap: @escaping () -> Void) -> some View {
+        Button(action: onTap) {
+            HStack(spacing: Spacing.xs) {
+                Text(title)
+                    .font(EngifyTypography.caption.weight(.semibold))
+                    .foregroundStyle(isSelected ? EngifyColors.textInverse : theme.accentColor)
+                    .lineLimit(1)
+
+                if isSelected {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(EngifyColors.textInverse.opacity(0.92))
+                }
+            }
+            .padding(.horizontal, Spacing.md)
+            .padding(.vertical, Spacing.sm)
+            .background(isSelected ? theme.accentColor : theme.accentColor.opacity(0.10))
+            .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
     }
 
     private func articleCard(_ article: Article) -> some View {

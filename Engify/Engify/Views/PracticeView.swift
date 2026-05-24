@@ -270,24 +270,6 @@ private struct PracticeDashboardSelectorGrid: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.xl) {
-            EngifyCard(tint: accentColor) {
-                VStack(alignment: .leading, spacing: Spacing.md) {
-                    Text("Choose your lane")
-                        .font(EngifyTypography.caption)
-                        .foregroundStyle(EngifyColors.textSecondary)
-                        .textCase(.uppercase)
-
-                    Text("Three focused practice zones, each with room to breathe.")
-                        .font(EngifyTypography.cardTitle)
-                        .foregroundStyle(EngifyColors.textPrimary)
-
-                    Text("Jump into speaking, zoom in on grammar, or run a fast quiz sprint without the root tab feeling overloaded.")
-                        .font(EngifyTypography.body)
-                        .foregroundStyle(EngifyColors.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-
             PracticeHubCard(
                 accentColor: accentColor,
                 eyebrow: "Section A • Speaking Hub",

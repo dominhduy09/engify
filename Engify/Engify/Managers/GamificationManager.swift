@@ -36,6 +36,7 @@ final class GamificationManager: ObservableObject {
     @Published var showLessonComplete = false
     @Published var currentLessonResult: LessonResult?
     @Published var showXPGain = false
+    @Published var showLevelUp = false
     @Published var lastXPGained: Int = 0
 
     // Request publisher for lesson completion overlay
@@ -192,8 +193,8 @@ final class GamificationManager: ObservableObject {
     }
 
     private func triggerLevelUp() {
-        // Level-up is implied by progress.level increasing;
-        // views can react to this via the @Published progress.level change.
-        // The overlay handles the visual celebration.
+        withAnimation(.spring(response: 0.45, dampingFraction: 0.78)) {
+            showLevelUp = true
+        }
     }
 }

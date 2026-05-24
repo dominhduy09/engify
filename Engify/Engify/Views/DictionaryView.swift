@@ -161,18 +161,10 @@ struct DictionaryView: View {
     }
 
     private var recentSearchesSection: some View {
-        VStack(alignment: .leading, spacing: Spacing.md) {
-            HStack(alignment: .center, spacing: Spacing.sm) {
-                HStack(spacing: Spacing.sm) {
-                    Image(systemName: "clock.arrow.circlepath")
-                        .foregroundStyle(EngifyColors.textSecondary)
-                    Text("Recent Searches")
-                        .font(EngifyTypography.headline)
-                        .foregroundStyle(EngifyColors.textPrimary)
-                }
-
-                Spacer(minLength: 0)
-
+        EngifyChipSection(
+            title: "Recent Searches",
+            systemImage: "clock.arrow.circlepath",
+            trailing: {
                 Button("Clear All") {
                     withAnimation(.easeInOut(duration: 0.18)) {
                         viewModel.clearRecentSearches()
@@ -182,7 +174,7 @@ struct DictionaryView: View {
                 .font(EngifyTypography.caption.weight(.semibold))
                 .foregroundStyle(theme.accentColor)
             }
-
+        ) {
             WrapChipsView(items: viewModel.recentSearches) { term in
                 recentSearchChip(term: term)
             }
@@ -442,97 +434,5 @@ struct DictionaryView: View {
 
     private func requestSearchAllowanceIfNeeded() -> Bool {
         !authManager.isGuestMode || authManager.requestGuestDictionarySearch()
-    }
-}
-
-private struct WrapChipsView<Item: Hashable, Chip: View>: View {
-    let items: [Item]
-    let chip: (Item) -> Chip
-
-    var body: some View {
-        FlexibleChipsLayout(items: items, chip: chip)
-    }
-}
-
-private struct FlexibleChipsLayout<Item: Hashable, Chip: View>: View {
-    let items: [Item]
-    let chip: (Item) -> Chip
-    @State private var itemSizes: [Int: CGSize] = [:]
-    @State private var availableWidth: CGFloat = 0
-
-    private let horizontalSpacing = Spacing.xs
-    private let verticalSpacing = Spacing.xs
-
-    var body: some View {
-        GeometryReader { proxy in
-            let layout = layout(for: proxy.size.width)
-
-            ZStack(alignment: .topLeading) {
-                ForEach(Array(items.enumerated()), id: \.offset) { index, item in
-                    chip(item)
-                        .fixedSize()
-                        .background(sizeReader(for: index))
-                        .offset(
-                            x: layout.positions[index]?.x ?? 0,
-                            y: layout.positions[index]?.y ?? 0
-                        )
-                }
-            }
-            .frame(width: proxy.size.width, height: max(layout.height, 1), alignment: .topLeading)
-            .onAppear {
-                availableWidth = proxy.size.width
-            }
-            .onChange(of: proxy.size.width) { newWidth in
-                availableWidth = newWidth
-            }
-        }
-        .frame(height: max(layout(for: availableWidth).height, 1))
-        .onPreferenceChange(FlexibleChipSizePreferenceKey.self) { itemSizes = $0 }
-    }
-
-    private func layout(for availableWidth: CGFloat) -> (positions: [Int: CGPoint], height: CGFloat) {
-        guard availableWidth > 0, !items.isEmpty else {
-            return ([:], 0)
-        }
-
-        var positions: [Int: CGPoint] = [:]
-        var currentX: CGFloat = 0
-        var currentY: CGFloat = 0
-        var rowHeight: CGFloat = 0
-
-        for index in items.indices {
-            let size = itemSizes[index] ?? .zero
-            let chipWidth = size.width
-            let chipHeight = size.height
-
-            if currentX > 0, currentX + chipWidth > availableWidth {
-                currentX = 0
-                currentY += rowHeight + verticalSpacing
-                rowHeight = 0
-            }
-
-            positions[index] = CGPoint(x: currentX, y: currentY)
-            currentX += chipWidth + horizontalSpacing
-            rowHeight = max(rowHeight, chipHeight)
-        }
-
-        return (positions, currentY + rowHeight)
-    }
-
-    private func sizeReader(for index: Int) -> some View {
-        GeometryReader { proxy in
-            Color.clear.preference(
-                key: FlexibleChipSizePreferenceKey.self,
-                value: [index: proxy.size]
-            )
-        }
-    }
-}
-
-private struct FlexibleChipSizePreferenceKey: PreferenceKey {
-    static var defaultValue: [Int: CGSize] = [:]
-
-    static func reduce(value: inout [Int: CGSize], nextValue: () -> [Int: CGSize]) {
-        value.merge(nextValue(), uniquingKeysWith: { $1 })
     }
 }

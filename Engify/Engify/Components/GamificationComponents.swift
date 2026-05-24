@@ -367,3 +367,23 @@ struct LessonCompleteOverlay: View {
         }
     }
 }
+
+struct LevelUpOverlay: View {
+    @EnvironmentObject private var gamification: GamificationManager
+
+    var body: some View {
+        if gamification.showLevelUp {
+            CompletionView(
+                title: "Level Up",
+                message: "You reached a new level and unlocked fresh momentum.",
+                pointsEarned: 0
+            ) {
+                gamification.showLevelUp = false
+            }
+            .overlay {
+                CelebrationView(isActive: true)
+                    .allowsHitTesting(false)
+            }
+        }
+    }
+}
