@@ -20,6 +20,8 @@ import Foundation
 ///   the first tag as the hint string.
 struct DictionaryService {
     private let session: URLSession
+    private static let defaultLookupBaseURL = "https://api.dictionaryapi.dev/api/v2/entries/en"
+    private static let dictionaryAPISettingsKey = "engify.settings.dictionary_api_base_url"
 
     init(session: URLSession = .shared) {
         self.session = session
@@ -31,7 +33,7 @@ struct DictionaryService {
             throw DictionaryServiceError.emptyQuery
         }
 
-        let urlString = "https://api.dictionaryapi.dev/api/v2/entries/en/\(trimmedWord)"
+        let urlString = "\(resolvedLookupBaseURL())/\(trimmedWord)"
         guard let url = URL(string: urlString) else {
             throw DictionaryServiceError.invalidURL
         }
@@ -50,15 +52,17 @@ struct DictionaryService {
         let definition = meaning?.definitions.first
         let phonetic = first.phonetic ?? first.phonetics.compactMap { $0.text }.first ?? ""
         let audioURL = first.phonetics.compactMap { $0.audio.flatMap { URL(string: $0) } }.first
-
         return DictionaryEntry(
             word: first.word,
-            phonetic: phonetic,
+            phonetic: phonetic.nonEmpty ?? "N/A",
             audioURL: audioURL,
-            partOfSpeech: meaning?.partOfSpeech ?? "unknown",
-            definition: definition?.definition ?? "",
-            example: definition?.example ?? "",
-            vietnameseMeaning: "Tạm dịch: \(first.word)"
+            partOfSpeech: meaning?.partOfSpeech.nonEmpty ?? "N/A",
+            definition: definition?.definition.nonEmpty ?? "N/A",
+            example: definition?.example?.nonEmpty ?? "N/A",
+            vietnameseMeaning: "N/A",
+            nounForm: "N/A",
+            adjectiveForm: "N/A",
+            verbForm: "N/A"
         )
     }
 
@@ -84,6 +88,17 @@ struct DictionaryService {
         return results.map { response in
             DictionarySuggestion(word: response.word, hint: response.tags?.first)
         }
+    }
+
+    private func resolvedLookupBaseURL() -> String {
+        let configured = UserDefaults.standard.string(forKey: Self.dictionaryAPISettingsKey)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard let configured, !configured.isEmpty, URL(string: configured) != nil else {
+            return Self.defaultLookupBaseURL
+        }
+
+        return configured.hasSuffix("/") ? String(configured.dropLast()) : configured
     }
 }
 
@@ -130,4 +145,10 @@ private struct DatamuseSuggestionResponse: Decodable {
     let word: String
     let score: Int?
     let tags: [String]?
+}
+
+private extension String {
+    var nonEmpty: String? {
+        trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : self
+    }
 }

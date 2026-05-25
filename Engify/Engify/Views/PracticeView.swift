@@ -1,13 +1,12 @@
 import SwiftUI
 
 struct PracticeView: View {
-    @State private var currentPracticeRoute: PracticeRoute = .dashboard
+    @State private var activePracticeSheet: PracticeRoute?
     @State private var selectedGrammarTopic = 0
     @State private var speakingHintVisible = false
     @State private var quizAnswers: [UUID: Int] = [:]
     @State private var showQuizResult = false
     @State private var currentQuizQuestions: [QuizQuestion] = []
-    @State private var navigationDirection: PracticeNavigationDirection = .forward
     @EnvironmentObject private var authManager: AuthenticationManager
     @EnvironmentObject private var theme: ThemeManager
     @EnvironmentObject private var gamification: GamificationManager
@@ -20,7 +19,6 @@ struct PracticeView: View {
             globalHeader
             routedContent
         }
-        .tabTransition()
         .overlay {
             if showBadge {
                 LessonCompleteOverlay()
@@ -35,6 +33,18 @@ struct PracticeView: View {
             }
         }
         .engifySettingsSheet(isPresented: $showSettingsSheet)
+        .sheet(item: $activePracticeSheet) { route in
+            if #available(iOS 16.0, *) {
+                NavigationView {
+                    practiceSheetView(for: route)
+                }
+                .navigationViewStyle(StackNavigationViewStyle())
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+            } else {
+                // Fallback on earlier versions
+            }
+        }
         .onAppear {
             if currentQuizQuestions.isEmpty {
                 refreshQuiz()
@@ -42,33 +52,30 @@ struct PracticeView: View {
         }
         .onChange(of: authManager.isGuestMode) { isGuestMode in
             if isGuestMode {
-                currentPracticeRoute = .dashboard
+                activePracticeSheet = nil
             }
         }
     }
 
     private var globalHeader: some View {
         EngifyGlobalTabHeader(
-            title: currentPracticeRoute.headerTitle,
-            subtitle: currentPracticeRoute.headerSubtitle,
+            title: PracticeRoute.dashboard.headerTitle,
+            subtitle: PracticeRoute.dashboard.headerSubtitle,
             showSettings: $showSettingsSheet
         )
     }
 
     private var routedContent: some View {
-        ZStack {
+        Group {
             if authManager.isGuestMode {
                 lockedPracticeExperience
-                    .transition(routeTransition)
             } else {
-                routeView(for: currentPracticeRoute)
-                    .id(currentPracticeRoute)
-                    .transition(routeTransition)
+                PracticeDashboardSelectorGrid(accentColor: theme.accentColor) { selectedRoute in
+                    present(route: selectedRoute)
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
-        .clipped()
-        .animation(EngifySpring.tabSlide, value: currentPracticeRoute)
     }
 
     private var lockedPracticeExperience: some View {
@@ -113,55 +120,44 @@ struct PracticeView: View {
     }
 
     @ViewBuilder
-    private func routeView(for route: PracticeRoute) -> some View {
-        switch route {
-        case .dashboard:
-            PracticeDashboardSelectorGrid(accentColor: theme.accentColor) { selectedRoute in
-                navigate(to: selectedRoute)
+    private func practiceSheetView(for route: PracticeRoute) -> some View {
+        EngifyScreenScroll(bottomInset: 40) {
+            switch route {
+            case .dashboard:
+                EmptyView()
+
+            case .speaking:
+                DedicatedSpeakingPracticeView(
+                    accentColor: theme.accentColor,
+                    speakingSentence: EngifySampleData.speakingSentence,
+                    speakingHintVisible: $speakingHintVisible
+                )
+
+            case .grammar:
+                DedicatedGrammarLessonView(
+                    accentColor: theme.accentColor,
+                    grammarTopics: EngifySampleData.grammarTopics,
+                    selectedTopicIndex: $selectedGrammarTopic,
+                    learningSettings: learningSettings
+                )
+
+            case .quiz:
+                DedicatedQuizView(
+                    accentColor: theme.accentColor,
+                    theme: theme,
+                    questions: currentQuizQuestions,
+                    quizAnswers: $quizAnswers,
+                    showQuizResult: $showQuizResult,
+                    quizScore: quizScore,
+                    scoreColor: scoreColor,
+                    onSelectAnswer: selectAnswer,
+                    onCheckScore: checkQuizScore,
+                    onRefresh: refreshQuiz
+                )
             }
-
-        case .speaking:
-            DedicatedSpeakingPracticeView(
-                accentColor: theme.accentColor,
-                speakingSentence: EngifySampleData.speakingSentence,
-                speakingHintVisible: $speakingHintVisible,
-                onBack: { navigate(to: .dashboard) }
-            )
-
-        case .grammar:
-            DedicatedGrammarLessonView(
-                accentColor: theme.accentColor,
-                grammarTopics: EngifySampleData.grammarTopics,
-                selectedTopicIndex: $selectedGrammarTopic,
-                learningSettings: learningSettings,
-                onBack: { navigate(to: .dashboard) }
-            )
-
-        case .quiz:
-            DedicatedQuizView(
-                accentColor: theme.accentColor,
-                theme: theme,
-                questions: currentQuizQuestions,
-                quizAnswers: $quizAnswers,
-                showQuizResult: $showQuizResult,
-                quizScore: quizScore,
-                scoreColor: scoreColor,
-                onBack: { navigate(to: .dashboard) },
-                onSelectAnswer: selectAnswer,
-                onCheckScore: checkQuizScore,
-                onRefresh: refreshQuiz
-            )
         }
-    }
-
-    private var routeTransition: AnyTransition {
-        let insertionEdge: Edge = navigationDirection == .forward ? .trailing : .leading
-        let removalEdge: Edge = navigationDirection == .forward ? .leading : .trailing
-
-        return .asymmetric(
-            insertion: .move(edge: insertionEdge).combined(with: .opacity),
-            removal: .move(edge: removalEdge).combined(with: .opacity)
-        )
+        .navigationTitle("Practice")
+        .navigationBarTitleDisplayMode(.inline)
     }
 
     private var scoreColor: Color {
@@ -183,13 +179,9 @@ struct PracticeView: View {
         }
     }
 
-    private func navigate(to route: PracticeRoute) {
-        guard currentPracticeRoute != route else { return }
-
-        navigationDirection = route.rawValue > currentPracticeRoute.rawValue ? .forward : .backward
-        withAnimation(EngifySpring.tabSlide) {
-            currentPracticeRoute = route
-        }
+    private func present(route: PracticeRoute) {
+        guard route != .dashboard else { return }
+        activePracticeSheet = route
         EngifyFeedback.shared.play(.tabSwitch, settings: learningSettings)
     }
 
@@ -226,11 +218,13 @@ struct PracticeView: View {
     }
 }
 
-private enum PracticeRoute: Int, Hashable {
+private enum PracticeRoute: Int, Hashable, Identifiable {
     case dashboard
     case speaking
     case grammar
     case quiz
+
+    var id: Int { rawValue }
 
     var headerTitle: String {
         switch self {
@@ -257,11 +251,6 @@ private enum PracticeRoute: Int, Hashable {
             return "Test your skills with rapid-fire reps"
         }
     }
-}
-
-private enum PracticeNavigationDirection {
-    case forward
-    case backward
 }
 
 private struct PracticeDashboardSelectorGrid: View {
@@ -392,44 +381,19 @@ private struct PracticeHubCard: View {
 }
 
 private struct PracticeDetailHeader: View {
-    let label: String
     let title: String
     let subtitle: String
-    let onBack: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.lg) {
-            Button {
-                withAnimation(EngifySpring.tabSlide) {
-                    onBack()
-                }
-            } label: {
-                HStack(spacing: Spacing.xs) {
-                    Image(systemName: "chevron.left")
-                    Text(label)
-                }
-                .font(EngifyTypography.caption.weight(.semibold))
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            Text(title)
+                .font(EngifyTypography.screenTitle)
+                .foregroundStyle(EngifyColors.textPrimary)
+
+            Text(subtitle)
+                .font(EngifyTypography.body)
                 .foregroundStyle(EngifyColors.textSecondary)
-                .padding(.horizontal, Spacing.md)
-                .padding(.vertical, Spacing.sm)
-                .background(
-                    Capsule()
-                        .fill(EngifyColors.surface.opacity(0.92))
-                )
-            }
-            .buttonStyle(.plain)
-            .engifyJellyPress()
-
-            VStack(alignment: .leading, spacing: Spacing.sm) {
-                Text(title)
-                    .font(EngifyTypography.screenTitle)
-                    .foregroundStyle(EngifyColors.textPrimary)
-
-                Text(subtitle)
-                    .font(EngifyTypography.body)
-                    .foregroundStyle(EngifyColors.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }
@@ -438,15 +402,12 @@ private struct DedicatedSpeakingPracticeView: View {
     let accentColor: Color
     let speakingSentence: String
     @Binding var speakingHintVisible: Bool
-    let onBack: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.xl) {
             PracticeDetailHeader(
-                label: "Practice",
                 title: "Speaking Practice",
-                subtitle: "Focus on one target phrase at a time and build calm, repeatable fluency.",
-                onBack: onBack
+                subtitle: "Focus on one target phrase at a time and build calm, repeatable fluency."
             )
 
             EngifyCard(tint: accentColor) {
@@ -534,7 +495,6 @@ private struct DedicatedGrammarLessonView: View {
     let grammarTopics: [(title: String, explanation: String, examples: [String])]
     @Binding var selectedTopicIndex: Int
     let learningSettings: LearningSettingsManager
-    let onBack: () -> Void
 
     private var topic: (title: String, explanation: String, examples: [String]) {
         grammarTopics[selectedTopicIndex]
@@ -543,10 +503,8 @@ private struct DedicatedGrammarLessonView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.xl) {
             PracticeDetailHeader(
-                label: "Practice",
                 title: "Grammar Lessons",
-                subtitle: "Browse a topic, settle into the rule, and give examples enough room to actually teach.",
-                onBack: onBack
+                subtitle: "Browse a topic, settle into the rule, and give examples enough room to actually teach."
             )
 
             ScrollView(.horizontal, showsIndicators: false) {
@@ -661,7 +619,6 @@ private struct DedicatedQuizView: View {
     @Binding var showQuizResult: Bool
     let quizScore: Int
     let scoreColor: Color
-    let onBack: () -> Void
     let onSelectAnswer: (QuizQuestion, Int) -> Void
     let onCheckScore: () -> Void
     let onRefresh: () -> Void
@@ -669,10 +626,8 @@ private struct DedicatedQuizView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.xl) {
             PracticeDetailHeader(
-                label: "Practice",
                 title: "Interactive Quizzes",
-                subtitle: "Run a tight set of rapid-fire questions, then see exactly how your recall held up.",
-                onBack: onBack
+                subtitle: "Run a tight set of rapid-fire questions, then see exactly how your recall held up."
             )
 
             EngifyCard(tint: accentColor) {

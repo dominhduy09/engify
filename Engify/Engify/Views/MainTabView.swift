@@ -2,20 +2,22 @@ import SwiftUI
 
 struct MainTabView: View {
     @State private var selectedTab: EngifyTab = .home
+    @State private var tabTransitionDirection: TabTransitionDirection = .forward
     @EnvironmentObject private var authManager: AuthenticationManager
+
+    private static let orderedTabs: [EngifyTab] = [
+        .home,
+        .vocabulary,
+        .dictionary,
+        .news,
+        .practice
+    ]
 
     private var tabSelection: Binding<EngifyTab> {
         Binding(
             get: { selectedTab },
             set: { newTab in
-                if authManager.isGuestMode && newTab == .vocabulary {
-                    authManager.presentAccountRequired(for: .vocabulary)
-                    return
-                }
-
-                withAnimation(EngifySpring.tabSlide) {
-                    selectedTab = newTab
-                }
+                switchToTab(newTab, initiatedBySwipe: false)
             }
         )
     }
@@ -24,6 +26,8 @@ struct MainTabView: View {
         ZStack {
             currentTabContent
         }
+        .contentShape(Rectangle())
+        .gesture(tabSwipeGesture)
         .safeAreaInset(edge: .bottom) {
             FloatingTabBar(selectedTab: tabSelection)
                 .padding(.horizontal, Spacing.screenPadding)
@@ -62,21 +66,90 @@ struct MainTabView: View {
         switch selectedTab {
         case .home:
             HomeView(selectedTab: tabSelection)
-                .transition(.opacity)
+                .transition(tabContentTransition)
         case .vocabulary:
             VocabularyView()
-                .transition(.opacity)
+                .transition(tabContentTransition)
         case .dictionary:
             DictionaryView()
-                .transition(.opacity)
+                .transition(tabContentTransition)
         case .news:
             NewsReadingView()
-                .transition(.opacity)
+                .transition(tabContentTransition)
         case .practice:
             PracticeView()
-                .transition(.opacity)
+                .transition(tabContentTransition)
         }
     }
+
+    private var tabContentTransition: AnyTransition {
+        let insertionEdge: Edge = tabTransitionDirection == .forward ? .trailing : .leading
+        let removalEdge: Edge = tabTransitionDirection == .forward ? .leading : .trailing
+
+        return .asymmetric(
+            insertion: .move(edge: insertionEdge).combined(with: .opacity),
+            removal: .move(edge: removalEdge).combined(with: .opacity)
+        )
+    }
+
+    private var tabSwipeGesture: some Gesture {
+        DragGesture(minimumDistance: 24, coordinateSpace: .local)
+            .onEnded { value in
+                let horizontal = value.translation.width
+                let vertical = value.translation.height
+
+                guard abs(horizontal) > abs(vertical), abs(horizontal) > 70 else { return }
+
+                if horizontal < 0 {
+                    moveToAdjacentTab(step: 1)
+                } else {
+                    moveToAdjacentTab(step: -1)
+                }
+            }
+    }
+
+    private func moveToAdjacentTab(step: Int) {
+        guard let currentIndex = Self.orderedTabs.firstIndex(of: selectedTab) else { return }
+
+        let nextIndex = currentIndex + step
+        guard Self.orderedTabs.indices.contains(nextIndex) else { return }
+
+        switchToTab(Self.orderedTabs[nextIndex], initiatedBySwipe: true)
+    }
+
+    private func switchToTab(_ newTab: EngifyTab, initiatedBySwipe: Bool) {
+        guard newTab != selectedTab else { return }
+
+        if authManager.isGuestMode && newTab == .vocabulary {
+            authManager.presentAccountRequired(for: .vocabulary)
+            return
+        }
+
+        updateTransitionDirection(from: selectedTab, to: newTab)
+
+        withAnimation(EngifySpring.tabSlide) {
+            selectedTab = newTab
+        }
+
+        if initiatedBySwipe {
+            EngifyFeedback.shared.play(.tabSwitch)
+        }
+    }
+
+    private func updateTransitionDirection(from currentTab: EngifyTab, to newTab: EngifyTab) {
+        guard let currentIndex = Self.orderedTabs.firstIndex(of: currentTab),
+              let newIndex = Self.orderedTabs.firstIndex(of: newTab) else {
+            tabTransitionDirection = .forward
+            return
+        }
+
+        tabTransitionDirection = newIndex >= currentIndex ? .forward : .backward
+    }
+}
+
+private enum TabTransitionDirection {
+    case forward
+    case backward
 }
 
 struct FloatingTabBar: View {
@@ -86,8 +159,8 @@ struct FloatingTabBar: View {
 
     private static let tabs: [(EngifyTab, String, String, String)] = [
         (.home, "house.fill", "Home", "Home"),
-        (.vocabulary, "book.closed.fill", "Vocabulary", "Vocab"),
-        (.dictionary, "magnifyingglass.circle.fill", "Dictionary", "Lookup"),
+        (.vocabulary, "book.fill", "Vocabulary", "Vocab"),
+        (.dictionary, "magnifyingglass", "Dictionary", "Lookup"),
         (.news, "newspaper.fill", "News", "News"),
         (.practice, "checklist.checked", "Practice", "Practice")
     ]

@@ -30,12 +30,17 @@ final class DictionaryViewModel: ObservableObject {
 
     private let service: DictionaryService
     private let recentSearchesKey = "engify.dictionary.recent-searches"
+    private let lastSearchTextKey = "engify.dictionary.last-search-text"
+    private let lastEntryKey = "engify.dictionary.last-entry"
+    private let persistLookupState: Bool
     private var cancellables = Set<AnyCancellable>()
     private var suppressNextSuggestionFetch = false
 
-    init(service: DictionaryService? = nil) {
+    init(service: DictionaryService? = nil, persistLookupState: Bool = false) {
         self.service = service ?? DictionaryService()
+        self.persistLookupState = persistLookupState
         loadRecentSearches()
+        restorePersistedStateIfNeeded()
         bindSearchText()
     }
 
@@ -44,6 +49,7 @@ final class DictionaryViewModel: ObservableObject {
         guard !trimmedText.isEmpty else {
             currentEntry = nil
             errorMessage = "Please enter a word to search."
+            persistStateIfNeeded()
             return
         }
 
@@ -54,11 +60,12 @@ final class DictionaryViewModel: ObservableObject {
             currentEntry = try await service.searchWord(trimmedText)
             addRecentSearch(trimmedText)
         } catch {
-            currentEntry = nil
-            errorMessage = friendlySearchError(error)
+            currentEntry = DictionaryEntry.placeholder(for: trimmedText)
+            errorMessage = nil
         }
 
         isLoading = false
+        persistStateIfNeeded()
     }
 
     func selectSuggestion(_ suggestion: DictionarySuggestion) {
@@ -81,6 +88,7 @@ final class DictionaryViewModel: ObservableObject {
         errorMessage = nil
         suggestions = []
         showSuggestions = false
+        persistStateIfNeeded()
     }
 
     func clearRecentSearches() {
@@ -161,6 +169,33 @@ final class DictionaryViewModel: ObservableObject {
             recentSearches = Array(recentSearches.prefix(8))
         }
         UserDefaults.standard.set(recentSearches, forKey: recentSearchesKey)
+    }
+
+    private func restorePersistedStateIfNeeded() {
+        guard persistLookupState else { return }
+
+        searchText = UserDefaults.standard.string(forKey: lastSearchTextKey) ?? ""
+
+        guard let data = UserDefaults.standard.data(forKey: lastEntryKey),
+              let entry = try? JSONDecoder().decode(DictionaryEntry.self, from: data) else {
+            return
+        }
+
+        currentEntry = entry
+    }
+
+    private func persistStateIfNeeded() {
+        guard persistLookupState else { return }
+
+        UserDefaults.standard.set(searchText, forKey: lastSearchTextKey)
+
+        guard let currentEntry,
+              let data = try? JSONEncoder().encode(currentEntry) else {
+            UserDefaults.standard.removeObject(forKey: lastEntryKey)
+            return
+        }
+
+        UserDefaults.standard.set(data, forKey: lastEntryKey)
     }
 
     private func friendlySearchError(_ error: Error) -> String {

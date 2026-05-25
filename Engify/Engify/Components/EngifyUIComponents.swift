@@ -1060,47 +1060,41 @@ struct EngifyTopMetricsBar: View {
     @EnvironmentObject private var gamification: GamificationManager
     @EnvironmentObject private var authManager: AuthenticationManager
     @State private var showGamificationInfoSheet = false
+    @Binding var showSettings: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.md) {
+        HStack(alignment: .center, spacing: Spacing.md) {
+            EngifyProfileMenuButton(showSettings: $showSettings)
+
+            Button {
+                showGamificationInfoSheet = true
+                EngifyFeedback.shared.play(.tabSwitch)
+            } label: {
+                StreakCounter(
+                    streakDays: authManager.isGuestMode ? 1 : gamification.progress.streakDays,
+                    isLocked: false
+                )
+            }
+            .buttonStyle(.plain)
+            .engifyJellyPress()
+            .accessibilityLabel("Daily streak")
+            .accessibilityHint("Opens information about streaks and rewards")
+
+            Button {
+                showGamificationInfoSheet = true
+                EngifyFeedback.shared.play(.tabSwitch)
+            } label: {
+                PointsCounter(
+                    count: authManager.isGuestMode ? 5 : gamification.progress.lingots,
+                    isLocked: false
+                )
+            }
+            .buttonStyle(.plain)
+            .engifyJellyPress()
+            .accessibilityLabel("Experience points and stars")
+            .accessibilityHint("Opens information about XP, stars, and badges")
+
             ProgressBar()
-            HStack(spacing: Spacing.md) {
-                Button {
-                    showGamificationInfoSheet = true
-                    EngifyFeedback.shared.play(.tabSwitch)
-                } label: {
-                    StreakCounter(
-                        streakDays: authManager.isGuestMode ? 0 : gamification.progress.streakDays,
-                        isLocked: authManager.isGuestMode
-                    )
-                }
-                .buttonStyle(.plain)
-                .engifyJellyPress()
-                .accessibilityLabel("Daily streak")
-                .accessibilityHint("Opens information about streaks and rewards")
-
-                Button {
-                    showGamificationInfoSheet = true
-                    EngifyFeedback.shared.play(.tabSwitch)
-                } label: {
-                    PointsCounter(
-                        count: authManager.isGuestMode ? 0 : gamification.progress.lingots,
-                        isLocked: authManager.isGuestMode
-                    )
-                }
-                .buttonStyle(.plain)
-                .engifyJellyPress()
-                .accessibilityLabel("Experience points and stars")
-                .accessibilityHint("Opens information about XP, stars, and badges")
-
-                Spacer(minLength: 0)
-            }
-
-            if authManager.isGuestMode {
-                Label("Sign in to track progress", systemImage: "lock.fill")
-                .font(EngifyTypography.caption)
-                .foregroundStyle(EngifyColors.textSecondary)
-            }
         }
         .sheet(isPresented: $showGamificationInfoSheet) {
             if #available(iOS 16.0, *) {
@@ -1228,14 +1222,22 @@ struct EngifyGlobalTabHeader: View {
     @Binding var showSettings: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.md) {
-            EngifyTopHeaderBar(
-                title: title,
-                subtitle: subtitle,
-                showSettings: $showSettings
-            )
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            EngifyTopMetricsBar(showSettings: $showSettings)
 
-            EngifyTopMetricsBar()
+            HStack {
+                VStack(alignment: .leading, spacing: Spacing.xxs) {
+                    Text(title)
+                        .font(EngifyTypography.headline)
+                        .foregroundStyle(EngifyColors.textPrimary)
+
+                    Text(subtitle)
+                        .font(EngifyTypography.caption)
+                        .foregroundStyle(EngifyColors.textSecondary)
+                }
+
+                Spacer(minLength: 0)
+            }
         }
         .zIndex(20)
     }
@@ -1713,8 +1715,7 @@ struct EngifyProfileSheet: View {
                             await authManager.signOut()
                             dismiss()
                         }
-                    },
-                    isDisabled: authManager.isLoading
+                    }, isDisabled: authManager.isLoading, tint: EngifyColors.coral
                 )
             }
         }
@@ -1808,21 +1809,9 @@ private struct EngifySettingsSheetModifier: ViewModifier {
 struct SavedWordBankSheet: View {
     @EnvironmentObject private var savedWordsManager: SavedWordsManager
     @Environment(\.themeAccentColor) private var accentColor
-    @State private var selectedFilter: SavedWordBankFilter = .all
 
     private var items: [SavedWordBankItem] {
         savedWordsManager.savedWordBankItems
-    }
-
-    private var filteredItems: [SavedWordBankItem] {
-        switch selectedFilter {
-        case .all:
-            return items
-        case .lookup:
-            return items.filter { $0.source == .dictionary }
-        case .vocab:
-            return items.filter { $0.source == .vocabulary || $0.source == .news }
-        }
     }
 
     var body: some View {
@@ -1833,16 +1822,15 @@ struct SavedWordBankSheet: View {
                 ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: Spacing.xl) {
                         summaryCard
-                        filterTabs
 
-                        if filteredItems.isEmpty {
+                        if items.isEmpty {
                             EmptyStateView(
-                                title: emptyStateTitle,
-                                message: emptyStateMessage,
+                                title: "No Saved Words Yet",
+                                message: "Save a word from Lookup, Vocab, or News and it will land here instantly.",
                                 systemImage: "books.vertical"
                             )
                         } else {
-                            ForEach(filteredItems) { item in
+                            ForEach(items) { item in
                                 savedWordCard(item)
                             }
                         }
@@ -1869,59 +1857,10 @@ struct SavedWordBankSheet: View {
                     .fixedSize(horizontal: false, vertical: true)
 
                 HStack(spacing: Spacing.sm) {
-                    VocabularyBadge(text: "\(filteredItems.count) shown")
-                    VocabularyBadge(text: "\(items.count) total saved", tint: accentColor)
+                    VocabularyBadge(text: "\(items.count) saved", tint: accentColor)
                 }
             }
         }
-    }
-
-    private var filterTabs: some View {
-        HStack(spacing: Spacing.sm) {
-            filterTab(.all, title: "All")
-            filterTab(.lookup, title: "Lookup")
-            filterTab(.vocab, title: "Vocab")
-        }
-    }
-
-    private var emptyStateTitle: String {
-        switch selectedFilter {
-        case .all:
-            return "No Saved Words Yet"
-        case .lookup:
-            return "No Lookup Saves Yet"
-        case .vocab:
-            return "No Vocab Saves Yet"
-        }
-    }
-
-    private var emptyStateMessage: String {
-        switch selectedFilter {
-        case .all:
-            return "Save a word from Vocabulary or Dictionary and it will land here instantly."
-        case .lookup:
-            return "Words you save from the Lookup page will appear in this tab."
-        case .vocab:
-            return "Words you save from Vocab or News will appear in this tab."
-        }
-    }
-
-    private func filterTab(_ filter: SavedWordBankFilter, title: String) -> some View {
-        Button {
-            withAnimation(EngifySpring.tabSlide) {
-                selectedFilter = filter
-            }
-        } label: {
-            Text(title)
-                .font(EngifyTypography.caption.weight(.semibold))
-                .foregroundStyle(selectedFilter == filter ? EngifyColors.textInverse : accentColor)
-                .padding(.horizontal, Spacing.lg)
-                .padding(.vertical, Spacing.sm)
-                .background(selectedFilter == filter ? accentColor : accentColor.opacity(0.10))
-                .clipShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .engifyJellyPress()
     }
 
     private func savedWordCard(_ item: SavedWordBankItem) -> some View {
@@ -1942,10 +1881,7 @@ struct SavedWordBankSheet: View {
 
                     Spacer(minLength: 0)
 
-                    VStack(alignment: .trailing, spacing: Spacing.xs) {
-                        VocabularyBadge(text: item.subtitle)
-                        VocabularyBadge(text: item.source.label, tint: accentColor)
-                    }
+                    VocabularyBadge(text: item.subtitle)
                 }
 
                 VStack(alignment: .leading, spacing: Spacing.xs) {
@@ -1971,12 +1907,6 @@ struct SavedWordBankSheet: View {
             }
         }
     }
-}
-
-private enum SavedWordBankFilter {
-    case all
-    case lookup
-    case vocab
 }
 
 extension View {

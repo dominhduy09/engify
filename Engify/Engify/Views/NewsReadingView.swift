@@ -44,7 +44,6 @@ struct NewsReadingView: View {
         .refreshable {
             await viewModel.refreshArticles()
         }
-        .tabTransition()
         .overlay(alignment: .top) {
             if let savedToastWordTitle {
                 savedWordToast(wordTitle: savedToastWordTitle)

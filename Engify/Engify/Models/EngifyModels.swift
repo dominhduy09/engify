@@ -94,6 +94,9 @@ struct DictionaryEntry: Identifiable, Codable, Hashable {
     let definition: String
     let example: String
     let vietnameseMeaning: String
+    let nounForm: String
+    let adjectiveForm: String
+    let verbForm: String
 
     init(
         word: String,
@@ -102,7 +105,10 @@ struct DictionaryEntry: Identifiable, Codable, Hashable {
         partOfSpeech: String,
         definition: String,
         example: String,
-        vietnameseMeaning: String
+        vietnameseMeaning: String,
+        nounForm: String = "N/A",
+        adjectiveForm: String = "N/A",
+        verbForm: String = "N/A"
     ) {
         self.id = word.lowercased()
         self.word = word
@@ -112,6 +118,26 @@ struct DictionaryEntry: Identifiable, Codable, Hashable {
         self.definition = definition
         self.example = example
         self.vietnameseMeaning = vietnameseMeaning
+        self.nounForm = nounForm
+        self.adjectiveForm = adjectiveForm
+        self.verbForm = verbForm
+    }
+
+    static func placeholder(for word: String) -> DictionaryEntry {
+        let normalizedWord = word.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        return DictionaryEntry(
+            word: normalizedWord.isEmpty ? "N/A" : normalizedWord,
+            phonetic: "N/A",
+            audioURL: nil,
+            partOfSpeech: "N/A",
+            definition: "N/A",
+            example: "N/A",
+            vietnameseMeaning: "N/A",
+            nounForm: "N/A",
+            adjectiveForm: "N/A",
+            verbForm: "N/A"
+        )
     }
 }
 
@@ -230,6 +256,12 @@ struct NewsVocabularyItem: Identifiable, Codable, Hashable {
     }
 }
 
+extension String {
+    var capitalizedIfAvailable: String {
+        self == "N/A" ? self : capitalized
+    }
+}
+
 /// User's gamification progress: XP, level, streak, hearts, and lingots.
 struct UserProgress: Codable {
     var xp: Int
@@ -260,8 +292,7 @@ struct UserProgress: Codable {
 
     mutating func earnXP(_ amount: Int) {
         xp += amount
-        let threshold = xpForNextLevel
-        if xp >= threshold {
+        while xp >= xpForNextLevel {
             level += 1
         }
     }

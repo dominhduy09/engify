@@ -53,6 +53,7 @@ struct SettingsView: View {
                         aiTutorSection
                         speakingSection
                         practiceSection
+                        dictionaryAPISection
                         notificationSection
                         appPreferencesSection
                         advancedLearningSection
@@ -66,6 +67,7 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
+            .navigationBarTitleDisplayMode(.inline)
         }
         .navigationViewStyle(StackNavigationViewStyle())
         .animation(.spring(response: 0.3, dampingFraction: 0.82), value: showSaveConfirmation)
@@ -575,6 +577,47 @@ struct SettingsView: View {
         }
     }
 
+    private var dictionaryAPISection: some View {
+        EngifySettingsSection(
+            title: "Dictionary API",
+            subtitle: "Change the lookup API here only. Leave it empty to keep the default public dictionary API."
+        ) {
+            VStack(alignment: .leading, spacing: Spacing.lg) {
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    Text("Lookup API base URL")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(EngifyColors.textPrimary)
+
+                    TextField("https://api.dictionaryapi.dev/api/v2/entries/en", text: $settings.dictionaryAPIBaseURL)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .font(.system(.body, design: .monospaced))
+                        .padding(.horizontal, Spacing.md)
+                        .frame(minHeight: 52)
+                        .background(
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .fill(EngifyColors.canvasRaised)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .stroke(EngifyColors.border.opacity(0.8), lineWidth: 1)
+                        )
+                }
+
+                Text("Use a full base URL that ends before the searched word. If the field is blank or invalid, Engify keeps using the first default API.")
+                    .font(.caption)
+                    .foregroundStyle(EngifyColors.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Button("Use Default API") {
+                    settings.dictionaryAPIBaseURL = ""
+                }
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(theme.accentColor)
+            }
+        }
+    }
+
     private var advancedLearningSection: some View {
         EngifySettingsSection(
             title: "Advanced learning controls",
@@ -718,6 +761,7 @@ struct SettingsView: View {
             settings.pronunciationModel,
             String(settings.newWordsPerDay),
             String(settings.reviewLimitPerDay),
+            settings.dictionaryAPIBaseURL,
             settings.notificationsEnabled.description,
             settings.dailyReminderEnabled.description,
             String(settings.dailyReminderTime.timeIntervalSince1970),

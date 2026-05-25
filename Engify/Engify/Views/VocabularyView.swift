@@ -1,11 +1,10 @@
 import SwiftUI
 
 struct VocabularyView: View {
-    @State private var currentWord: Word
-    @State private var previousWords: Set<String> = []
-    @State private var cardRotation: Double = 0
+    @StateObject private var dictionaryViewModel = DictionaryViewModel()
+    @State private var lessonWord = "meticulous"
+    @State private var currentWordIndex = 0
     @State private var wordsReviewedThisSession = 0
-    @State private var showLessonComplete = false
     @State private var savedToastWordTitle: String?
     @EnvironmentObject private var savedWordsManager: SavedWordsManager
     @EnvironmentObject private var theme: ThemeManager
@@ -15,17 +14,22 @@ struct VocabularyView: View {
     @State private var showSettingsSheet = false
     @State private var showSavedWordBank = false
 
-    init() {
-        let initialWord = EngifySampleData.vocabularyWords.randomElement()
-            ?? EngifySampleData.vocabularyWords.first
-            ?? Word(
-                word: "learn",
-                pronunciation: "/lɝn/",
-                partOfSpeech: "verb",
-                meaning: "hoc",
-                example: "We learn a little every day."
-            )
-        _currentWord = State(initialValue: initialWord)
+    private let lessonWords = Array(
+        NSOrderedSet(array: EngifySampleData.vocabularyWords.map { $0.word.lowercased() })
+    ).compactMap { $0 as? String }
+
+    private var currentEntry: DictionaryEntry {
+        dictionaryViewModel.currentEntry ?? DictionaryEntry.placeholder(for: lessonWord)
+    }
+
+    private var currentWord: Word {
+        Word(
+            word: currentEntry.word,
+            pronunciation: currentEntry.phonetic == "N/A" ? "" : currentEntry.phonetic,
+            partOfSpeech: currentEntry.partOfSpeech == "N/A" ? "N/A" : currentEntry.partOfSpeech,
+            meaning: currentEntry.vietnameseMeaning,
+            example: currentEntry.example
+        )
     }
 
     var body: some View {
@@ -33,17 +37,6 @@ struct VocabularyView: View {
             globalHeader
             wordCard
             actionButtons
-        }
-        .refreshable {
-            advanceWord()
-            try? await Task.sleep(nanoseconds: 300_000_000)
-        }
-        .tabTransition()
-        .overlay {
-            if showLessonComplete {
-                LessonCompleteOverlay()
-                    .environmentObject(gamification)
-            }
         }
         .overlay(alignment: .bottom) {
             if gamification.showXPGain {
@@ -66,79 +59,89 @@ struct VocabularyView: View {
             SavedWordBankSheet()
                 .environmentObject(savedWordsManager)
         }
+        .task {
+            await searchLessonWord()
+        }
     }
 
     private var globalHeader: some View {
         EngifyGlobalTabHeader(
             title: "Vocab",
-            subtitle: "New words, tighter focus",
+            subtitle: "Curated lesson flow with deep word focus",
             showSettings: $showSettingsSheet
         )
     }
+
     private var wordCard: some View {
         EngifyCard(tint: theme.accentColor) {
             VStack(alignment: .leading, spacing: Spacing.cardGap) {
                 HStack(alignment: .center, spacing: Spacing.sm) {
-                    cardMeta
-                    saveButton
+                    VocabularyBadge(text: "Word #\(currentWordIndex + 1)")
+                    VocabularyBadge(text: displayValue(currentEntry.partOfSpeech.capitalizedIfAvailable), tint: theme.accentColor)
+                    bookmarkButton
                     Spacer(minLength: 0)
                 }
 
                 VStack(alignment: .leading, spacing: Spacing.sm) {
-                    Text(currentWord.word)
+                    Text(displayValue(currentEntry.word))
                         .font(.system(size: 40, weight: .bold, design: .rounded))
                         .foregroundStyle(EngifyColors.textPrimary)
                         .fixedSize(horizontal: false, vertical: true)
 
-                    Text(currentWord.pronunciation)
-                        .font(.system(.body, design: .monospaced))
-                        .foregroundStyle(EngifyColors.textSecondary)
+                    HStack(spacing: Spacing.xs) {
+                        Text(displayValue(currentEntry.phonetic))
+                            .font(.system(.body, design: .monospaced))
+                            .foregroundStyle(EngifyColors.textSecondary)
+
+                        Image(systemName: "speaker.wave.2.fill")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(theme.accentColor)
+                    }
                 }
-                .rotation3DEffect(.degrees(cardRotation), axis: (x: 0, y: 1, z: 0))
 
                 Divider()
 
-                detailsSection
+                structuredBreakdown
                 progressIndicator
             }
         }
     }
 
-    private var cardMeta: some View {
-        HStack(spacing: Spacing.sm) {
-            VocabularyBadge(text: "Word #\(wordsReviewedThisSession + 1)")
-            VocabularyBadge(text: currentWord.partOfSpeech.capitalized, tint: theme.accentColor)
-        }
-    }
-
-    private var detailsSection: some View {
+    private var structuredBreakdown: some View {
         VStack(alignment: .leading, spacing: Spacing.lg) {
-            VStack(alignment: .leading, spacing: Spacing.xs) {
-                Text("Vietnamese meaning")
-                    .font(EngifyTypography.caption)
-                    .foregroundStyle(EngifyColors.textSecondary)
-
-                Text(currentWord.meaning)
-                    .font(EngifyTypography.cardTitle)
-                    .foregroundStyle(EngifyColors.textPrimary)
+            lessonDetailBlock(
+                title: "Definition",
+                icon: "list.bullet.rectangle.portrait",
+                tint: theme.accentColor
+            ) {
+                Text(displayValue(currentEntry.definition))
             }
 
-            VStack(alignment: .leading, spacing: Spacing.xs) {
-                Text("Example")
-                    .font(EngifyTypography.caption)
-                    .foregroundStyle(EngifyColors.textSecondary)
+            lessonDetailBlock(
+                title: "Vietnamese Meaning",
+                icon: "globe",
+                tint: EngifyColors.sage
+            ) {
+                Text(displayValue(currentEntry.vietnameseMeaning))
+            }
 
-                Text("“\(currentWord.example)”")
+            lessonDetailBlock(
+                title: "Example",
+                icon: "quote.opening",
+                tint: EngifyColors.sky
+            ) {
+                Text(exampleText)
                     .font(.system(size: 16, weight: .regular, design: .serif))
-                    .foregroundStyle(EngifyColors.textPrimary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .italic()
             }
         }
     }
 
-    private var saveButton: some View {
-        Button {
-            let wasSaved = savedWordsManager.isSaved(word: currentWord)
+    private var bookmarkButton: some View {
+        let isSaved = savedWordsManager.isSaved(word: currentWord)
+
+        return Button {
+            let wasSaved = isSaved
             withAnimation(EngifySpring.jellyRelease) {
                 savedWordsManager.toggleSaved(word: currentWord)
             }
@@ -148,19 +151,157 @@ struct VocabularyView: View {
             }
         } label: {
             HStack(spacing: Spacing.sm) {
-                Image(systemName: savedWordsManager.isSaved(word: currentWord) ? "bookmark.fill" : "bookmark")
-                Text(savedWordsManager.isSaved(word: currentWord) ? "Saved" : "Save")
+                Image(systemName: isSaved ? "bookmark.fill" : "bookmark")
+                Text("Bookmark")
             }
             .font(EngifyTypography.caption.weight(.semibold))
-            .foregroundStyle(savedWordsManager.isSaved(word: currentWord) ? theme.accentColor : EngifyColors.textSecondary)
+            .foregroundStyle(isSaved ? EngifyColors.textInverse : theme.accentColor)
             .padding(.horizontal, Spacing.md)
             .frame(minHeight: 42)
-            .background((savedWordsManager.isSaved(word: currentWord) ? theme.accentColor : EngifyColors.border).opacity(0.14))
-            .clipShape(Capsule())
-            .drawingGroup()
+            .background(
+                Capsule()
+                    .fill(isSaved ? theme.accentColor : theme.accentColor.opacity(0.12))
+            )
         }
         .buttonStyle(.plain)
         .engifyJellyPress()
+    }
+
+    private var progressIndicator: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            HStack {
+                Text("Daily Goal")
+                    .font(EngifyTypography.caption.weight(.semibold))
+                    .foregroundStyle(theme.accentColor)
+
+                Spacer(minLength: 0)
+
+                Text("\(min(wordsReviewedThisSession, 8))/8")
+                    .font(EngifyTypography.caption.weight(.semibold))
+                    .foregroundStyle(theme.accentColor)
+                    .padding(.horizontal, Spacing.md)
+                    .padding(.vertical, Spacing.sm)
+                    .background(theme.accentColor.opacity(0.12))
+                    .clipShape(Capsule())
+            }
+
+            Text("\(max(0, 8 - wordsReviewedThisSession)) more words to reach today’s target.")
+                .font(EngifyTypography.caption)
+                .foregroundStyle(EngifyColors.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var actionButtons: some View {
+        VStack(spacing: Spacing.md) {
+            if horizontalSizeClass == .compact {
+                VStack(spacing: Spacing.md) {
+                    skipButton
+                    nextWordButton
+                }
+            } else {
+                HStack(spacing: Spacing.md) {
+                    skipButton
+                    nextWordButton
+                }
+            }
+
+            completeLessonButton
+        }
+    }
+
+    private var skipButton: some View {
+        SecondaryButton(
+            title: "Skip",
+            systemImage: "forward.fill",
+            action: { skipWord() },
+            size: .large
+        )
+    }
+
+    private var nextWordButton: some View {
+        PrimaryButton(
+            title: "Next Word",
+            systemImage: "arrow.right.circle.fill",
+            action: { advanceWord() },
+            size: .large,
+            feedbackEvent: .tabSwitch
+        )
+        .environmentObject(theme)
+    }
+
+    private var completeLessonButton: some View {
+        PrimaryButton(
+            title: "Complete Lesson",
+            systemImage: "checkmark.circle.fill",
+            action: {
+                gamification.earnXP(10)
+                EngifyFeedback.shared.play(.tabSwitch, settings: learningSettings)
+            },
+            size: .large,
+            feedbackEvent: .successPop
+        )
+        .environmentObject(theme)
+    }
+
+    private var exampleText: String {
+        let example = displayValue(currentEntry.example)
+        return example == "N/A" ? "N/A" : "“\(example)”"
+    }
+
+    private func lessonDetailBlock<Content: View>(
+        title: String,
+        icon: String,
+        tint: Color,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            Label(title, systemImage: icon)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(tint)
+
+            content()
+                .font(EngifyTypography.body)
+                .foregroundStyle(EngifyColors.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func advanceWord() {
+        wordsReviewedThisSession += 1
+        guard !lessonWords.isEmpty else { return }
+        currentWordIndex = (currentWordIndex + 1) % lessonWords.count
+        lessonWord = lessonWords[currentWordIndex]
+        Task {
+            await searchLessonWord()
+        }
+        gamification.earnXP(5)
+        EngifyFeedback.shared.play(.tabSwitch, settings: learningSettings)
+    }
+
+    private func skipWord() {
+        guard !lessonWords.isEmpty else { return }
+        currentWordIndex = (currentWordIndex + 1) % lessonWords.count
+        lessonWord = lessonWords[currentWordIndex]
+        Task {
+            await searchLessonWord()
+        }
+        EngifyFeedback.shared.play(.tabSwitch, settings: learningSettings)
+    }
+
+    private func searchLessonWord() async {
+        if lessonWords.isEmpty {
+            dictionaryViewModel.currentEntry = DictionaryEntry.placeholder(for: "N/A")
+            return
+        }
+
+        lessonWord = lessonWords[currentWordIndex]
+        dictionaryViewModel.searchText = lessonWord
+        await dictionaryViewModel.search()
+    }
+
+    private func displayValue(_ value: String) -> String {
+        value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "N/A" : value
     }
 
     private func savedWordToast(wordTitle: String) -> some View {
@@ -213,130 +354,6 @@ struct VocabularyView: View {
         }
         .buttonStyle(.plain)
         .engifyJellyPress()
-    }
-
-    private var progressIndicator: some View {
-        VStack(alignment: .leading, spacing: Spacing.sm) {
-            HStack {
-                Text("Daily Goal")
-                    .font(EngifyTypography.caption.weight(.semibold))
-                    .foregroundStyle(theme.accentColor)
-                Spacer(minLength: 0)
-                Text("\(min(wordsReviewedThisSession, learningSettings.newWordsPerDay))/\(learningSettings.newWordsPerDay)")
-                    .font(EngifyTypography.caption.weight(.semibold))
-                    .foregroundStyle(theme.accentColor)
-                    .padding(.horizontal, Spacing.md)
-                    .padding(.vertical, Spacing.sm)
-                    .background(theme.accentColor.opacity(0.12))
-                    .clipShape(Capsule())
-            }
-
-            Text(goalProgressSubtitle)
-                .font(EngifyTypography.caption)
-                .foregroundStyle(EngifyColors.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
-    private var actionButtons: some View {
-        VStack(spacing: Spacing.md) {
-            if horizontalSizeClass == .compact {
-                VStack(spacing: Spacing.md) {
-                    skipButton
-                    nextWordButton
-                }
-            } else {
-                HStack(spacing: Spacing.md) {
-                    skipButton
-                    nextWordButton
-                }
-            }
-
-            PrimaryButton(title: "Complete Lesson", systemImage: "checkmark.circle.fill", action: {
-                gamification.completeLesson(type: .vocabulary, xpEarned: 10)
-                showLessonComplete = true
-                advanceWord(triggerFeedback: false)
-            }, feedbackEvent: .successPop)
-            .environmentObject(theme)
-        }
-    }
-
-    private var goalProgressSubtitle: String {
-        if wordsReviewedThisSession >= learningSettings.newWordsPerDay {
-            return "You reached today’s vocabulary target. Keep going if you want extra practice."
-        }
-
-        let remaining = max(0, learningSettings.newWordsPerDay - wordsReviewedThisSession)
-        return "\(remaining) more word\(remaining == 1 ? "" : "s") to reach today’s target."
-    }
-
-    private var skipButton: some View {
-        SecondaryButton(title: "Skip", systemImage: "xmark", action: {
-            skipWord()
-        })
-    }
-
-    private var nextWordButton: some View {
-        PrimaryButton(title: "Next Word", systemImage: "arrow.right", action: {
-            advanceWord()
-        })
-        .environmentObject(theme)
-    }
-
-    private func advanceWord(triggerFeedback: Bool = true) {
-        wordsReviewedThisSession += 1
-        if wordsReviewedThisSession % 5 == 0 {
-            gamification.earnXP(5)
-        }
-
-        withAnimation(EngifySpring.tabSlide) {
-            let availableWords = EngifySampleData.vocabularyWords.filter { !previousWords.contains($0.word) }
-            let nextWord: Word
-
-            if availableWords.isEmpty {
-                previousWords.removeAll()
-                nextWord = EngifySampleData.vocabularyWords.randomElement() ?? currentWord
-            } else {
-                nextWord = availableWords.randomElement() ?? currentWord
-            }
-
-            previousWords.insert(currentWord.word)
-            if previousWords.count > 10 {
-                previousWords.remove(previousWords.randomElement()!)
-            }
-
-            currentWord = nextWord
-            cardRotation = cardRotation == 0 ? 360 : 0  // Clamp rotation to avoid unbounded growth
-        }
-
-        if triggerFeedback {
-            EngifyFeedback.shared.play(.tabSwitch, settings: learningSettings)
-        }
-    }
-
-    private func skipWord() {
-        withAnimation(EngifySpring.tabSlide) {
-            // Track skipped words to prevent seeing the same word again
-            let availableWords = EngifySampleData.vocabularyWords.filter {
-                !previousWords.contains($0.word) && $0.word != currentWord.word
-            }
-            
-            previousWords.insert(currentWord.word)
-            if previousWords.count > 10 {
-                previousWords.remove(previousWords.randomElement()!)
-            }
-
-            if let next = availableWords.randomElement() {
-                currentWord = next
-            } else {
-                previousWords.removeAll()
-                currentWord = EngifySampleData.vocabularyWords.randomElement() ?? currentWord
-            }
-
-            cardRotation = cardRotation == 0 ? 360 : 0  // Clamp rotation
-        }
-
-        EngifyFeedback.shared.play(.tabSwitch, settings: learningSettings)
     }
 
     private func showSavedWordToast(for wordTitle: String) {

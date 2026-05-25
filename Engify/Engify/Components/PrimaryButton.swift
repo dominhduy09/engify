@@ -310,6 +310,7 @@ struct SecondaryButton: View {
     var size: EngifyButtonSize = .regular
     var fillsWidth: Bool = true
     var feedbackEvent: EngifyFeedbackEvent? = nil
+    var tint: Color? = nil
 
     @Environment(\.themeAccentColor) private var accentColor
 
@@ -332,26 +333,30 @@ struct SecondaryButton: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.9)
             }
-            .foregroundStyle(isDisabled ? EngifyColors.textSecondary : accentColor)
+            .foregroundStyle(isDisabled ? EngifyColors.textSecondary : resolvedTint)
             .frame(maxWidth: fillsWidth ? .infinity : nil)
             .frame(minHeight: size.minHeight)
             .padding(.horizontal, size.horizontalPadding)
             .background(
                 EngifyGelRoundedButtonSurface(
-                    tint: accentColor,
+                    tint: resolvedTint,
                     style: .secondary,
                     isDisabled: isDisabled,
                     cornerRadius: 18
                 )
             )
             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .shadow(color: accentColor.opacity(isDisabled ? 0 : 0.12), radius: 10, x: 0, y: 6)
+            .shadow(color: resolvedTint.opacity(isDisabled ? 0 : 0.12), radius: 10, x: 0, y: 6)
             .compositingGroup()
             .drawingGroup()
         }
         .buttonStyle(.plain)
         .disabled(isDisabled)
         .engifyJellyPress(isDisabled: isDisabled)
+    }
+
+    private var resolvedTint: Color {
+        tint ?? accentColor
     }
 }
 

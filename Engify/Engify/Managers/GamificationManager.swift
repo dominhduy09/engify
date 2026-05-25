@@ -38,6 +38,8 @@ final class GamificationManager: ObservableObject {
     @Published var showXPGain = false
     @Published var showLevelUp = false
     @Published var lastXPGained: Int = 0
+    @Published var lastUnlockedLevel: Int?
+    @Published var lastLevelUpWasMilestone = false
 
     // Request publisher for lesson completion overlay
     let lessonCompletionRequest = PassthroughSubject<LessonResult, Never>()
@@ -62,7 +64,7 @@ final class GamificationManager: ObservableObject {
 
     /// Adds XP and triggers the XP gain toast animation.
     func earnXP(_ amount: Int) {
-        let wasBelowThreshold = progress.xp < progress.xpForNextLevel
+        let previousLevel = progress.level
         progress.earnXP(amount)
         lastXPGained = amount
         save()
@@ -77,8 +79,8 @@ final class GamificationManager: ObservableObject {
             }
         }
 
-        if wasBelowThreshold && progress.xp >= progress.xpForNextLevel {
-            triggerLevelUp()
+        if progress.level > previousLevel {
+            triggerLevelUp(level: progress.level)
         }
     }
 
@@ -192,9 +194,17 @@ final class GamificationManager: ObservableObject {
         save()
     }
 
-    private func triggerLevelUp() {
+    private func triggerLevelUp(level: Int) {
+        lastUnlockedLevel = level
+        lastLevelUpWasMilestone = Self.milestoneLevels.contains(level)
         withAnimation(.spring(response: 0.45, dampingFraction: 0.78)) {
             showLevelUp = true
         }
     }
+
+    private static let milestoneLevels: Set<Int> = {
+        var levels: Set<Int> = [2, 5]
+        stride(from: 10, through: 100, by: 10).forEach { levels.insert($0) }
+        return levels
+    }()
 }

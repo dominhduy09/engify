@@ -72,6 +72,13 @@ final class LearningSettingsManager: ObservableObject {
     @Published var reviewLimitPerDay: Int {
         didSet { saveIfValid("review_limit_per_day", reviewLimitPerDay) { $0 >= 5 && $0 <= 40 } }
     }
+
+    @Published var dictionaryAPIBaseURL: String {
+        didSet {
+            let trimmed = dictionaryAPIBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+            save("dictionary_api_base_url", trimmed)
+        }
+    }
     
     // MARK: - Notifications
     
@@ -219,6 +226,7 @@ final class LearningSettingsManager: ObservableObject {
         
         self.newWordsPerDay = Self.loadValidated("new_words_per_day", default: 8) { $0 >= 3 && $0 <= 20 }
         self.reviewLimitPerDay = Self.loadValidated("review_limit_per_day", default: 15) { $0 >= 5 && $0 <= 40 }
+        self.dictionaryAPIBaseURL = Self.loadString("dictionary_api_base_url", default: "")
         
         self.notificationsEnabled = Self.loadBool("notifications_enabled", default: true)
         self.dailyReminderEnabled = Self.loadBool("daily_reminder", default: true)
@@ -477,6 +485,11 @@ final class LearningSettingsManager: ObservableObject {
         return `default`
     }
 
+    private static func loadString(_ key: String, default: String) -> String {
+        let fullKey = Keys.prefix + key
+        return UserDefaults.standard.string(forKey: fullKey) ?? `default`
+    }
+
     private static func defaultReminderTime() -> Date {
         let calendar = Calendar.current
         var components = calendar.dateComponents([.year, .month, .day], from: Date())
@@ -540,6 +553,7 @@ final class LearningSettingsManager: ObservableObject {
     /// Resets all settings to the Engify Default preset.
     func resetToDefaults() {
         applyPreset(.default)
+        dictionaryAPIBaseURL = ""
     }
 }
 

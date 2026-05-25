@@ -2,12 +2,11 @@ import AVFoundation
 import SwiftUI
 
 struct DictionaryView: View {
-    @StateObject private var viewModel = DictionaryViewModel()
-    @EnvironmentObject private var authManager: AuthenticationManager
+    @StateObject private var viewModel = DictionaryViewModel(persistLookupState: true)
     @EnvironmentObject private var savedWordsManager: SavedWordsManager
     @EnvironmentObject private var theme: ThemeManager
     @EnvironmentObject private var learningSettings: LearningSettingsManager
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @FocusState private var isSearchFieldFocused: Bool
     @State private var audioPlayer: AVPlayer?
     @State private var showSettingsSheet = false
     @State private var savedToastWordTitle: String?
@@ -16,35 +15,8 @@ struct DictionaryView: View {
     var body: some View {
         EngifyScreenScroll {
             globalHeader
-            searchSection
-
-            if viewModel.isLoading {
-                EngifyLoadingCard(
-                    title: "Searching...",
-                    message: "Looking up the word in the dictionary."
-                )
-            } else if let errorMessage = viewModel.errorMessage {
-                EngifyStateCard(
-                    title: "Word Not Found",
-                    message: errorMessage,
-                    systemImage: "exclamationmark.triangle.fill",
-                    tone: .warning,
-                    actionTitle: "Try Again",
-                    action: {
-                        Task { await viewModel.search() }
-                    }
-                )
-            } else if let entry = viewModel.currentEntry {
-                entrySection(entry)
-            } else {
-                EngifyStateCard(
-                    title: "Start Searching",
-                    message: "Type an English word above to see its definition, pronunciation, and examples.",
-                    systemImage: "text.book.closed.fill"
-                )
-            }
+            lookupCard
         }
-        .tabTransition()
         .animation(.easeInOut(duration: 0.22), value: viewModel.showSuggestions)
         .overlay(alignment: .top) {
             if let savedToastWordTitle {
@@ -65,53 +37,158 @@ struct DictionaryView: View {
     private var globalHeader: some View {
         EngifyGlobalTabHeader(
             title: "Lookup",
-            subtitle: "Search first, read faster",
+            subtitle: "Specific word analysis, one meaning at a time",
             showSettings: $showSettingsSheet
         )
     }
-    private var searchSection: some View {
-        CardView {
-            VStack(alignment: .leading, spacing: Spacing.lg) {
-                SearchBar(
-                    text: $viewModel.searchText,
-                    placeholder: "Search a word like happy, learn...",
-                    isLoading: viewModel.isSuggestionsLoading,
-                    onSubmit: {
-                        runSearchIfAllowed()
-                    }
-                )
 
-                if authManager.isGuestMode {
-                    Label("Guest searches left this session: \(authManager.guestDictionarySearchesRemaining)", systemImage: "magnifyingglass")
-                        .font(EngifyTypography.caption)
-                        .foregroundStyle(EngifyColors.textSecondary)
-                }
+    private var lookupCard: some View {
+        EngifyCard(tint: theme.accentColor) {
+            VStack(alignment: .leading, spacing: Spacing.cardGap) {
+                searchCapsule
 
-                if viewModel.showSuggestions {
+                if viewModel.showSuggestions && isSearchFieldFocused {
                     suggestionsDropdown
                         .transition(.move(edge: .top).combined(with: .opacity))
                 }
 
-                if !viewModel.recentSearches.isEmpty,
-                   viewModel.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    recentSearchesSection
+                if viewModel.isLoading {
+                    EngifyLoadingCard(
+                        title: "Searching...",
+                        message: "Looking up the word with the public dictionary API."
+                    )
+                } else if let displayedEntry = viewModel.currentEntry {
+                    resultContent(for: displayedEntry)
+                } else {
+                    emptyLookupState
                 }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func resultContent(for displayedEntry: DictionaryEntry) -> some View {
+        wordSummary(for: displayedEntry)
+        Divider()
+        formsSection(for: displayedEntry)
+        detailBlock(
+            title: "Definition",
+            icon: "list.bullet.rectangle.portrait",
+            tint: theme.accentColor
+        ) {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                dictionaryLine(label: "Part of speech", value: displayValue(displayedEntry.partOfSpeech.capitalizedIfAvailable))
+                dictionaryLine(label: "Specific sense", value: displayValue(displayedEntry.definition))
+            }
+        }
+        detailBlock(
+            title: "Vietnamese Meaning",
+            icon: "globe",
+            tint: EngifyColors.sage
+        ) {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                dictionaryLine(label: "Translation", value: displayValue(displayedEntry.vietnameseMeaning))
+            }
+        }
+        detailBlock(
+            title: "Example",
+            icon: "quote.opening",
+            tint: EngifyColors.sky
+        ) {
+            if #available(iOS 16.0, *) {
+                Text(exampleText(for: displayedEntry))
+                    .font(.system(size: 16, weight: .regular, design: .serif))
+                    .foregroundStyle(EngifyColors.textPrimary)
+                    .italic()
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                // Fallback on earlier versions
+            }
+        }
+    }
+
+    private var emptyLookupState: some View {
+        VStack(alignment: .leading, spacing: Spacing.md) {
+            Text("Search for a word")
+                .font(EngifyTypography.headline)
+                .foregroundStyle(EngifyColors.textPrimary)
+
+            Text("Type any word and search with the public dictionary API to see pronunciation, definition, example, and available forms.")
+                .font(EngifyTypography.body)
+                .foregroundStyle(EngifyColors.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.vertical, Spacing.sm)
+    }
+
+    private var searchCapsule: some View {
+        HStack(spacing: Spacing.md) {
+            Image(systemName: "magnifyingglass")
+                .font(.body.weight(.semibold))
+                .foregroundStyle(EngifyColors.textSecondary)
+
+            TextField("Search a word", text: $viewModel.searchText)
+                .font(EngifyTypography.body)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .submitLabel(.search)
+                .focused($isSearchFieldFocused)
+                .onSubmit {
+                    isSearchFieldFocused = false
+                    viewModel.showSuggestions = false
+                    Task { await viewModel.search() }
+                }
+
+            if viewModel.isSuggestionsLoading {
+                ProgressView()
+                    .scaleEffect(0.9)
+            } else if !viewModel.searchText.isEmpty {
+                Button {
+                    viewModel.clearSearch()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(EngifyColors.textSecondary)
+                        .frame(width: 28, height: 28)
+                        .background(EngifyColors.border.opacity(0.18))
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, Spacing.lg)
+        .frame(minHeight: 56)
+        .background(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(EngifyColors.canvasRaised)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(EngifyColors.border.opacity(0.9), lineWidth: 1)
+        )
+        .onTapGesture {
+            isSearchFieldFocused = true
+            if !viewModel.suggestions.isEmpty {
+                viewModel.showSuggestions = true
+            }
+        }
+        .onChange(of: isSearchFieldFocused) { isFocused in
+            if isFocused {
+                viewModel.showSuggestions = !viewModel.suggestions.isEmpty
+            } else {
+                viewModel.showSuggestions = false
             }
         }
     }
 
     private var suggestionsDropdown: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if viewModel.isSuggestionsLoading {
-                SkeletonSuggestionRow()
-                SkeletonSuggestionRow()
-                SkeletonSuggestionRow()
-            } else if viewModel.suggestions.isEmpty {
+            if viewModel.suggestions.isEmpty {
                 HStack(spacing: Spacing.md) {
                     Image(systemName: "sparkles")
                         .foregroundStyle(EngifyColors.textSecondary)
 
-                    Text("No suggestions yet. Try a shorter word.")
+                    Text("No suggestions yet.")
                         .font(EngifyTypography.body)
                         .foregroundStyle(EngifyColors.textSecondary)
                 }
@@ -119,22 +196,12 @@ struct DictionaryView: View {
             } else {
                 ForEach(viewModel.suggestions) { suggestion in
                     Button {
-                        guard requestSearchAllowanceIfNeeded() else { return }
-                        withAnimation(.easeInOut(duration: 0.18)) {
-                            viewModel.selectSuggestion(suggestion)
-                        }
+                        viewModel.selectSuggestion(suggestion)
                     } label: {
                         HStack(spacing: Spacing.md) {
-                            VStack(alignment: .leading, spacing: Spacing.xs) {
-                                highlightedWordText(suggestion.word, query: viewModel.searchText)
-                                    .font(EngifyTypography.headline)
-
-                                if let hint = suggestion.hint, !hint.isEmpty {
-                                    Text(hint.replacingOccurrences(of: "-", with: " "))
-                                        .font(EngifyTypography.caption)
-                                        .foregroundStyle(EngifyColors.textSecondary)
-                                }
-                            }
+                            Text(suggestion.word)
+                                .font(EngifyTypography.headline)
+                                .foregroundStyle(EngifyColors.textPrimary)
 
                             Spacer(minLength: 0)
 
@@ -160,159 +227,101 @@ struct DictionaryView: View {
         .engifyGlassPanel(cornerRadius: 20, tint: theme.accentColor, shadowOpacity: 0.12)
     }
 
-    private var recentSearchesSection: some View {
-        EngifyChipSection(
-            title: "Recent Searches",
-            systemImage: "clock.arrow.circlepath",
-            trailing: {
-                Button("Clear All") {
-                    withAnimation(.easeInOut(duration: 0.18)) {
-                        viewModel.clearRecentSearches()
-                    }
-                }
-                .buttonStyle(.plain)
-                .font(EngifyTypography.caption.weight(.semibold))
-                .foregroundStyle(theme.accentColor)
-            }
-        ) {
-            WrapChipsView(items: viewModel.recentSearches) { term in
-                recentSearchChip(term: term)
-            }
-        }
-    }
-
-    private func recentSearchChip(term: String) -> some View {
-        HStack(spacing: Spacing.xs) {
-            Button {
-                guard requestSearchAllowanceIfNeeded() else { return }
-                viewModel.runSearch(for: term)
-            } label: {
-                Text(term)
-                    .font(EngifyTypography.caption.weight(.semibold))
-                    .foregroundStyle(theme.accentColor)
-                    .lineLimit(1)
-            }
-            .buttonStyle(.plain)
-
-            Button {
-                withAnimation(.easeInOut(duration: 0.18)) {
-                    viewModel.removeRecentSearch(term)
-                }
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(theme.accentColor.opacity(0.82))
-                    .frame(width: 16, height: 16)
-                    .background(theme.accentColor.opacity(0.10))
-                    .clipShape(Circle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Remove \(term) from recent searches")
-        }
-        .padding(.leading, Spacing.md)
-        .padding(.trailing, Spacing.sm)
-        .padding(.vertical, Spacing.sm)
-        .background(theme.accentColor.opacity(0.10))
-        .clipShape(Capsule())
-    }
-
-    private func entrySection(_ entry: DictionaryEntry) -> some View {
-        EngifyCard(tint: theme.accentColor) {
-            VStack(alignment: .leading, spacing: Spacing.cardGap) {
-                headerRow(entry)
-                Divider()
-                detailBlock(title: "Definition", icon: "text.alignleft", tint: theme.accentColor) {
-                    Text(entry.definition.isEmpty ? "Definition not available" : entry.definition)
-                }
-                detailBlock(title: "Vietnamese Meaning", icon: "globe", tint: EngifyColors.sage) {
-                    Text(entry.vietnameseMeaning)
-                }
-                detailBlock(title: "Example", icon: "quote.opening", tint: EngifyColors.sky) {
-                    Text(entry.example.isEmpty ? "Example not available" : "“\(entry.example)”")
-                        .italic()
-                }
-            }
-        }
-    }
-
-    private func headerRow(_ entry: DictionaryEntry) -> some View {
-        Group {
-            if horizontalSizeClass == .compact {
-                VStack(alignment: .leading, spacing: Spacing.md) {
-                    wordSummary(entry)
-                    headerActions(entry)
-                }
-            } else {
-            HStack(alignment: .top, spacing: Spacing.md) {
-                wordSummary(entry)
-                Spacer(minLength: 0)
-                headerActions(entry)
-            }
-            }
-        }
-    }
-
-    private func wordSummary(_ entry: DictionaryEntry) -> some View {
-        VStack(alignment: .leading, spacing: Spacing.sm) {
-            Text(entry.word)
-                .font(.system(size: 36, weight: .bold, design: .rounded))
-                .foregroundStyle(EngifyColors.textPrimary)
-
-            Text(entry.phonetic.isEmpty ? "No phonetic" : entry.phonetic)
-                .font(.system(.body, design: .monospaced))
-                .foregroundStyle(EngifyColors.textSecondary)
-        }
-    }
-
-    private func headerActions(_ entry: DictionaryEntry) -> some View {
-        HStack(spacing: Spacing.sm) {
-            VocabularyBadge(text: entry.partOfSpeech)
-
-            if entry.audioURL != nil {
-                audioButton(url: entry.audioURL)
-            }
-
-            if authManager.isGuestMode {
-                Button {
-                    authManager.presentAccountRequired(for: .saveWords)
-                } label: {
-                    HStack(spacing: Spacing.xs) {
-                        Image(systemName: "lock.fill")
-                        Text("Save")
-                    }
-                    .font(EngifyTypography.caption.weight(.semibold))
-                    .foregroundStyle(EngifyColors.textSecondary)
-                    .padding(.horizontal, Spacing.md)
-                    .frame(minHeight: 42)
-                    .background(EngifyColors.border.opacity(0.12))
-                    .clipShape(Capsule())
-                }
-                .buttonStyle(.plain)
-            } else {
-                ToggleSaveButton(
-                    entry: entry,
-                    onSaved: {
-                        showSavedWordToast(for: entry.word)
-                    }
+    private func wordSummary(for displayedEntry: DictionaryEntry) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.md) {
+            HStack(alignment: .center, spacing: Spacing.sm) {
+                VocabularyBadge(
+                    text: displayValue(displayedEntry.partOfSpeech.capitalizedIfAvailable),
+                    tint: theme.accentColor
                 )
-                    .environmentObject(savedWordsManager)
-                    .environmentObject(theme)
+                bookmarkButton(for: displayedEntry)
+                Spacer(minLength: 0)
+            }
+
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                Text(displayValue(displayedEntry.word))
+                    .font(.system(size: 38, weight: .bold, design: .rounded))
+                    .foregroundStyle(EngifyColors.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                HStack(spacing: Spacing.xs) {
+                    Text(displayValue(displayedEntry.phonetic))
+                        .font(.system(.body, design: .monospaced))
+                        .foregroundStyle(EngifyColors.textSecondary)
+
+                    Button {
+                        playAudio(for: displayedEntry)
+                    } label: {
+                        Image(systemName: "speaker.wave.2.fill")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(theme.accentColor)
+                    }
+                    .buttonStyle(.plain)
+                }
             }
         }
     }
 
-    private func audioButton(url: URL?) -> some View {
-        Button {
-            playAudio(url: url)
+    private func bookmarkButton(for displayedEntry: DictionaryEntry) -> some View {
+        let isSaved = savedWordsManager.isSaved(displayedEntry)
+
+        return Button {
+            let wasSaved = isSaved
+            withAnimation(EngifySpring.jellyRelease) {
+                savedWordsManager.toggleSaved(displayedEntry)
+            }
+            EngifyFeedback.shared.play(.successPop, settings: learningSettings)
+            if !wasSaved, savedWordsManager.isSaved(displayedEntry) {
+                showSavedWordToast(for: displayedEntry.word)
+            }
         } label: {
-            Image(systemName: "speaker.wave.2.fill")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(theme.accentColor)
-                .frame(width: 42, height: 42)
-                .background(theme.accentColor.opacity(0.12))
-                .clipShape(Capsule())
+            HStack(spacing: Spacing.sm) {
+                Image(systemName: isSaved ? "bookmark.fill" : "bookmark")
+                Text("Bookmark")
+            }
+            .font(EngifyTypography.caption.weight(.semibold))
+            .foregroundStyle(isSaved ? EngifyColors.textInverse : theme.accentColor)
+            .padding(.horizontal, Spacing.md)
+            .frame(minHeight: 42)
+            .background(
+                Capsule()
+                    .fill(isSaved ? theme.accentColor : theme.accentColor.opacity(0.12))
+            )
         }
         .buttonStyle(.plain)
+        .engifyJellyPress()
+    }
+
+    private func formsSection(for displayedEntry: DictionaryEntry) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            Label("Forms", systemImage: "tag.fill")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(EngifyColors.warning)
+
+            HStack(spacing: Spacing.sm) {
+                VocabularyBadge(text: "N: \(displayValue(displayedEntry.nounForm))", tint: EngifyColors.warning)
+                VocabularyBadge(text: "Adj: \(displayValue(displayedEntry.adjectiveForm))", tint: EngifyColors.warning)
+                VocabularyBadge(text: "V: \(displayValue(displayedEntry.verbForm))", tint: EngifyColors.warning)
+            }
+        }
+    }
+
+    private func exampleText(for displayedEntry: DictionaryEntry) -> String {
+        let example = displayValue(displayedEntry.example)
+        return example == "N/A" ? "N/A" : "“\(example)”"
+    }
+
+    private func dictionaryLine(label: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.xxs) {
+            Text(label)
+                .font(EngifyTypography.caption.weight(.semibold))
+                .foregroundStyle(EngifyColors.textSecondary)
+
+            Text(value)
+                .font(EngifyTypography.body)
+                .foregroundStyle(EngifyColors.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 
     private func detailBlock<Content: View>(
@@ -327,16 +336,21 @@ struct DictionaryView: View {
                 .foregroundStyle(tint)
 
             content()
-                .font(EngifyTypography.body)
-                .foregroundStyle(EngifyColors.textPrimary)
-                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
-    private func playAudio(url: URL?) {
-        guard let url else { return }
+    private func playAudio(for displayedEntry: DictionaryEntry) {
+        guard let url = displayedEntry.audioURL else {
+            EngifyFeedback.shared.play(.tabSwitch, settings: learningSettings)
+            return
+        }
+
         audioPlayer = AVPlayer(url: url)
         audioPlayer?.play()
+    }
+
+    private func displayValue(_ value: String) -> String {
+        value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "N/A" : value
     }
 
     private func savedWordToast(wordTitle: String) -> some View {
@@ -406,33 +420,5 @@ struct DictionaryView: View {
                 }
             }
         }
-    }
-
-    private func highlightedWordText(_ word: String, query: String) -> Text {
-        let normalizedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        var attributed = AttributedString(word)
-
-        if !normalizedQuery.isEmpty,
-           let range = attributed.range(of: normalizedQuery, options: [.caseInsensitive]) {
-            attributed[range].foregroundColor = theme.accentColor
-            attributed[range].font = .headline
-        }
-
-        return Text(attributed)
-    }
-
-    private func runSearchIfAllowed() {
-        guard !viewModel.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            Task { await viewModel.search() }
-            return
-        }
-
-        guard requestSearchAllowanceIfNeeded() else { return }
-
-        Task { await viewModel.search() }
-    }
-
-    private func requestSearchAllowanceIfNeeded() -> Bool {
-        !authManager.isGuestMode || authManager.requestGuestDictionarySearch()
     }
 }

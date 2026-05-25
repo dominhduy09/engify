@@ -31,17 +31,16 @@ final class SavedWordsManager: ObservableObject {
     }
 
     func isSaved(_ entry: DictionaryEntry) -> Bool {
-        savedDictionaryEntries.contains(entry)
+        let normalizedWord = entry.word.lowercased()
+        return savedDictionaryEntries.contains { $0.word.lowercased() == normalizedWord }
+            || savedWords.contains { $0.word.lowercased() == normalizedWord }
     }
 
     func toggleSaved(_ entry: DictionaryEntry) {
+        let normalizedWord = entry.word.lowercased()
+
         if isSaved(entry) {
-            for i in savedDictionaryEntries.indices.reversed() {
-                if savedDictionaryEntries[i].id == entry.id {
-                    savedDictionaryEntries.remove(at: i)
-                    break
-                }
-            }
+            removeSavedWord(named: normalizedWord)
         } else {
             savedDictionaryEntries.append(entry)
             lastSavedWordEvent = .dictionary(entry)
@@ -51,13 +50,16 @@ final class SavedWordsManager: ObservableObject {
     }
 
     func isSaved(word: Word) -> Bool {
-        savedWords.contains { $0.word.lowercased() == word.word.lowercased() }
+        let normalizedWord = word.word.lowercased()
+        return savedWords.contains { $0.word.lowercased() == normalizedWord }
+            || savedDictionaryEntries.contains { $0.word.lowercased() == normalizedWord }
     }
 
     func toggleSaved(word: Word) {
-        let key = word.word.lowercased()
-        if let index = savedWords.firstIndex(where: { $0.word.lowercased() == key }) {
-            savedWords.remove(at: index)
+        let normalizedWord = word.word.lowercased()
+
+        if isSaved(word: word) {
+            removeSavedWord(named: normalizedWord)
         } else {
             savedWords.append(word)
             lastSavedWordEvent = .vocabulary(word)
@@ -93,7 +95,17 @@ final class SavedWordsManager: ObservableObject {
             )
         }
 
-        return dictionaryItems + vocabularyItems.sorted {
+        var dedupedItems: [SavedWordBankItem] = []
+        var seenWords = Set<String>()
+
+        for item in dictionaryItems + vocabularyItems {
+            let normalizedTitle = item.title.lowercased()
+            guard !seenWords.contains(normalizedTitle) else { continue }
+            seenWords.insert(normalizedTitle)
+            dedupedItems.append(item)
+        }
+
+        return dedupedItems.sorted {
             $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
         }
     }
@@ -127,6 +139,11 @@ final class SavedWordsManager: ObservableObject {
         if let encodedWords = try? JSONEncoder().encode(savedWords) {
             UserDefaults.standard.set(encodedWords, forKey: savedWordsStorageKey)
         }
+    }
+
+    private func removeSavedWord(named normalizedWord: String) {
+        savedDictionaryEntries.removeAll { $0.word.lowercased() == normalizedWord }
+        savedWords.removeAll { $0.word.lowercased() == normalizedWord }
     }
 }
 

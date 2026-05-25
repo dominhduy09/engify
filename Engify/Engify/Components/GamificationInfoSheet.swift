@@ -3,12 +3,17 @@ import SwiftUI
 struct GamificationInfoSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.themeAccentColor) private var accentColor
+    @EnvironmentObject private var gamification: GamificationManager
     @State private var showBadges = false
 
     private let badgeColumns = [
         GridItem(.flexible(), spacing: Spacing.md),
         GridItem(.flexible(), spacing: Spacing.md),
         GridItem(.flexible(), spacing: Spacing.md)
+    ]
+
+    private let milestoneColumns = [
+        GridItem(.adaptive(minimum: 94), spacing: Spacing.sm)
     ]
 
     private let badgePreviews: [BadgePreview] = [
@@ -30,24 +35,28 @@ struct GamificationInfoSheet: View {
     ]
 
     var body: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: Spacing.lg) {
-                header
-                streakBlock
-                xpBlock
-                badgesBlock
+        NavigationView {
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: Spacing.lg) {
+                    streakBlock
+                    xpBlock
+                    milestoneLevelsBlock
+                    badgesBlock
 
-                Button("Back to Learning") {
-                    dismiss()
+                    Button("Back to Learning") {
+                        dismiss()
+                    }
+                    .buttonStyle(SolidButtonStyle())
+                    .padding(.top, Spacing.sm)
                 }
-                .buttonStyle(SolidButtonStyle())
-                .padding(.top, Spacing.sm)
+                .padding(.horizontal, Spacing.screenPadding)
+                .padding(.top, Spacing.xl)
+                .padding(.bottom, Spacing.xl)
             }
-            .padding(.horizontal, Spacing.screenPadding)
-            .padding(.top, Spacing.xl)
-            .padding(.bottom, Spacing.xl)
+            .background(sheetBackground.ignoresSafeArea())
+            .navigationTitle("Progress & Rewards")
+            .navigationBarTitleDisplayMode(.inline)
         }
-        .background(sheetBackground.ignoresSafeArea())
         .onAppear {
             showBadges = false
 
@@ -56,19 +65,6 @@ struct GamificationInfoSheet: View {
                     showBadges = true
                 }
             }
-        }
-    }
-
-    private var header: some View {
-        VStack(alignment: .leading, spacing: Spacing.sm) {
-            Text("Progress & Rewards")
-                .font(EngifyTypography.cardTitle)
-                .foregroundStyle(EngifyColors.textPrimary)
-
-            Text("See how streaks, XP, stars, and milestone badges work so you always know what moves your learning forward.")
-                .font(EngifyTypography.body)
-                .foregroundStyle(EngifyColors.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -121,6 +117,29 @@ struct GamificationInfoSheet: View {
         }
     }
 
+    private var milestoneLevelsBlock: some View {
+        EngifyCard(tint: EngifyColors.accent) {
+            VStack(alignment: .leading, spacing: Spacing.md) {
+                infoHeader(
+                    systemImage: "flag.checkered.2.crossed",
+                    title: "Level Milestones",
+                    tint: EngifyColors.accent
+                )
+
+                Text("Big congratulations appear at level 2, level 5, and every 10 levels after that until Level MAX.")
+                    .font(EngifyTypography.body)
+                    .foregroundStyle(EngifyColors.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                LazyVGrid(columns: milestoneColumns, spacing: Spacing.sm) {
+                    ForEach(levelMilestones, id: \.self) { level in
+                        milestoneLevelChip(level: level)
+                    }
+                }
+            }
+        }
+    }
+
     private var badgesBlock: some View {
         EngifyCard(tint: EngifyColors.sage) {
             VStack(alignment: .leading, spacing: Spacing.md) {
@@ -147,6 +166,44 @@ struct GamificationInfoSheet: View {
                 }
             }
         }
+    }
+
+    private var levelMilestones: [Int] {
+        [2, 5] + Array(stride(from: 10, through: 100, by: 10))
+    }
+
+    private func milestoneLevelChip(level: Int) -> some View {
+        let isReached = gamification.progress.level >= level
+        let isCurrent = gamification.progress.level == level
+        let isMaxLevel = level == 100
+        let tint = isReached ? (isMaxLevel ? EngifyColors.warning : EngifyColors.accent) : EngifyColors.textSecondary
+
+        return VStack(alignment: .leading, spacing: Spacing.xs) {
+            HStack(spacing: Spacing.xs) {
+                Image(systemName: isReached ? "checkmark.seal.fill" : "lock.fill")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(isReached ? tint : EngifyColors.textSecondary)
+
+                Text(isMaxLevel ? "MAX" : "Lv \(level)")
+                    .font(EngifyTypography.caption.weight(.semibold))
+                    .foregroundStyle(EngifyColors.textPrimary)
+            }
+
+            Text(isCurrent ? "Current" : (isReached ? "Reached" : "Upcoming"))
+                .font(.system(size: 11, weight: .medium, design: .rounded))
+                .foregroundStyle(isReached ? tint : EngifyColors.textSecondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, Spacing.md)
+        .padding(.vertical, Spacing.sm)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(isReached ? tint.opacity(0.10) : EngifyColors.surfaceMuted)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(isReached ? tint.opacity(0.22) : EngifyColors.border.opacity(0.7), lineWidth: 1)
+        )
     }
 
     private var sheetBackground: LinearGradient {
