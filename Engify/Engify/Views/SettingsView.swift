@@ -22,6 +22,8 @@ import SwiftUI
 /// - Important toggles like notifications/microphone include request buttons if denied.
 /// - All values validate on load; corrupted settings reset to defaults.
 struct SettingsView: View {
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var authManager: AuthenticationManager
     @EnvironmentObject private var theme: ThemeManager
     @EnvironmentObject private var settings: LearningSettingsManager
     
@@ -32,6 +34,7 @@ struct SettingsView: View {
     @State private var saveConfirmationTask: DispatchWorkItem?
     @State private var settingsSnapshot = ""
     @State private var showPresetConfirmation = false
+    @State private var showDeleteAccountConfirmation = false
     @State private var pendingPreset: SettingsPreset?
     private let betaTag = "Beta"
 
@@ -42,6 +45,8 @@ struct SettingsView: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: Spacing.xl) {
+                        statusSection
+
                         if showSaveConfirmation {
                             saveConfirmationBanner
                                 .transition(.move(edge: .top).combined(with: .opacity))
@@ -60,6 +65,7 @@ struct SettingsView: View {
                         accessibilitySection
                         appearanceSection
                         privacySection
+                        legalSection
                         resetSection
                     }
                     .padding()
@@ -104,6 +110,30 @@ struct SettingsView: View {
             if let preset = pendingPreset {
                 Text("This will replace your current settings with the \"\(preset.title)\" preset. Notification and microphone settings won't change.")
             }
+        }
+        .alert("Delete Account?", isPresented: $showDeleteAccountConfirmation) {
+            Button("Delete", role: .destructive) {
+                Task {
+                    let didDelete = await authManager.deleteAccount()
+                    if didDelete {
+                        dismiss()
+                    }
+                }
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("This permanently removes your Engify account and associated synced learning data. This action cannot be undone.")
+        }
+    }
+
+    @ViewBuilder
+    private var statusSection: some View {
+        if let errorMessage = authManager.errorMessage, !errorMessage.isEmpty {
+            StatusBanner(message: errorMessage, type: .error)
+        }
+
+        if let deletionMessage = authManager.accountDeletionMessage, !deletionMessage.isEmpty {
+            StatusBanner(message: deletionMessage, type: .success)
         }
     }
 
@@ -930,12 +960,225 @@ struct SettingsView: View {
             }
         }
     }
+
+    private var legalSection: some View {
+        EngifySettingsSection(
+            title: "Legal",
+            subtitle: "Keep App Store review-friendly documents available in the app, including account deletion guidance."
+        ) {
+            VStack(alignment: .leading, spacing: Spacing.md) {
+                legalLinkRow(
+                    title: "Terms & Conditions",
+                    subtitle: "Usage rules, account responsibilities, and acceptable use for Engify.",
+                    systemImage: "doc.text.fill",
+                    document: .termsAndConditions
+                )
+
+                legalLinkRow(
+                    title: "Privacy Policy",
+                    subtitle: "What Engify stores, what stays on-device, and how account data is handled.",
+                    systemImage: "hand.raised.fill",
+                    document: .privacyPolicy
+                )
+
+                legalLinkRow(
+                    title: "Account Deletion",
+                    subtitle: "How to permanently delete your account and what data is removed.",
+                    systemImage: "trash.fill",
+                    document: .accountDeletion
+                )
+
+                if authManager.isAuthenticated {
+                    SecondaryButton(
+                        title: authManager.isLoading ? "Deleting..." : "Delete My Account",
+                        systemImage: "trash.fill",
+                        action: {
+                            showDeleteAccountConfirmation = true
+                        },
+                        isDisabled: authManager.isLoading,
+                        tint: EngifyColors.coral
+                    )
+                }
+            }
+        }
+    }
+
+    private func legalLinkRow(
+        title: String,
+        subtitle: String,
+        systemImage: String,
+        document: EngifyLegalDocument
+    ) -> some View {
+        NavigationLink {
+            EngifyLegalDocumentView(document: document)
+        } label: {
+            HStack(spacing: Spacing.md) {
+                Image(systemName: systemImage)
+                    .font(.headline)
+                    .foregroundStyle(theme.accentColor)
+                    .frame(width: 24)
+
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    Text(title)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(EngifyColors.textPrimary)
+
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(EngifyColors.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(EngifyColors.textSecondary)
+            }
+            .padding(.horizontal, Spacing.md)
+            .padding(.vertical, Spacing.md)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(EngifyColors.canvasRaised)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(EngifyColors.border.opacity(0.75), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private enum EngifyLegalDocument {
+    case termsAndConditions
+    case privacyPolicy
+    case accountDeletion
+
+    var title: String {
+        switch self {
+        case .termsAndConditions:
+            return "Terms & Conditions"
+        case .privacyPolicy:
+            return "Privacy Policy"
+        case .accountDeletion:
+            return "Account Deletion"
+        }
+    }
+
+    var sections: [(title: String, body: String)] {
+        switch self {
+        case .termsAndConditions:
+            return [
+                (
+                    "Using Engify",
+                    "Engify is a language-learning app designed to help you practice vocabulary, reading, speaking, and study habits. By using the app, you agree to use it lawfully and not attempt to misuse, disrupt, or reverse engineer the service."
+                ),
+                (
+                    "Accounts",
+                    "You are responsible for the accuracy of the information you provide when creating an account and for maintaining the confidentiality of your login credentials. You may continue in guest mode, but some features require a registered account."
+                ),
+                (
+                    "Learning Content",
+                    "Engify may provide AI-assisted or third-party sourced explanations, examples, lookup results, or reading materials. These materials are provided for educational use and may occasionally contain errors, so you should use your own judgment when relying on them."
+                ),
+                (
+                    "Availability",
+                    "We may update, improve, suspend, or remove features at any time to maintain service quality, security, or compliance. We may also limit access to features that require authentication, external services, or supported devices."
+                ),
+                (
+                    "Termination",
+                    "You may stop using Engify at any time. If you want your account removed, you can request permanent deletion from inside the app by opening Profile and choosing Delete Account."
+                )
+            ]
+        case .privacyPolicy:
+            return [
+                (
+                    "Information We Store",
+                    "If you create an account, Engify stores the basic information needed to operate your profile, including your email address, display name, avatar choice, saved words, and synced learning progress."
+                ),
+                (
+                    "Information That Stays On Device",
+                    "App preferences, some learning settings, and optional voice-history storage remain on your device unless a future feature explicitly asks to sync them to the cloud."
+                ),
+                (
+                    "Online Features",
+                    "When you use connected features such as authentication, synced progress, dictionary lookup, or online content, Engify may send the minimum data required to the service providers that power those features."
+                ),
+                (
+                    "How We Use Data",
+                    "Your data is used to sign you in, personalize your profile, restore your saved learning progress, and support the features you choose to use inside the app."
+                ),
+                (
+                    "Your Choices",
+                    "You can use guest mode for limited access, manage settings from the Settings screen, and permanently delete your account from the Profile screen. Deleting your account removes associated synced account data from the app database."
+                )
+            ]
+        case .accountDeletion:
+            return [
+                (
+                    "How To Delete",
+                    "Open the profile menu from the top-left corner of the app, choose Profile, then tap Delete Account. You will be asked to confirm before the deletion request is sent."
+                ),
+                (
+                    "What Gets Removed",
+                    "Once completed, your Engify account record and the synced data associated with that account, such as profile details, saved words, progress, lesson history, and earned badges, are permanently removed from the database."
+                ),
+                (
+                    "Important Notes",
+                    "Account deletion is permanent and cannot be undone. If you only want to stop using the app temporarily, you can sign out instead of deleting your account."
+                )
+            ]
+        }
+    }
+}
+
+private struct EngifyLegalDocumentView: View {
+    let document: EngifyLegalDocument
+
+    var body: some View {
+        ZStack {
+            EngifyAppBackground()
+
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: Spacing.lg) {
+                    ForEach(Array(document.sections.enumerated()), id: \.offset) { _, section in
+                        EngifyCard {
+                            VStack(alignment: .leading, spacing: Spacing.sm) {
+                                Text(section.title)
+                                    .font(EngifyTypography.headline)
+                                    .foregroundStyle(EngifyColors.textPrimary)
+
+                                Text(section.body)
+                                    .font(EngifyTypography.body)
+                                    .foregroundStyle(EngifyColors.textSecondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                    }
+                }
+                .padding()
+                .padding(.bottom, Spacing.xxl)
+            }
+        }
+        .navigationTitle(document.title)
+        .navigationBarTitleDisplayMode(.inline)
+    }
 }
 
 struct SettingsView_Previews: PreviewProvider {
     static var previews: some View {
+        let savedWordsManager = SavedWordsManager()
+        let gamificationManager = GamificationManager()
+
         SettingsView()
+            .environmentObject(AuthenticationManager(
+                savedWordsManager: savedWordsManager,
+                gamificationManager: gamificationManager
+            ))
             .environmentObject(ThemeManager())
+            .environmentObject(gamificationManager)
             .environmentObject(LearningSettingsManager())
     }
 }

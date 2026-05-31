@@ -1386,6 +1386,19 @@ private struct EngifyProfileMenu: View {
         .fixedSize(horizontal: false, vertical: true)
         .scaleEffect(menuScale, anchor: .topLeading)
         .opacity(menuOpacity)
+        .background {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(0.72),
+                            accentColor.opacity(0.18)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+        }
         .engifyLiquidGlassCard(cornerRadius: 24, tint: accentColor, shadowOpacity: 0.18)
         .onAppear {
             animateMenuAppearance()
@@ -1546,6 +1559,7 @@ struct EngifyProfileSheet: View {
     @State private var displayName = ""
     @State private var selectedAvatarStyle: EngifyAvatarStyle = .meadow
     @State private var localMessage: String?
+    @State private var showDeleteAccountConfirmation = false
 
     private let columns = [
         GridItem(.flexible(), spacing: Spacing.sm),
@@ -1582,6 +1596,19 @@ struct EngifyProfileSheet: View {
             if let message {
                 localMessage = message
             }
+        }
+        .alert("Delete Account?", isPresented: $showDeleteAccountConfirmation) {
+            Button("Delete", role: .destructive) {
+                Task {
+                    let didDelete = await authManager.deleteAccount()
+                    if didDelete {
+                        dismiss()
+                    }
+                }
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("This permanently removes your Engify account and associated learning data from the app database. This action cannot be undone.")
         }
     }
 
@@ -1695,7 +1722,7 @@ struct EngifyProfileSheet: View {
             VStack(alignment: .leading, spacing: Spacing.md) {
                 EngifySectionHeader(
                     title: "Account Actions",
-                    subtitle: "Access settings or safely sign out from the same place across every tab."
+                    subtitle: "Access settings, review your legal options, sign out, or permanently delete your account."
                 )
 
                 SecondaryButton(
@@ -1707,6 +1734,12 @@ struct EngifyProfileSheet: View {
                     }
                 )
 
+                if let deletionMessage = authManager.accountDeletionMessage, !deletionMessage.isEmpty {
+                    Text(deletionMessage)
+                        .font(EngifyTypography.caption)
+                        .foregroundStyle(accentColor)
+                }
+
                 SecondaryButton(
                     title: authManager.isLoading ? "Signing Out..." : "Sign Out",
                     systemImage: "rectangle.portrait.and.arrow.right",
@@ -1716,6 +1749,16 @@ struct EngifyProfileSheet: View {
                             dismiss()
                         }
                     }, isDisabled: authManager.isLoading, tint: EngifyColors.coral
+                )
+
+                SecondaryButton(
+                    title: authManager.isLoading ? "Deleting..." : "Delete Account",
+                    systemImage: "trash.fill",
+                    action: {
+                        showDeleteAccountConfirmation = true
+                    },
+                    isDisabled: authManager.isLoading,
+                    tint: EngifyColors.coral
                 )
             }
         }

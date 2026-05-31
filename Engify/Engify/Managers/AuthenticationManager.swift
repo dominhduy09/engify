@@ -50,6 +50,7 @@ final class AuthenticationManager: ObservableObject {
     @Published var errorMessage: String?
     @Published var infoMessage: String?
     @Published var profileUpdateMessage: String?
+    @Published var accountDeletionMessage: String?
     @Published var accountRequiredContext: AccountRequiredContext?
 
     var isAuthenticated: Bool {
@@ -73,13 +74,21 @@ final class AuthenticationManager: ObservableObject {
     }
 
     private let authService: AuthServicing
+    private let savedWordsManager: SavedWordsManager
+    private let gamificationManager: GamificationManager
     private var authStateTask: Task<Void, Never>?
 
-    init(authService: AuthServicing? = nil) {
+    init(
+        authService: AuthServicing? = nil,
+        savedWordsManager: SavedWordsManager,
+        gamificationManager: GamificationManager
+    ) {
         self.authService = authService ?? SupabaseAuthService(
             provider: .shared,
             profileService: .shared
         )
+        self.savedWordsManager = savedWordsManager
+        self.gamificationManager = gamificationManager
         restoreInitialState()
         observeAuthStateChanges()
     }
@@ -133,6 +142,21 @@ final class AuthenticationManager: ObservableObject {
                 infoMessage = "Account created for \(email). Check your inbox to confirm your email before logging in."
             }
 
+            return true
+        } catch {
+            errorMessage = friendlyError(error)
+            return false
+        }
+    }
+
+    func signInWithGoogle() async -> Bool {
+        resetMessages()
+        isLoading = true
+        defer { isLoading = false }
+
+        do {
+            let session = try await authService.signInWithGoogle()
+            apply(session: session)
             return true
         } catch {
             errorMessage = friendlyError(error)
@@ -247,6 +271,22 @@ final class AuthenticationManager: ObservableObject {
         }
     }
 
+    func deleteAccount() async -> Bool {
+        resetMessages()
+        isLoading = true
+        defer { isLoading = false }
+
+        do {
+            try await authService.deleteAccount()
+            accountDeletionMessage = "Your account has been permanently deleted."
+            clearSession()
+            return true
+        } catch {
+            errorMessage = friendlyError(error)
+            return false
+        }
+    }
+
     func consumeInfoMessage() -> String? {
         defer { infoMessage = nil }
         return infoMessage
@@ -303,6 +343,12 @@ final class AuthenticationManager: ObservableObject {
         isGuestMode = false
         clearGuestUsage()
         errorMessage = nil
+
+        let userID = session.user.id.uuidString
+        Task {
+            await savedWordsManager.loadFromRemote(for: userID)
+            await gamificationManager.loadFromRemote(for: userID)
+        }
     }
 
     private func clearSession() {
@@ -310,6 +356,8 @@ final class AuthenticationManager: ObservableObject {
         authState = .unauthenticated
         isGuestMode = false
         clearGuestUsage()
+        savedWordsManager.clearRemoteSession()
+        gamificationManager.clearRemoteSession()
     }
 
     private func mapUser(_ user: UserInfo) -> User {
@@ -352,6 +400,7 @@ final class AuthenticationManager: ObservableObject {
         errorMessage = nil
         infoMessage = nil
         profileUpdateMessage = nil
+        accountDeletionMessage = nil
     }
 
     private func clearGuestUsage() {

@@ -45,11 +45,6 @@ struct PracticeView: View {
                 // Fallback on earlier versions
             }
         }
-        .onAppear {
-            if currentQuizQuestions.isEmpty {
-                refreshQuiz()
-            }
-        }
         .onChange(of: authManager.isGuestMode) { isGuestMode in
             if isGuestMode {
                 activePracticeSheet = nil
@@ -152,7 +147,8 @@ struct PracticeView: View {
                     scoreColor: scoreColor,
                     onSelectAnswer: selectAnswer,
                     onCheckScore: checkQuizScore,
-                    onRefresh: refreshQuiz
+                    onRefresh: refreshQuiz,
+                    onAppear: refreshQuiz
                 )
             }
         }
@@ -211,10 +207,31 @@ struct PracticeView: View {
     }
 
     private func refreshQuiz() {
-        let questionCount = min(5, EngifySampleData.practiceQuizQuestions.count)
-        currentQuizQuestions = EngifySampleData.practiceQuizQuestions.shuffled().prefix(questionCount).map { $0 }
+        currentQuizQuestions = randomizedQuizQuestions()
         quizAnswers.removeAll()
         showQuizResult = false
+    }
+
+    private func randomizedQuizQuestions() -> [QuizQuestion] {
+        let questionCount = min(5, EngifySampleData.practiceQuizQuestions.count)
+
+        return EngifySampleData.practiceQuizQuestions
+            .shuffled()
+            .prefix(questionCount)
+            .map(randomizeQuestionOptions)
+    }
+
+    private func randomizeQuestionOptions(for question: QuizQuestion) -> QuizQuestion {
+        let answer = question.options[question.answerIndex]
+        let shuffledOptions = question.options.shuffled()
+        let shuffledAnswerIndex = shuffledOptions.firstIndex(of: answer) ?? question.answerIndex
+
+        return QuizQuestion(
+            prompt: question.prompt,
+            options: shuffledOptions,
+            answerIndex: shuffledAnswerIndex,
+            explanation: question.explanation
+        )
     }
 }
 
@@ -507,27 +524,60 @@ private struct DedicatedGrammarLessonView: View {
                 subtitle: "Browse a topic, settle into the rule, and give examples enough room to actually teach."
             )
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: Spacing.sm) {
-                    ForEach(grammarTopics.indices, id: \.self) { index in
-                        Button {
-                            withAnimation(EngifySpring.tabSlide) {
-                                selectedTopicIndex = index
-                            }
-                            EngifyFeedback.shared.play(.tabSwitch, settings: learningSettings)
-                        } label: {
-                            Text(grammarTopics[index].title)
+            EngifyCard(tint: accentColor) {
+                VStack(alignment: .leading, spacing: Spacing.lg) {
+                    HStack(alignment: .top, spacing: Spacing.md) {
+                        VStack(alignment: .leading, spacing: Spacing.xs) {
+                            Text("Lesson selector")
                                 .font(EngifyTypography.caption.weight(.semibold))
-                                .lineLimit(1)
-                                .fixedSize(horizontal: true, vertical: false)
-                                .foregroundStyle(selectedTopicIndex == index ? EngifyColors.textInverse : accentColor)
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 8)
-                                .background(selectedTopicIndex == index ? accentColor : accentColor.opacity(0.10))
-                                .clipShape(Capsule())
+                                .foregroundStyle(accentColor)
+                                .textCase(.uppercase)
+
+                            Text("Lesson \(selectedTopicIndex + 1) of \(grammarTopics.count)")
+                                .font(EngifyTypography.body)
+                                .foregroundStyle(EngifyColors.textSecondary)
                         }
-                        .buttonStyle(.plain)
-                        .engifyJellyPress()
+
+                        Spacer(minLength: 0)
+
+                        Menu {
+                            ForEach(grammarTopics.indices, id: \.self) { index in
+                                Button(grammarTopics[index].title) {
+                                    updateTopicSelection(to: index)
+                                }
+                            }
+                        } label: {
+                            HStack(spacing: Spacing.sm) {
+                                Text(topic.title)
+                                    .font(EngifyTypography.bodyStrong)
+                                    .foregroundStyle(EngifyColors.textPrimary)
+                                    .lineLimit(1)
+
+                                Image(systemName: "chevron.down")
+                                    .font(.caption.weight(.bold))
+                                    .foregroundStyle(accentColor)
+                            }
+                            .padding(.horizontal, Spacing.md)
+                            .padding(.vertical, Spacing.sm)
+                            .background(accentColor.opacity(0.10))
+                            .clipShape(Capsule())
+                        }
+                    }
+
+                    HStack(spacing: Spacing.md) {
+                        SecondaryButton(
+                            title: "Previous",
+                            systemImage: "arrow.left",
+                            action: selectPreviousTopic,
+                            size: .large
+                        )
+
+                        SecondaryButton(
+                            title: "Next",
+                            systemImage: "arrow.right",
+                            action: selectNextTopic,
+                            size: .large
+                        )
                     }
                 }
             }
@@ -609,6 +659,25 @@ private struct DedicatedGrammarLessonView: View {
             ]
         }
     }
+
+    private func updateTopicSelection(to index: Int) {
+        guard grammarTopics.indices.contains(index) else { return }
+
+        withAnimation(EngifySpring.tabSlide) {
+            selectedTopicIndex = index
+        }
+        EngifyFeedback.shared.play(.tabSwitch, settings: learningSettings)
+    }
+
+    private func selectPreviousTopic() {
+        let previousIndex = selectedTopicIndex == 0 ? grammarTopics.count - 1 : selectedTopicIndex - 1
+        updateTopicSelection(to: previousIndex)
+    }
+
+    private func selectNextTopic() {
+        let nextIndex = selectedTopicIndex == grammarTopics.count - 1 ? 0 : selectedTopicIndex + 1
+        updateTopicSelection(to: nextIndex)
+    }
 }
 
 private struct DedicatedQuizView: View {
@@ -622,6 +691,7 @@ private struct DedicatedQuizView: View {
     let onSelectAnswer: (QuizQuestion, Int) -> Void
     let onCheckScore: () -> Void
     let onRefresh: () -> Void
+    let onAppear: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.xl) {
@@ -709,6 +779,7 @@ private struct DedicatedQuizView: View {
                 }
             }
         }
+        .onAppear(perform: onAppear)
     }
 }
 

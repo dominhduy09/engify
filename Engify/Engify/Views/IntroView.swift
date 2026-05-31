@@ -288,7 +288,13 @@ private struct OnboardingSlideCard: View {
 }
 
 #Preview {
+    let savedWordsManager = SavedWordsManager()
+    let gamificationManager = GamificationManager()
+
     IntroView(onContinue: {})
-        .environmentObject(AuthenticationManager())
+        .environmentObject(AuthenticationManager(
+            savedWordsManager: savedWordsManager,
+            gamificationManager: gamificationManager
+        ))
         .environmentObject(ThemeManager())
 }

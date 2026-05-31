@@ -177,3 +177,275 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- Enable realtime for progress updates
 ALTER PUBLICATION supabase_realtime ADD TABLE public.user_progress;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.saved_words;
+
+-- =====================================================
+-- FUNCTION: Delete the currently authenticated account
+-- Lets the signed-in user permanently remove their own
+-- auth account and all related rows with ON DELETE CASCADE.
+-- =====================================================
+CREATE OR REPLACE FUNCTION public.delete_my_account()
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, auth
+AS $$
+DECLARE
+    current_user_id UUID := auth.uid();
+BEGIN
+    IF current_user_id IS NULL THEN
+        RAISE EXCEPTION 'Not authenticated';
+    END IF;
+
+    DELETE FROM auth.users
+    WHERE id = current_user_id;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Account not found';
+    END IF;
+END;
+$$;
+
+ALTER FUNCTION public.delete_my_account() OWNER TO postgres;
+REVOKE ALL ON FUNCTION public.delete_my_account() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.delete_my_account() TO authenticated;
+
+-- =====================================================
+-- VOCABULARY WORD DATABASE
+-- Shared word catalog for Vocabulary lessons and Lookup
+-- =====================================================
+CREATE TABLE IF NOT EXISTS public.vocabulary_words (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    word TEXT NOT NULL UNIQUE,
+    category TEXT NOT NULL,
+    word_level TEXT NOT NULL,
+    pronunciation TEXT NOT NULL,
+    audio_url TEXT,
+    part_of_speech TEXT NOT NULL,
+    definition TEXT NOT NULL,
+    vietnamese_meaning TEXT NOT NULL,
+    example TEXT NOT NULL,
+    noun_form TEXT DEFAULT 'N/A',
+    adjective_form TEXT DEFAULT 'N/A',
+    verb_form TEXT DEFAULT 'N/A',
+    idiom TEXT DEFAULT 'N/A',
+    phrasal_verbs TEXT[] DEFAULT '{}',
+    tags TEXT[] DEFAULT '{}',
+    is_featured BOOLEAN DEFAULT false,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_vocabulary_words_word
+    ON public.vocabulary_words (lower(word));
+
+CREATE INDEX IF NOT EXISTS idx_vocabulary_words_category
+    ON public.vocabulary_words (category);
+
+CREATE INDEX IF NOT EXISTS idx_vocabulary_words_level
+    ON public.vocabulary_words (word_level);
+
+ALTER TABLE public.vocabulary_words ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Vocabulary words are readable by everyone" ON public.vocabulary_words;
+CREATE POLICY "Vocabulary words are readable by everyone"
+    ON public.vocabulary_words FOR SELECT
+    USING (true);
+
+INSERT INTO public.vocabulary_words (
+    word,
+    category,
+    word_level,
+    pronunciation,
+    audio_url,
+    part_of_speech,
+    definition,
+    vietnamese_meaning,
+    example,
+    noun_form,
+    adjective_form,
+    verb_form,
+    idiom,
+    phrasal_verbs,
+    tags,
+    is_featured
+)
+VALUES
+    (
+        'habit',
+        'Daily Life',
+        'A1',
+        '/ˈhæb.ɪt/',
+        NULL,
+        'noun',
+        'something you do regularly, often without thinking about it',
+        'thói quen',
+        'Reading before bed became a healthy habit for her.',
+        'habit',
+        'habitual',
+        'habituate',
+        'old habits die hard',
+        ARRAY[]::TEXT[],
+        ARRAY['routine', 'daily-life', 'beginner'],
+        true
+    ),
+    (
+        'improve',
+        'Learning',
+        'A2',
+        '/ɪmˈpruːv/',
+        NULL,
+        'verb',
+        'to become better or to make something better',
+        'cải thiện',
+        'You will improve your listening if you practice every day.',
+        'improvement',
+        'improved',
+        'improve',
+        'improve on something',
+        ARRAY['improve on'],
+        ARRAY['study', 'progress', 'core'],
+        true
+    ),
+    (
+        'focus',
+        'Study Skills',
+        'A2',
+        '/ˈfoʊ.kəs/',
+        NULL,
+        'verb',
+        'to give your attention to one thing and think about it carefully',
+        'tập trung',
+        'Try to focus on the key sentence before checking the translation.',
+        'focus',
+        'focused',
+        'focus',
+        'focus on the task at hand',
+        ARRAY['focus on'],
+        ARRAY['attention', 'study-skills'],
+        true
+    ),
+    (
+        'confidence',
+        'Speaking',
+        'B1',
+        '/ˈkɑn.fə.dəns/',
+        NULL,
+        'noun',
+        'the feeling that you can do something successfully',
+        'sự tự tin',
+        'Short daily speaking practice builds confidence over time.',
+        'confidence',
+        'confident',
+        'confide',
+        'with confidence',
+        ARRAY[]::TEXT[],
+        ARRAY['speaking', 'mindset'],
+        true
+    ),
+    (
+        'break down',
+        'Phrasal Verbs',
+        'B1',
+        '/breɪk daʊn/',
+        NULL,
+        'phrasal verb',
+        'to divide something into smaller parts to make it easier to understand',
+        'chia nhỏ; phân tích',
+        'Let''s break down this sentence word by word.',
+        'breakdown',
+        'N/A',
+        'break down',
+        'break it down',
+        ARRAY['break down', 'break it down'],
+        ARRAY['phrasal-verb', 'analysis'],
+        true
+    ),
+    (
+        'piece of cake',
+        'Idioms',
+        'B1',
+        '/ˌpiːs əv ˈkeɪk/',
+        NULL,
+        'idiom',
+        'something that is very easy to do',
+        'dễ như ăn bánh',
+        'The vocabulary quiz was a piece of cake after all that review.',
+        'N/A',
+        'N/A',
+        'N/A',
+        'a piece of cake',
+        ARRAY[]::TEXT[],
+        ARRAY['idiom', 'conversation'],
+        false
+    ),
+    (
+        'analyze',
+        'Academic',
+        'B2',
+        '/ˈæn.əl.aɪz/',
+        NULL,
+        'verb',
+        'to study something carefully in order to understand it',
+        'phân tích',
+        'Readers should analyze the example sentence before memorizing the word.',
+        'analysis',
+        'analytical',
+        'analyze',
+        'analyze something in depth',
+        ARRAY[]::TEXT[],
+        ARRAY['academic', 'reading'],
+        false
+    ),
+    (
+        'carry out',
+        'Work',
+        'B2',
+        '/ˈkær.i aʊt/',
+        NULL,
+        'phrasal verb',
+        'to do and complete something that has been planned',
+        'thực hiện',
+        'The team carried out the new learning plan successfully.',
+        'N/A',
+        'N/A',
+        'carry out',
+        'carry out a plan',
+        ARRAY['carry out', 'carry out a plan'],
+        ARRAY['phrasal-verb', 'work'],
+        false
+    ),
+    (
+        'resilient',
+        'Motivation',
+        'C1',
+        '/rɪˈzɪl.jənt/',
+        NULL,
+        'adjective',
+        'able to recover quickly after difficulties',
+        'kiên cường',
+        'A resilient learner keeps going even after making mistakes.',
+        'resilience',
+        'resilient',
+        'N/A',
+        'stay resilient under pressure',
+        ARRAY[]::TEXT[],
+        ARRAY['motivation', 'advanced'],
+        false
+    )
+ON CONFLICT (word) DO UPDATE SET
+    category = EXCLUDED.category,
+    word_level = EXCLUDED.word_level,
+    pronunciation = EXCLUDED.pronunciation,
+    audio_url = EXCLUDED.audio_url,
+    part_of_speech = EXCLUDED.part_of_speech,
+    definition = EXCLUDED.definition,
+    vietnamese_meaning = EXCLUDED.vietnamese_meaning,
+    example = EXCLUDED.example,
+    noun_form = EXCLUDED.noun_form,
+    adjective_form = EXCLUDED.adjective_form,
+    verb_form = EXCLUDED.verb_form,
+    idiom = EXCLUDED.idiom,
+    phrasal_verbs = EXCLUDED.phrasal_verbs,
+    tags = EXCLUDED.tags,
+    is_featured = EXCLUDED.is_featured,
+    updated_at = NOW();

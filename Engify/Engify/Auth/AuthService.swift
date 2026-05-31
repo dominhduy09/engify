@@ -1,6 +1,10 @@
 import Auth
 import Foundation
+import GoogleSignIn
 import Supabase
+#if canImport(UIKit)
+import UIKit
+#endif
 
 enum AuthSignUpOutcome {
     case authenticated(Session)
@@ -16,8 +20,10 @@ protocol AuthServicing {
 
     func signIn(email: String, password: String) async throws -> Session
     func signUp(email: String, password: String, displayName: String) async throws -> AuthSignUpOutcome
+    func signInWithGoogle() async throws -> Session
     func updateProfile(displayName: String, avatarStyle: EngifyAvatarStyle) async throws -> UserInfo
     func signOut() async throws
+    func deleteAccount() async throws
     func sendPasswordReset(email: String) async throws
 }
 
@@ -56,6 +62,27 @@ final class SupabaseAuthService: AuthServicing {
     func signIn(email: String, password: String) async throws -> Session {
         let client = try configuredClient()
         return try await client.auth.signIn(email: email, password: password)
+    }
+
+    func signInWithGoogle() async throws -> Session {
+        let client = try configuredClient()
+        let presentingViewController = try rootViewController()
+
+        let signInResult = try await GIDSignIn.sharedInstance.signIn(withPresenting: presentingViewController)
+
+        guard let idToken = signInResult.user.idToken?.tokenString, !idToken.isEmpty else {
+            throw AuthValidationError.invalidSignInCredentials("Google ID token is missing.")
+        }
+
+        let accessToken = signInResult.user.accessToken.tokenString
+
+        return try await client.auth.signInWithIdToken(
+            credentials: OpenIDConnectCredentials(
+                provider: .google,
+                idToken: idToken,
+                accessToken: accessToken
+            )
+        )
     }
 
     func signUp(email: String, password: String, displayName: String) async throws -> AuthSignUpOutcome {
@@ -108,6 +135,15 @@ final class SupabaseAuthService: AuthServicing {
         try await client.auth.signOut()
     }
 
+    func deleteAccount() async throws {
+        let client = try configuredClient()
+        do {
+            try await client.rpc("delete_my_account").execute()
+        } catch {
+            throw mapAccountDeletionError(error)
+        }
+    }
+
     func sendPasswordReset(email: String) async throws {
         let client = try configuredClient()
         try await client.auth.resetPasswordForEmail(email)
@@ -121,4 +157,59 @@ final class SupabaseAuthService: AuthServicing {
         }
         return client
     }
+
+    private func mapAccountDeletionError(_ error: Error) -> Error {
+        let message = error.localizedDescription.lowercased()
+
+        if message.contains("delete_my_account") && message.contains("function") {
+            return AuthValidationError.accountDeletionUnavailable(
+                "Account deletion is not enabled in Supabase yet. Run the latest delete-account SQL in Supabase, then try again."
+            )
+        }
+
+        if message.contains("permission denied") || message.contains("auth.users") {
+            return AuthValidationError.accountDeletionUnavailable(
+                "Supabase blocked account deletion. Re-run the updated delete-account SQL so the function can delete from auth.users."
+            )
+        }
+
+        return error
+    }
+
+    #if canImport(UIKit)
+    @MainActor
+    private func rootViewController() throws -> UIViewController {
+        let connectedScenes = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+
+        let keyWindow = connectedScenes
+            .flatMap(\.windows)
+            .first { $0.isKeyWindow }
+
+        guard let rootViewController = keyWindow?.rootViewController else {
+            throw AuthValidationError.invalidSignInCredentials("Unable to present Google Sign-In.")
+        }
+
+        return topViewController(from: rootViewController)
+    }
+
+    @MainActor
+    private func topViewController(from viewController: UIViewController) -> UIViewController {
+        if let presented = viewController.presentedViewController {
+            return topViewController(from: presented)
+        }
+
+        if let navigation = viewController as? UINavigationController,
+           let visible = navigation.visibleViewController {
+            return topViewController(from: visible)
+        }
+
+        if let tab = viewController as? UITabBarController,
+           let selected = tab.selectedViewController {
+            return topViewController(from: selected)
+        }
+
+        return viewController
+    }
+    #endif
 }

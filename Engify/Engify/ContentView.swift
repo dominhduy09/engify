@@ -51,10 +51,16 @@ struct ContentView: View {
 }
 
 #Preview {
+    let savedWordsManager = SavedWordsManager()
+    let gamificationManager = GamificationManager()
+
     ContentView()
-        .environmentObject(AuthenticationManager())
-        .environmentObject(SavedWordsManager())
+        .environmentObject(AuthenticationManager(
+            savedWordsManager: savedWordsManager,
+            gamificationManager: gamificationManager
+        ))
+        .environmentObject(savedWordsManager)
         .environmentObject(ThemeManager())
-        .environmentObject(GamificationManager())
+        .environmentObject(gamificationManager)
         .environmentObject(LearningSettingsManager())
 }

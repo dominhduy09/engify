@@ -321,8 +321,17 @@ struct LoginView: View {
 
     private var socialSection: some View {
         VStack(spacing: Spacing.sm) {
-            SocialLoginButton(provider: "Continue with Google", icon: "g.circle.fill") {
-                authManager.errorMessage = "Google sign-in is not enabled yet. Add Supabase OAuth callback wiring to turn it on safely."
+            SocialLoginButton(
+                provider: authManager.isLoading ? "Opening Google..." : "Continue with Google",
+                icon: "g.circle.fill",
+                isDisabled: authManager.isLoading || authManager.configurationErrorMessage != nil
+            ) {
+                Task {
+                    let wasSuccessful = await authManager.signInWithGoogle()
+                    if wasSuccessful {
+                        clearLocalFields(keepEmail: false)
+                    }
+                }
             }
 
             SocialLoginButton(provider: "Continue with Apple", icon: "apple.logo") {
@@ -558,6 +567,7 @@ struct StatusBanner: View {
 struct SocialLoginButton: View {
     let provider: String
     let icon: String
+    var isDisabled: Bool = false
     let action: () -> Void
 
     @State private var isPressed = false
@@ -579,23 +589,25 @@ struct SocialLoginButton: View {
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(EngifyColors.textSecondary)
             }
-            .foregroundStyle(EngifyColors.textPrimary)
+            .foregroundStyle(isDisabled ? EngifyColors.textSecondary : EngifyColors.textPrimary)
             .padding(.horizontal, Spacing.lg)
             .frame(minHeight: Spacing.controlHeight)
             .background(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(EngifyColors.surface)
+                    .fill(isDisabled ? EngifyColors.canvasRaised.opacity(0.78) : EngifyColors.surface)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .stroke(EngifyColors.border.opacity(0.85), lineWidth: 1)
             )
-            .scaleEffect(isPressed ? 0.985 : 1)
+            .scaleEffect(isPressed && !isDisabled ? 0.985 : 1)
         }
         .buttonStyle(.plain)
+        .disabled(isDisabled)
         .simultaneousGesture(
             DragGesture(minimumDistance: 0)
                 .onChanged { _ in
+                    guard !isDisabled else { return }
                     withAnimation(.easeInOut(duration: 0.12)) {
                         isPressed = true
                     }
@@ -629,7 +641,13 @@ struct ShakeEffect: GeometryEffect {
 }
 
 #Preview {
+    let savedWordsManager = SavedWordsManager()
+    let gamificationManager = GamificationManager()
+
     LoginView()
-        .environmentObject(AuthenticationManager())
+        .environmentObject(AuthenticationManager(
+            savedWordsManager: savedWordsManager,
+            gamificationManager: gamificationManager
+        ))
         .environmentObject(ThemeManager())
 }

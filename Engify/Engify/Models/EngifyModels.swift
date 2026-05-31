@@ -88,6 +88,8 @@ enum WordSource: String, Codable, Hashable {
 struct DictionaryEntry: Identifiable, Codable, Hashable {
     let id: String
     let word: String
+    let category: String
+    let wordLevel: String
     let phonetic: String
     let audioURL: URL?
     let partOfSpeech: String
@@ -97,9 +99,13 @@ struct DictionaryEntry: Identifiable, Codable, Hashable {
     let nounForm: String
     let adjectiveForm: String
     let verbForm: String
+    let idiom: String
+    let phrasalVerbs: [String]
 
     init(
         word: String,
+        category: String = "N/A",
+        wordLevel: String = "N/A",
         phonetic: String,
         audioURL: URL?,
         partOfSpeech: String,
@@ -108,10 +114,14 @@ struct DictionaryEntry: Identifiable, Codable, Hashable {
         vietnameseMeaning: String,
         nounForm: String = "N/A",
         adjectiveForm: String = "N/A",
-        verbForm: String = "N/A"
+        verbForm: String = "N/A",
+        idiom: String = "N/A",
+        phrasalVerbs: [String] = []
     ) {
         self.id = word.lowercased()
         self.word = word
+        self.category = category
+        self.wordLevel = wordLevel
         self.phonetic = phonetic
         self.audioURL = audioURL
         self.partOfSpeech = partOfSpeech
@@ -121,6 +131,8 @@ struct DictionaryEntry: Identifiable, Codable, Hashable {
         self.nounForm = nounForm
         self.adjectiveForm = adjectiveForm
         self.verbForm = verbForm
+        self.idiom = idiom
+        self.phrasalVerbs = phrasalVerbs
     }
 
     static func placeholder(for word: String) -> DictionaryEntry {
@@ -128,6 +140,8 @@ struct DictionaryEntry: Identifiable, Codable, Hashable {
 
         return DictionaryEntry(
             word: normalizedWord.isEmpty ? "N/A" : normalizedWord,
+            category: "N/A",
+            wordLevel: "N/A",
             phonetic: "N/A",
             audioURL: nil,
             partOfSpeech: "N/A",
@@ -136,7 +150,9 @@ struct DictionaryEntry: Identifiable, Codable, Hashable {
             vietnameseMeaning: "N/A",
             nounForm: "N/A",
             adjectiveForm: "N/A",
-            verbForm: "N/A"
+            verbForm: "N/A",
+            idiom: "N/A",
+            phrasalVerbs: []
         )
     }
 }
@@ -264,6 +280,21 @@ extension String {
 
 /// User's gamification progress: XP, level, streak, hearts, and lingots.
 struct UserProgress: Codable {
+    struct XPSnapshot {
+        let totalXP: Int
+        let level: Int
+        let xpForCurrentLevelStart: Int
+        let xpNeededForLevel: Int
+
+        var xpIntoCurrentLevel: Int {
+            max(0, totalXP - xpForCurrentLevelStart)
+        }
+
+        var levelProgress: Double {
+            Double(xpIntoCurrentLevel) / Double(max(1, xpNeededForLevel))
+        }
+    }
+
     var xp: Int
     var level: Int
     var streakDays: Int
@@ -272,22 +303,56 @@ struct UserProgress: Codable {
     var lingots: Int
     var lastActiveDate: Date?
 
-    var xpForNextLevel: Int { level * 100 + 50 }
+    var xpForNextLevel: Int { Self.xpRequired(for: level) }
 
     var levelProgress: Double {
-        let xpInCurrentLevel = xp - xpForCurrentLevelStart
-        let xpNeeded = xpForNextLevel - xpForCurrentLevelStart
-        return min(1.0, Double(xpInCurrentLevel) / Double(max(1, xpNeeded)))
+        snapshot.levelProgress
     }
 
     var xpForCurrentLevelStart: Int {
-        var sum = 0
-        for l in 1..<level { sum += l * 100 + 50 }
-        return sum
+        Self.levelStartXP(for: level)
+    }
+
+    var snapshot: XPSnapshot {
+        Self.snapshot(forTotalXP: xp)
     }
 
     static var initial: UserProgress {
         UserProgress(xp: 0, level: 1, streakDays: 0, hearts: 5, maxHearts: 5, lingots: 0, lastActiveDate: nil)
+    }
+
+    static func snapshot(forTotalXP totalXP: Int) -> XPSnapshot {
+        let resolvedXP = max(0, totalXP)
+        var level = 1
+        var levelStartXP = 0
+        var xpNeededForLevel = xpRequired(for: level)
+
+        while resolvedXP >= levelStartXP + xpNeededForLevel {
+            levelStartXP += xpNeededForLevel
+            level += 1
+            xpNeededForLevel = xpRequired(for: level)
+        }
+
+        return XPSnapshot(
+            totalXP: resolvedXP,
+            level: level,
+            xpForCurrentLevelStart: levelStartXP,
+            xpNeededForLevel: xpNeededForLevel
+        )
+    }
+
+    static func levelStartXP(for level: Int) -> Int {
+        guard level > 1 else { return 0 }
+
+        var sum = 0
+        for currentLevel in 1..<level {
+            sum += xpRequired(for: currentLevel)
+        }
+        return sum
+    }
+
+    static func xpRequired(for level: Int) -> Int {
+        150
     }
 
     mutating func earnXP(_ amount: Int) {

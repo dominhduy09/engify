@@ -26,11 +26,25 @@ import SwiftUI
 
 @main
 struct EngifyApp: App {
-    @StateObject private var authManager = AuthenticationManager()
     @StateObject private var savedWordsManager = SavedWordsManager()
     @StateObject private var themeManager = ThemeManager()
     @StateObject private var gamificationManager = GamificationManager()
     @StateObject private var learningSettingsManager = LearningSettingsManager()
+    @StateObject private var authManager: AuthenticationManager
+
+    init() {
+        let savedWordsManager = SavedWordsManager()
+        let gamificationManager = GamificationManager()
+
+        _savedWordsManager = StateObject(wrappedValue: savedWordsManager)
+        _gamificationManager = StateObject(wrappedValue: gamificationManager)
+        _authManager = StateObject(
+            wrappedValue: AuthenticationManager(
+                savedWordsManager: savedWordsManager,
+                gamificationManager: gamificationManager
+            )
+        )
+    }
 
     var body: some Scene {
         WindowGroup {

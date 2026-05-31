@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		506F91C22FC806760003485F /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 506F91C12FC806760003485F /* GoogleSignIn */; };
+		506F91C42FC806760003485F /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 506F91C32FC806760003485F /* GoogleSignInSwift */; };
 		50DA76E32FAE647600154537 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 50DA76E22FAE647600154537 /* Supabase */; };
 /* End PBXBuildFile section */
 
@@ -14,9 +16,22 @@
 		50A1B3852FA95AED00A86055 /* Engify.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Engify.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		506F91BF2FC804AA0003485F /* Exceptions for "Engify" folder in "Engify" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 50A1B3842FA95AED00A86055 /* Engify */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		50A1B3872FA95AED00A86055 /* Engify */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				506F91BF2FC804AA0003485F /* Exceptions for "Engify" folder in "Engify" target */,
+			);
 			path = Engify;
 			sourceTree = "<group>";
 		};
@@ -27,7 +42,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				506F91C42FC806760003485F /* GoogleSignInSwift in Frameworks */,
 				50DA76E32FAE647600154537 /* Supabase in Frameworks */,
+				506F91C22FC806760003485F /* GoogleSignIn in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -79,6 +96,8 @@
 			name = Engify;
 			packageProductDependencies = (
 				50DA76E22FAE647600154537 /* Supabase */,
+				506F91C12FC806760003485F /* GoogleSignIn */,
+				506F91C32FC806760003485F /* GoogleSignInSwift */,
 			);
 			productName = Engify;
 			productReference = 50A1B3852FA95AED00A86055 /* Engify.app */;
@@ -110,6 +129,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				50DA76E12FAE639C00154537 /* XCRemoteSwiftPackageReference "supabase-swift" */,
+				506F91C02FC806760003485F /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 50A1B3862FA95AED00A86055 /* Products */;
@@ -267,10 +287,12 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
+				CODE_SIGN_ENTITLEMENTS = Engify.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Engify/Info.plist;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -301,10 +323,12 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
+				CODE_SIGN_ENTITLEMENTS = Engify.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Engify/Info.plist;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -353,6 +377,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		506F91C02FC806760003485F /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/google/GoogleSignIn-iOS";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 9.1.0;
+			};
+		};
 		50DA76E12FAE639C00154537 /* XCRemoteSwiftPackageReference "supabase-swift" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/supabase/supabase-swift";
@@ -364,6 +396,16 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		506F91C12FC806760003485F /* GoogleSignIn */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 506F91C02FC806760003485F /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
+			productName = GoogleSignIn;
+		};
+		506F91C32FC806760003485F /* GoogleSignInSwift */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 506F91C02FC806760003485F /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
+			productName = GoogleSignInSwift;
+		};
 		50DA76E22FAE647600154537 /* Supabase */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 50DA76E12FAE639C00154537 /* XCRemoteSwiftPackageReference "supabase-swift" */;

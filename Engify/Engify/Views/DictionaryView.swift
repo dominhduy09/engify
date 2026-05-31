@@ -105,6 +105,28 @@ struct DictionaryView: View {
                 // Fallback on earlier versions
             }
         }
+        if displayValue(displayedEntry.idiom) != "N/A" {
+            detailBlock(
+                title: "Idiom",
+                icon: "text.quote",
+                tint: EngifyColors.warning
+            ) {
+                dictionaryLine(label: "Common phrase", value: displayValue(displayedEntry.idiom))
+            }
+        }
+        if !displayedEntry.phrasalVerbs.isEmpty {
+            detailBlock(
+                title: "Phrasal Verbs",
+                icon: "arrow.triangle.branch",
+                tint: EngifyColors.sage
+            ) {
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    ForEach(displayedEntry.phrasalVerbs, id: \.self) { phrasalVerb in
+                        dictionaryLine(label: "Related form", value: displayValue(phrasalVerb))
+                    }
+                }
+            }
+        }
     }
 
     private var emptyLookupState: some View {
@@ -234,6 +256,12 @@ struct DictionaryView: View {
                     text: displayValue(displayedEntry.partOfSpeech.capitalizedIfAvailable),
                     tint: theme.accentColor
                 )
+                if displayValue(displayedEntry.category) != "N/A" {
+                    VocabularyBadge(text: displayValue(displayedEntry.category), tint: EngifyColors.sky)
+                }
+                if displayValue(displayedEntry.wordLevel) != "N/A" {
+                    VocabularyBadge(text: displayValue(displayedEntry.wordLevel), tint: EngifyColors.sage)
+                }
                 bookmarkButton(for: displayedEntry)
                 Spacer(minLength: 0)
             }

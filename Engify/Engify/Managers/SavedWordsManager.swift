@@ -25,8 +25,12 @@ final class SavedWordsManager: ObservableObject {
 
     private let dictionaryStorageKey = "engify.saved.dictionary.entries"
     private let savedWordsStorageKey = "engify.saved.words"
+    private let supabaseManager: SupabaseManager
+    private var currentUserID: String?
+    private var isApplyingRemoteState = false
 
-    init() {
+    init(supabaseManager: SupabaseManager = .shared) {
+        self.supabaseManager = supabaseManager
         loadSavedData()
     }
 
@@ -44,6 +48,16 @@ final class SavedWordsManager: ObservableObject {
         } else {
             savedDictionaryEntries.append(entry)
             lastSavedWordEvent = .dictionary(entry)
+            syncSavedWordToRemote(
+                Word(
+                    word: entry.word,
+                    pronunciation: entry.phonetic,
+                    partOfSpeech: entry.partOfSpeech,
+                    meaning: entry.vietnameseMeaning,
+                    example: entry.example,
+                    source: .vocabulary
+                )
+            )
         }
 
         saveSavedData()
@@ -63,6 +77,7 @@ final class SavedWordsManager: ObservableObject {
         } else {
             savedWords.append(word)
             lastSavedWordEvent = .vocabulary(word)
+            syncSavedWordToRemote(word)
         }
 
         saveSavedData()
@@ -116,6 +131,25 @@ final class SavedWordsManager: ObservableObject {
         return event
     }
 
+    func loadFromRemote(for userID: String) async {
+        currentUserID = userID
+
+        do {
+            let remoteWords = try await supabaseManager.fetchSavedWords(userId: userID)
+            isApplyingRemoteState = true
+            savedDictionaryEntries = []
+            savedWords = remoteWords
+            saveSavedData()
+            isApplyingRemoteState = false
+        } catch {
+            print("Failed to load saved words: \(error.localizedDescription)")
+        }
+    }
+
+    func clearRemoteSession() {
+        currentUserID = nil
+    }
+
     private func loadSavedData() {
         if let dictionaryData = UserDefaults.standard.data(forKey: dictionaryStorageKey),
            let decodedEntries = try? JSONDecoder().decode([DictionaryEntry].self, from: dictionaryData) {
@@ -142,8 +176,50 @@ final class SavedWordsManager: ObservableObject {
     }
 
     private func removeSavedWord(named normalizedWord: String) {
+        let removedWord = savedWords.first { $0.word.lowercased() == normalizedWord }
+            ?? savedDictionaryEntries.first { $0.word.lowercased() == normalizedWord }.map {
+                Word(
+                    word: $0.word,
+                    pronunciation: $0.phonetic,
+                    partOfSpeech: $0.partOfSpeech,
+                    meaning: $0.vietnameseMeaning,
+                    example: $0.example,
+                    source: .vocabulary
+                )
+            }
+
         savedDictionaryEntries.removeAll { $0.word.lowercased() == normalizedWord }
         savedWords.removeAll { $0.word.lowercased() == normalizedWord }
+
+        guard let removedWord else { return }
+        deleteSavedWordFromRemote(removedWord)
+    }
+
+    private func syncSavedWordToRemote(_ word: Word) {
+        guard currentUserID != nil, !isApplyingRemoteState else { return }
+
+        Task {
+            do {
+                try await supabaseManager.saveWord(word)
+            } catch {
+                print("Failed to save word remotely: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func deleteSavedWordFromRemote(_ word: Word) {
+        guard let currentUserID, !isApplyingRemoteState else { return }
+
+        Task {
+            do {
+                try await supabaseManager.deleteSavedWord(
+                    userId: currentUserID,
+                    wordId: word.word.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                )
+            } catch {
+                print("Failed to delete saved word remotely: \(error.localizedDescription)")
+            }
+        }
     }
 }
 

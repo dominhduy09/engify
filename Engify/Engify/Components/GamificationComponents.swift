@@ -3,57 +3,199 @@ import SwiftUI
 // MARK: - Progress Bar
 
 struct ProgressBar: View {
+    private struct ProgressDisplayState: Equatable {
+        let level: Int
+        let currentXP: Int
+        let totalLevelXP: Int
+
+        init(level: Int, currentXP: Int, totalLevelXP: Int) {
+            self.level = level
+            self.currentXP = max(0, currentXP)
+            self.totalLevelXP = max(1, totalLevelXP)
+        }
+
+        init(snapshot: UserProgress.XPSnapshot) {
+            self.init(
+                level: snapshot.level,
+                currentXP: snapshot.xpIntoCurrentLevel,
+                totalLevelXP: snapshot.xpNeededForLevel
+            )
+        }
+
+        var progressFraction: CGFloat {
+            min(max(CGFloat(currentXP) / CGFloat(totalLevelXP), 0), 1)
+        }
+    }
+
     @EnvironmentObject private var gamification: GamificationManager
     @EnvironmentObject private var authManager: AuthenticationManager
     @Environment(\.themeAccentColor) private var accentColor
+    @State private var animatedState = ProgressDisplayState(snapshot: UserProgress.initial.snapshot)
+    @State private var animatedTotalXP = 0
+    @State private var xpAnimationTask: Task<Void, Never>?
 
     var body: some View {
-        HStack(spacing: Spacing.md) {
-            GeometryReader { geometry in
-                ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(EngifyColors.border.opacity(0.82))
-                        .frame(height: 12)
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: Spacing.md) {
+                GeometryReader { geometry in
+                    ZStack(alignment: .leading) {
+                        Capsule()
+                            .fill(EngifyColors.border.opacity(0.82))
+                            .frame(height: 12)
 
-                    Capsule()
-                        .fill(
-                            LinearGradient(
-                                colors: authManager.isGuestMode
-                                    ? [EngifyColors.textSecondary.opacity(0.22), EngifyColors.textSecondary.opacity(0.14)]
-                                    : [accentColor, accentColor.opacity(0.72)],
-                                startPoint: .leading,
-                                endPoint: .trailing
+                        Capsule()
+                            .fill(
+                                LinearGradient(
+                                    colors: authManager.isGuestMode
+                                        ? [EngifyColors.textSecondary.opacity(0.22), EngifyColors.textSecondary.opacity(0.14)]
+                                        : [accentColor, accentColor.opacity(0.72)],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
                             )
-                        )
-                        .frame(
-                            width: max(18, geometry.size.width * displayedProgress),
-                            height: 12
-                        )
-                        .animation(.spring(response: 0.34, dampingFraction: 0.82), value: gamification.progress.xp)
+                            .frame(
+                                width: geometry.size.width * displayedProgress,
+                                height: 12
+                            )
+                    }
+                    .clipShape(Capsule())
                 }
-            }
-            .frame(height: 12)
+                .frame(height: 12)
 
-            Text("Lv \(authManager.isGuestMode ? 10 : gamification.progress.level)")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(EngifyColors.textSecondary)
-                .lineLimit(1)
+                Text("Lv \(displayedLevel)")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(EngifyColors.textSecondary)
+                    .lineLimit(1)
+            }
+
+            Text(progressFractionText)
+                .font(.system(size: 11, weight: .medium, design: .default))
+                .foregroundStyle(Color(red: 0.29, green: 0.29, blue: 0.33))
+                .monospacedDigit()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .onAppear {
+            syncProgressDisplayToCurrentState()
+        }
+        .onChange(of: gamification.progress.xp) { newXP in
+            guard !authManager.isGuestMode else { return }
+            animateXPProgress(to: newXP)
+        }
+        .onChange(of: authManager.isGuestMode) { _ in
+            syncProgressDisplayToCurrentState()
+        }
+        .onDisappear {
+            xpAnimationTask?.cancel()
+        }
     }
 
     private var displayedProgress: CGFloat {
         if authManager.isGuestMode {
-            return 0.10
+            return 0.25
         }
 
-        let liveProgress = CGFloat(gamification.progress.levelProgress)
+        return animatedState.progressFraction
+    }
 
-        if gamification.progress.xp <= 0 {
-            return 0.08
+    private var displayedLevel: Int {
+        authManager.isGuestMode ? 10 : animatedState.level
+    }
+
+    private var progressFractionText: String {
+        let currentXP = authManager.isGuestMode ? 1 : animatedState.currentXP
+        let totalLevelXP = authManager.isGuestMode ? 4 : animatedState.totalLevelXP
+        return "\(currentXP)/\(totalLevelXP)"
+    }
+
+    private func syncProgressDisplayToCurrentState() {
+        xpAnimationTask?.cancel()
+
+        if authManager.isGuestMode {
+            animatedState = ProgressDisplayState(level: 10, currentXP: 1, totalLevelXP: 4)
+            animatedTotalXP = 0
+            return
         }
 
-        return min(max(liveProgress, 0.03), 1.0)
+        let snapshot = gamification.progress.snapshot
+        animatedState = ProgressDisplayState(snapshot: snapshot)
+        animatedTotalXP = snapshot.totalXP
+    }
+
+    private func animateXPProgress(to totalXP: Int) {
+        xpAnimationTask?.cancel()
+
+        let startXP = animatedTotalXP
+        let targetXP = max(0, totalXP)
+
+        guard targetXP != startXP else {
+            let snapshot = UserProgress.snapshot(forTotalXP: targetXP)
+            animatedState = ProgressDisplayState(snapshot: snapshot)
+            animatedTotalXP = targetXP
+            return
+        }
+
+        xpAnimationTask = Task {
+            if targetXP < startXP {
+                let snapshot = UserProgress.snapshot(forTotalXP: targetXP)
+                await MainActor.run {
+                    withAnimation(.spring(response: 0.45, dampingFraction: 0.75, blendDuration: 0)) {
+                        animatedState = ProgressDisplayState(snapshot: snapshot)
+                    }
+                    animatedTotalXP = targetXP
+                }
+                return
+            }
+
+            let states = progressStatesForXPTransition(from: startXP, to: targetXP)
+
+            for transition in states {
+                if Task.isCancelled { return }
+
+                await MainActor.run {
+                    withAnimation(.spring(response: 0.45, dampingFraction: 0.75, blendDuration: 0)) {
+                        animatedState = transition.state
+                    }
+                    animatedTotalXP = transition.resolvedXP
+                }
+
+                try? await Task.sleep(nanoseconds: transition.delayNanoseconds)
+            }
+
+            if Task.isCancelled { return }
+
+            let finalSnapshot = UserProgress.snapshot(forTotalXP: targetXP)
+            await MainActor.run {
+                animatedState = ProgressDisplayState(snapshot: finalSnapshot)
+                animatedTotalXP = targetXP
+            }
+        }
+    }
+
+    private func progressStatesForXPTransition(from startXP: Int, to targetXP: Int) -> [(state: ProgressDisplayState, resolvedXP: Int, delayNanoseconds: UInt64)] {
+        guard targetXP > startXP else { return [] }
+
+        var transitions: [(state: ProgressDisplayState, resolvedXP: Int, delayNanoseconds: UInt64)] = []
+
+        for nextXPValue in (startXP + 1)...targetXP {
+            let previousSnapshot = UserProgress.snapshot(forTotalXP: nextXPValue - 1)
+            let nextLevelThreshold = previousSnapshot.xpForCurrentLevelStart + previousSnapshot.xpNeededForLevel
+
+            if nextXPValue == nextLevelThreshold {
+                let cappedState = ProgressDisplayState(
+                    level: previousSnapshot.level,
+                    currentXP: previousSnapshot.xpNeededForLevel,
+                    totalLevelXP: previousSnapshot.xpNeededForLevel
+                )
+                transitions.append((cappedState, nextXPValue, 160_000_000))
+            }
+
+            let snapshot = UserProgress.snapshot(forTotalXP: nextXPValue)
+            let steppedState = ProgressDisplayState(snapshot: snapshot)
+            let delay: UInt64 = nextXPValue == targetXP ? 0 : 55_000_000
+            transitions.append((steppedState, nextXPValue, delay))
+        }
+
+        return transitions
     }
 }
 

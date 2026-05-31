@@ -24,6 +24,8 @@ enum AuthValidationError: LocalizedError {
     case shortDisplayName
     case longDisplayName
     case passwordsDoNotMatch
+    case invalidSignInCredentials(String)
+    case accountDeletionUnavailable(String)
     case missingSupabaseConfiguration(String)
 
     var errorDescription: String? {
@@ -42,6 +44,10 @@ enum AuthValidationError: LocalizedError {
             return "Name must be 40 characters or less."
         case .passwordsDoNotMatch:
             return "Passwords don't match. Try again!"
+        case let .invalidSignInCredentials(message):
+            return message
+        case let .accountDeletionUnavailable(message):
+            return message
         case let .missingSupabaseConfiguration(message):
             return message
         }

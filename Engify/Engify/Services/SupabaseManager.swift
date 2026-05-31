@@ -103,9 +103,11 @@ final class SupabaseManager: ObservableObject {
     func saveWord(_ word: Word) async throws {
         guard let userID = currentUser?.id.uuidString else { return }
 
+        let stableWordID = word.word.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+
         let savedWord = SavedWordData(
             userId: userID,
-            wordId: word.id.uuidString,
+            wordId: stableWordID,
             word: word.word,
             pronunciation: word.pronunciation,
             partOfSpeech: word.partOfSpeech,
@@ -130,7 +132,7 @@ final class SupabaseManager: ObservableObject {
 
         return response.value.map { data in
             Word(
-                id: UUID(uuidString: data.wordId) ?? UUID(),
+                id: UUID(),
                 word: data.word,
                 pronunciation: data.pronunciation,
                 partOfSpeech: data.partOfSpeech,

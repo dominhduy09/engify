@@ -272,10 +272,16 @@ struct TabBarButton: View {
 }
 
 #Preview {
+    let savedWordsManager = SavedWordsManager()
+    let gamificationManager = GamificationManager()
+
     MainTabView()
-        .environmentObject(SavedWordsManager())
+        .environmentObject(savedWordsManager)
         .environmentObject(ThemeManager())
-        .environmentObject(AuthenticationManager())
-        .environmentObject(GamificationManager())
+        .environmentObject(AuthenticationManager(
+            savedWordsManager: savedWordsManager,
+            gamificationManager: gamificationManager
+        ))
+        .environmentObject(gamificationManager)
         .environmentObject(LearningSettingsManager())
 }

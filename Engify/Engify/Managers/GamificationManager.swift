@@ -45,10 +45,14 @@ final class GamificationManager: ObservableObject {
     let lessonCompletionRequest = PassthroughSubject<LessonResult, Never>()
 
     private var cancellables = Set<AnyCancellable>()
+    private let supabaseManager: SupabaseManager
+    private var currentUserID: String?
+    private var isApplyingRemoteState = false
 
     // MARK: - Init
 
-    init() {
+    init(supabaseManager: SupabaseManager = .shared) {
+        self.supabaseManager = supabaseManager
         if let data = UserDefaults.standard.data(forKey: Keys.progress),
            let decoded = try? JSONDecoder().decode(UserProgress.self, from: data) {
             self.progress = decoded
@@ -131,11 +135,37 @@ final class GamificationManager: ObservableObject {
         currentLessonResult = nil
     }
 
+    func loadFromRemote(for userID: String) async {
+        currentUserID = userID
+
+        do {
+            if let remoteProgress = try await supabaseManager.fetchUserProgress(userId: userID) {
+                isApplyingRemoteState = true
+                progress = remoteProgress
+                save()
+                isApplyingRemoteState = false
+            }
+        } catch {
+            print("Failed to load remote progress: \(error.localizedDescription)")
+        }
+    }
+
+    func clearRemoteSession() {
+        currentUserID = nil
+    }
+
     // MARK: - Private Methods
 
     private func save() {
         if let encoded = try? JSONEncoder().encode(progress) {
             UserDefaults.standard.set(encoded, forKey: Keys.progress)
+        }
+
+        guard currentUserID != nil, !isApplyingRemoteState else { return }
+
+        let snapshot = progress
+        Task {
+            await supabaseManager.syncUserData(progress: snapshot)
         }
     }
 
@@ -144,6 +174,16 @@ final class GamificationManager: ObservableObject {
         lessons.append(lesson)
         if let encoded = try? JSONEncoder().encode(lessons) {
             UserDefaults.standard.set(encoded, forKey: Keys.completedLessons)
+        }
+
+        guard currentUserID != nil else { return }
+
+        Task {
+            do {
+                try await supabaseManager.saveLessonResult(lesson)
+            } catch {
+                print("Failed to save lesson result: \(error.localizedDescription)")
+            }
         }
     }
 

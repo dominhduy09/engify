@@ -1,11 +1,28 @@
 import SwiftUI
 
 struct VocabularyView: View {
+    private enum ReviewMode: String, CaseIterable, Identifiable {
+        case hidden
+        case showing
+
+        var id: String { rawValue }
+    }
+
+    private enum StorageKeys {
+        static let completedVocabularyWords = "engify.vocabulary.completed-words"
+        static let reviewVocabularyWords = "engify.vocabulary.review-words"
+    }
+
     @StateObject private var dictionaryViewModel = DictionaryViewModel()
-    @State private var lessonWord = "meticulous"
-    @State private var currentWordIndex = 0
+    @State private var lessonWord = "habit"
+    @State private var lessonWords: [String] = []
     @State private var wordsReviewedThisSession = 0
     @State private var savedToastWordTitle: String?
+    @State private var isLoadingNewWords = false
+    @State private var reviewWords: [Word] = []
+    @State private var completedWordIDs: Set<String> = []
+    @State private var completedCurrentWordIDs: Set<String> = []
+    @State private var reviewMode: ReviewMode = .hidden
     @EnvironmentObject private var savedWordsManager: SavedWordsManager
     @EnvironmentObject private var theme: ThemeManager
     @EnvironmentObject private var gamification: GamificationManager
@@ -14,7 +31,9 @@ struct VocabularyView: View {
     @State private var showSettingsSheet = false
     @State private var showSavedWordBank = false
 
-    private let lessonWords = Array(
+    private let randomWordService = DictionaryService()
+
+    private let fallbackLessonWords = Array(
         NSOrderedSet(array: EngifySampleData.vocabularyWords.map { $0.word.lowercased() })
     ).compactMap { $0 as? String }
 
@@ -27,7 +46,7 @@ struct VocabularyView: View {
             word: currentEntry.word,
             pronunciation: currentEntry.phonetic == "N/A" ? "" : currentEntry.phonetic,
             partOfSpeech: currentEntry.partOfSpeech == "N/A" ? "N/A" : currentEntry.partOfSpeech,
-            meaning: currentEntry.vietnameseMeaning,
+            meaning: preferredMeaning(for: currentEntry),
             example: currentEntry.example
         )
     }
@@ -60,14 +79,14 @@ struct VocabularyView: View {
                 .environmentObject(savedWordsManager)
         }
         .task {
-            await searchLessonWord()
+            await initializeVocabularyExperience()
         }
     }
 
     private var globalHeader: some View {
         EngifyGlobalTabHeader(
             title: "Vocab",
-            subtitle: "Curated lesson flow with deep word focus",
+            subtitle: "Fresh API words with a review deck that remembers your progress",
             showSettings: $showSettingsSheet
         )
     }
@@ -76,8 +95,14 @@ struct VocabularyView: View {
         EngifyCard(tint: theme.accentColor) {
             VStack(alignment: .leading, spacing: Spacing.cardGap) {
                 HStack(alignment: .center, spacing: Spacing.sm) {
-                    VocabularyBadge(text: "Word #\(currentWordIndex + 1)")
+                    VocabularyBadge(text: currentWordBadgeText)
                     VocabularyBadge(text: displayValue(currentEntry.partOfSpeech.capitalizedIfAvailable), tint: theme.accentColor)
+                    if displayValue(currentEntry.category) != "N/A" {
+                        VocabularyBadge(text: displayValue(currentEntry.category), tint: EngifyColors.sky)
+                    }
+                    if displayValue(currentEntry.wordLevel) != "N/A" {
+                        VocabularyBadge(text: displayValue(currentEntry.wordLevel), tint: EngifyColors.sage)
+                    }
                     bookmarkButton
                     Spacer(minLength: 0)
                 }
@@ -103,6 +128,9 @@ struct VocabularyView: View {
 
                 structuredBreakdown
                 progressIndicator
+                if isLoadingNewWords {
+                    loadingWordsState
+                }
             }
         }
     }
@@ -122,7 +150,7 @@ struct VocabularyView: View {
                 icon: "globe",
                 tint: EngifyColors.sage
             ) {
-                Text(displayValue(currentEntry.vietnameseMeaning))
+                Text(displayValue(preferredMeaning(for: currentEntry)))
             }
 
             lessonDetailBlock(
@@ -133,6 +161,26 @@ struct VocabularyView: View {
                 Text(exampleText)
                     .font(.system(size: 16, weight: .regular, design: .serif))
                     .italic()
+            }
+
+            if displayValue(currentEntry.idiom) != "N/A" {
+                lessonDetailBlock(
+                    title: "Idiom",
+                    icon: "text.quote",
+                    tint: EngifyColors.warning
+                ) {
+                    Text(displayValue(currentEntry.idiom))
+                }
+            }
+
+            if !currentEntry.phrasalVerbs.isEmpty {
+                lessonDetailBlock(
+                    title: "Phrasal Verbs",
+                    icon: "arrow.triangle.branch",
+                    tint: EngifyColors.sage
+                ) {
+                    Text(currentEntry.phrasalVerbs.joined(separator: ", "))
+                }
             }
         }
     }
@@ -207,6 +255,7 @@ struct VocabularyView: View {
             }
 
             completeLessonButton
+            reviewSection
         }
     }
 
@@ -235,7 +284,7 @@ struct VocabularyView: View {
             title: "Complete Lesson",
             systemImage: "checkmark.circle.fill",
             action: {
-                gamification.earnXP(10)
+                completeCurrentLesson()
                 EngifyFeedback.shared.play(.tabSwitch, settings: learningSettings)
             },
             size: .large,
@@ -244,9 +293,84 @@ struct VocabularyView: View {
         .environmentObject(theme)
     }
 
+    private var reviewSection: some View {
+        EngifyCard(tint: EngifyColors.sky) {
+            VStack(alignment: .leading, spacing: Spacing.cardGap) {
+                HStack(alignment: .top, spacing: Spacing.md) {
+                    VStack(alignment: .leading, spacing: Spacing.xxs) {
+                        Text("Review")
+                            .font(EngifyTypography.sectionTitle)
+                            .foregroundStyle(EngifyColors.textPrimary)
+
+                        Text(reviewSummaryText)
+                            .font(EngifyTypography.caption)
+                            .foregroundStyle(EngifyColors.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Spacer(minLength: 0)
+
+                    if !reviewWords.isEmpty {
+                        Button(reviewMode == .showing ? "Hide" : "Open") {
+                            withAnimation(EngifySpring.jellyRelease) {
+                                reviewMode = reviewMode == .showing ? .hidden : .showing
+                            }
+                        }
+                        .font(EngifyTypography.caption.weight(.semibold))
+                        .foregroundStyle(EngifyColors.sky)
+                    }
+                }
+
+                if reviewWords.isEmpty {
+                    Text("Complete a lesson to save that word here for spaced review later.")
+                        .font(EngifyTypography.body)
+                        .foregroundStyle(EngifyColors.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else if reviewMode == .showing {
+                    VStack(spacing: Spacing.sm) {
+                        ForEach(displayedReviewWords) { word in
+                            reviewCard(for: word)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     private var exampleText: String {
         let example = displayValue(currentEntry.example)
         return example == "N/A" ? "N/A" : "“\(example)”"
+    }
+
+    private var currentWordBadgeText: String {
+        let completedCount = completedWordIDs.count
+        if completedCount == 0 {
+            return "Fresh Word"
+        }
+        return "Fresh Word #\(completedCount + 1)"
+    }
+
+    private var reviewSummaryText: String {
+        let limit = min(learningSettings.reviewLimitPerDay, reviewWords.count)
+        guard !reviewWords.isEmpty else {
+            return "Your completed lesson words will build a personal review list."
+        }
+        return "\(reviewWords.count) saved word\(reviewWords.count == 1 ? "" : "s"), showing up to \(limit) today."
+    }
+
+    private var displayedReviewWords: [Word] {
+        Array(reviewWords.prefix(learningSettings.reviewLimitPerDay))
+    }
+
+    private var loadingWordsState: some View {
+        HStack(spacing: Spacing.sm) {
+            ProgressView()
+                .tint(theme.accentColor)
+
+            Text("Pulling more words from the API...")
+                .font(EngifyTypography.caption)
+                .foregroundStyle(EngifyColors.textSecondary)
+        }
     }
 
     private func lessonDetailBlock<Content: View>(
@@ -268,23 +392,16 @@ struct VocabularyView: View {
     }
 
     private func advanceWord() {
-        wordsReviewedThisSession += 1
-        guard !lessonWords.isEmpty else { return }
-        currentWordIndex = (currentWordIndex + 1) % lessonWords.count
-        lessonWord = lessonWords[currentWordIndex]
         Task {
-            await searchLessonWord()
+            await moveToNextWord(countAsReviewed: true)
         }
         gamification.earnXP(5)
         EngifyFeedback.shared.play(.tabSwitch, settings: learningSettings)
     }
 
     private func skipWord() {
-        guard !lessonWords.isEmpty else { return }
-        currentWordIndex = (currentWordIndex + 1) % lessonWords.count
-        lessonWord = lessonWords[currentWordIndex]
         Task {
-            await searchLessonWord()
+            await moveToNextWord(countAsReviewed: false)
         }
         EngifyFeedback.shared.play(.tabSwitch, settings: learningSettings)
     }
@@ -295,13 +412,186 @@ struct VocabularyView: View {
             return
         }
 
-        lessonWord = lessonWords[currentWordIndex]
+        lessonWord = lessonWords[0]
         dictionaryViewModel.searchText = lessonWord
         await dictionaryViewModel.search()
     }
 
+    private func moveToNextWord(countAsReviewed: Bool) async {
+        if countAsReviewed {
+            wordsReviewedThisSession += 1
+        }
+
+        if !lessonWords.isEmpty {
+            lessonWords.removeFirst()
+        }
+
+        if lessonWords.isEmpty {
+            await refillLessonWordsIfNeeded(force: true)
+        }
+
+        await searchLessonWord()
+        await refillLessonWordsIfNeeded()
+    }
+
+    private func completeCurrentLesson() {
+        let normalized = normalizedWordID(for: currentWord.word)
+        guard !normalized.isEmpty, normalized != "n/a" else { return }
+
+        let wasNewCompletion = completedWordIDs.insert(normalized).inserted
+        if wasNewCompletion {
+            persistCompletedWordIDs()
+        }
+
+        saveWordForReview(currentWord)
+        completedCurrentWordIDs.insert(normalized)
+        gamification.completeLesson(type: .vocabulary, xpEarned: 10)
+
+        Task {
+            await moveToNextWord(countAsReviewed: false)
+        }
+    }
+
+    private func saveWordForReview(_ word: Word) {
+        let normalized = normalizedWordID(for: word.word)
+        reviewWords.removeAll { normalizedWordID(for: $0.word) == normalized }
+        reviewWords.insert(word, at: 0)
+        persistReviewWords()
+
+        if reviewMode == .hidden {
+            reviewMode = .showing
+        }
+    }
+
+    private func refillLessonWordsIfNeeded(force: Bool = false) async {
+        guard force || lessonWords.count < 3 else { return }
+        guard !isLoadingNewWords else { return }
+
+        isLoadingNewWords = true
+        defer { isLoadingNewWords = false }
+
+        let batch: [String]
+        do {
+            batch = try await randomWordService.fetchRandomWordBatch(limit: 24)
+        } catch {
+            batch = fallbackLessonWords.shuffled()
+        }
+
+        let existing = Set(lessonWords)
+        let filtered = batch.filter { word in
+            let normalized = normalizedWordID(for: word)
+            return !normalized.isEmpty
+                && !completedWordIDs.contains(normalized)
+                && !completedCurrentWordIDs.contains(normalized)
+                && !existing.contains(word)
+        }
+
+        if filtered.isEmpty, lessonWords.isEmpty {
+            let fallback = fallbackLessonWords.filter { word in
+                let normalized = normalizedWordID(for: word)
+                return !completedWordIDs.contains(normalized) && !completedCurrentWordIDs.contains(normalized)
+            }
+
+            if fallback.isEmpty {
+                completedCurrentWordIDs.removeAll()
+                lessonWords.append(contentsOf: fallbackLessonWords.shuffled().prefix(12))
+            } else {
+                lessonWords.append(contentsOf: fallback.shuffled().prefix(12))
+            }
+        } else {
+            lessonWords.append(contentsOf: filtered)
+        }
+    }
+
+    private func loadVocabularyProgress() {
+        completedWordIDs = loadStringSet(forKey: StorageKeys.completedVocabularyWords)
+        reviewWords = loadReviewWords()
+    }
+
+    private func loadReviewWords() -> [Word] {
+        guard let data = UserDefaults.standard.data(forKey: StorageKeys.reviewVocabularyWords),
+              let words = try? JSONDecoder().decode([Word].self, from: data) else {
+            return []
+        }
+        return words
+    }
+
+    private func persistCompletedWordIDs() {
+        let words = Array(completedWordIDs).sorted()
+        UserDefaults.standard.set(words, forKey: StorageKeys.completedVocabularyWords)
+    }
+
+    private func persistReviewWords() {
+        guard let encoded = try? JSONEncoder().encode(reviewWords) else { return }
+        UserDefaults.standard.set(encoded, forKey: StorageKeys.reviewVocabularyWords)
+    }
+
+    private func loadStringSet(forKey key: String) -> Set<String> {
+        Set(UserDefaults.standard.stringArray(forKey: key) ?? [])
+    }
+
+    private func normalizedWordID(for value: String) -> String {
+        value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
+    private func reviewCard(for word: Word) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            HStack(alignment: .center, spacing: Spacing.sm) {
+                Text(word.word.capitalizedIfAvailable)
+                    .font(EngifyTypography.bodyStrong)
+                    .foregroundStyle(EngifyColors.textPrimary)
+
+                VocabularyBadge(text: displayValue(word.partOfSpeech.capitalizedIfAvailable), tint: EngifyColors.sky)
+                Spacer(minLength: 0)
+            }
+
+            if !word.pronunciation.isEmpty {
+                Text(word.pronunciation)
+                    .font(.system(.footnote, design: .monospaced))
+                    .foregroundStyle(EngifyColors.textSecondary)
+            }
+
+            Text(displayValue(word.meaning))
+                .font(EngifyTypography.body)
+                .foregroundStyle(EngifyColors.textPrimary)
+
+            if #available(iOS 16.0, *) {
+                Text(word.example)
+                    .font(.system(size: 15, weight: .regular, design: .serif))
+                    .foregroundStyle(EngifyColors.textSecondary)
+                    .italic()
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                // Fallback on earlier versions
+            }
+
+            Button {
+                startReview(word)
+            } label: {
+                Label("Review This Word", systemImage: "arrow.up.left.circle.fill")
+                    .font(EngifyTypography.caption.weight(.semibold))
+                    .foregroundStyle(EngifyColors.sky)
+            }
+            .buttonStyle(.plain)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(Spacing.md)
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(EngifyColors.sky.opacity(0.08))
+        )
+    }
+
     private func displayValue(_ value: String) -> String {
         value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "N/A" : value
+    }
+
+    private func preferredMeaning(for entry: DictionaryEntry) -> String {
+        let translated = displayValue(entry.vietnameseMeaning)
+        if translated != "N/A" {
+            return translated
+        }
+        return displayValue(entry.definition)
     }
 
     private func savedWordToast(wordTitle: String) -> some View {
@@ -370,6 +660,25 @@ struct VocabularyView: View {
                     savedToastWordTitle = nil
                 }
             }
+        }
+    }
+
+    private func initializeVocabularyExperience() async {
+        loadVocabularyProgress()
+        if !reviewWords.isEmpty {
+            reviewMode = .showing
+        }
+        await refillLessonWordsIfNeeded(force: true)
+        await searchLessonWord()
+        await refillLessonWordsIfNeeded()
+    }
+
+    private func startReview(_ word: Word) {
+        lessonWords.removeAll { normalizedWordID(for: $0) == normalizedWordID(for: word.word) }
+        lessonWords.insert(normalizedWordID(for: word.word), at: 0)
+
+        Task {
+            await searchLessonWord()
         }
     }
 }
