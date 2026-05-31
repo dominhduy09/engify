@@ -1,15 +1,17 @@
 {
   "images" : [
     {
-      "filename" : "EngifyLogo.png",
+      "filename" : "EngifyBrandLogo-1x.png",
       "idiom" : "universal",
       "scale" : "1x"
     },
     {
+      "filename" : "EngifyBrandLogo-2x.png",
       "idiom" : "universal",
       "scale" : "2x"
     },
     {
+      "filename" : "EngifyBrandLogo-3x.png",
       "idiom" : "universal",
       "scale" : "3x"
     }
