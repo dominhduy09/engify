@@ -542,7 +542,7 @@ struct LevelUpOverlay: View {
 
     @ViewBuilder
     private var levelUpContent: some View {
-        let unlockedLevel = gamification.lastUnlockedLevel ?? gamification.progress.level
+        let unlockedLevel = gamification.lastUnlockedLevel ?? gamification.progress.resolvedLevel
 
         if gamification.lastLevelUpWasMilestone {
             MilestoneLevelUpCard(

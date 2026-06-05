@@ -173,8 +173,9 @@ struct GamificationInfoSheet: View {
     }
 
     private func milestoneLevelChip(level: Int) -> some View {
-        let isReached = gamification.progress.level >= level
-        let isCurrent = gamification.progress.level == level
+        let currentLevel = gamification.progress.resolvedLevel
+        let isReached = currentLevel >= level
+        let isCurrent = currentLevel == level
         let isMaxLevel = level == 100
         let tint = isReached ? (isMaxLevel ? EngifyColors.warning : EngifyColors.accent) : EngifyColors.textSecondary
 

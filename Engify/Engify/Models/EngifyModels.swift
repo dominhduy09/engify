@@ -317,6 +317,10 @@ struct UserProgress: Codable {
         Self.snapshot(forTotalXP: xp)
     }
 
+    var resolvedLevel: Int {
+        snapshot.level
+    }
+
     static var initial: UserProgress {
         UserProgress(xp: 0, level: 1, streakDays: 0, hearts: 5, maxHearts: 5, lingots: 0, lastActiveDate: nil)
     }
@@ -356,10 +360,8 @@ struct UserProgress: Codable {
     }
 
     mutating func earnXP(_ amount: Int) {
-        xp += amount
-        while xp >= xpForNextLevel {
-            level += 1
-        }
+        xp = max(0, xp + amount)
+        normalizeLevel()
     }
 
     mutating func loseHeart() {
@@ -376,6 +378,10 @@ struct UserProgress: Codable {
 
     mutating func incrementStreak() {
         streakDays += 1
+    }
+
+    mutating func normalizeLevel() {
+        level = resolvedLevel
     }
 }
 

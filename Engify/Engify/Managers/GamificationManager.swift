@@ -55,7 +55,9 @@ final class GamificationManager: ObservableObject {
         self.supabaseManager = supabaseManager
         if let data = UserDefaults.standard.data(forKey: Keys.progress),
            let decoded = try? JSONDecoder().decode(UserProgress.self, from: data) {
-            self.progress = decoded
+            var normalized = decoded
+            normalized.normalizeLevel()
+            self.progress = normalized
         } else {
             self.progress = .initial
         }
@@ -141,7 +143,9 @@ final class GamificationManager: ObservableObject {
         do {
             if let remoteProgress = try await supabaseManager.fetchUserProgress(userId: userID) {
                 isApplyingRemoteState = true
-                progress = remoteProgress
+                var normalized = remoteProgress
+                normalized.normalizeLevel()
+                progress = normalized
                 save()
                 isApplyingRemoteState = false
             }

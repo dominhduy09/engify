@@ -1648,7 +1648,7 @@ struct EngifyProfileSheet: View {
                 )
 
                 HStack(spacing: Spacing.md) {
-                    profileMetric(title: "Level", value: "Lv \(gamification.progress.level)", icon: "flag.fill")
+                    profileMetric(title: "Level", value: "Lv \(gamification.progress.resolvedLevel)", icon: "flag.fill")
                     profileMetric(title: "Streak", value: "\(gamification.progress.streakDays) days", icon: "flame.fill")
                 }
 

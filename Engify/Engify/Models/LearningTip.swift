@@ -54,6 +54,27 @@ struct LearningTip: Identifiable, Equatable {
             icon: "text.book.closed.fill",
             category: "Vocabulary"
         ),
+        LearningTip(
+            id: "vocab-5",
+            title: "Recycle new words quickly",
+            body: "Use a new word again within 24 hours. Fast repetition helps move vocabulary from short-term memory into long-term memory.",
+            icon: "text.book.closed.fill",
+            category: "Vocabulary"
+        ),
+        LearningTip(
+            id: "vocab-6",
+            title: "Keep a personal word bank",
+            body: "Save words that matter to your daily life, work, or hobbies. Useful words are easier to remember because they belong to your world.",
+            icon: "text.book.closed.fill",
+            category: "Vocabulary"
+        ),
+        LearningTip(
+            id: "vocab-7",
+            title: "Learn opposites together",
+            body: "Study pairs like \"borrow/lend\" or \"cheap/expensive\". Opposites give your brain a stronger map of meaning.",
+            icon: "text.book.closed.fill",
+            category: "Vocabulary"
+        ),
 
         // Grammar
         LearningTip(
@@ -74,6 +95,27 @@ struct LearningTip: Identifiable, Equatable {
             id: "grammar-3",
             title: "Prepositions need practice",
             body: "\"On Monday\", \"at night\", \"in the morning\" — prepositions don't translate directly. Learn them as fixed phrases, not logic.",
+            icon: "pencil.and.ruler.fill",
+            category: "Grammar"
+        ),
+        LearningTip(
+            id: "grammar-4",
+            title: "Short sentences build accuracy",
+            body: "When you're unsure, make the sentence shorter. Clear grammar in a simple sentence is better than a complicated sentence with mistakes.",
+            icon: "pencil.and.ruler.fill",
+            category: "Grammar"
+        ),
+        LearningTip(
+            id: "grammar-5",
+            title: "Watch for word order",
+            body: "English often depends on order more than endings. Practice where adjectives, adverbs, and questions usually go.",
+            icon: "pencil.and.ruler.fill",
+            category: "Grammar"
+        ),
+        LearningTip(
+            id: "grammar-6",
+            title: "Review one pattern often",
+            body: "Pick one structure like \"used to\" or \"going to\" and notice it everywhere for a day. Repeated exposure makes grammar feel natural.",
             icon: "pencil.and.ruler.fill",
             category: "Grammar"
         ),
@@ -100,6 +142,27 @@ struct LearningTip: Identifiable, Equatable {
             icon: "waveform.and.mic",
             category: "Speaking"
         ),
+        LearningTip(
+            id: "speaking-4",
+            title: "Pause instead of translating",
+            body: "If you get stuck, pause and restart with easier words instead of translating from your first language word by word.",
+            icon: "waveform.and.mic",
+            category: "Speaking"
+        ),
+        LearningTip(
+            id: "speaking-5",
+            title: "Practice useful fillers",
+            body: "Phrases like \"let me think\" or \"what I mean is\" buy you time and make your speech sound more natural.",
+            icon: "waveform.and.mic",
+            category: "Speaking"
+        ),
+        LearningTip(
+            id: "speaking-6",
+            title: "Repeat the same topic twice",
+            body: "Speak on the same topic once, then do it again immediately. The second round is often smoother and more confident.",
+            icon: "waveform.and.mic",
+            category: "Speaking"
+        ),
 
         // Reading
         LearningTip(
@@ -120,6 +183,27 @@ struct LearningTip: Identifiable, Equatable {
             id: "reading-3",
             title: "Read the same article twice",
             body: "First read for main idea, second for details. You'll be surprised how much more you catch on the second pass.",
+            icon: "newspaper.fill",
+            category: "Reading"
+        ),
+        LearningTip(
+            id: "reading-4",
+            title: "Underline signal words",
+            body: "Words like \"however\", \"because\", and \"for example\" show how ideas connect. Spotting them makes comprehension easier.",
+            icon: "newspaper.fill",
+            category: "Reading"
+        ),
+        LearningTip(
+            id: "reading-5",
+            title: "Read headlines carefully",
+            body: "Headlines use short, compressed English. Learning their patterns helps you understand news faster.",
+            icon: "newspaper.fill",
+            category: "Reading"
+        ),
+        LearningTip(
+            id: "reading-6",
+            title: "Summarize in one sentence",
+            body: "After reading, explain the main idea in one sentence. If you can summarize it simply, you probably understood it well.",
             icon: "newspaper.fill",
             category: "Reading"
         ),
@@ -146,6 +230,27 @@ struct LearningTip: Identifiable, Equatable {
             icon: "clock.fill",
             category: "Habits"
         ),
+        LearningTip(
+            id: "habits-4",
+            title: "Start with your easiest task",
+            body: "A quick win at the start makes it easier to keep going. Momentum is one of the best study tools you have.",
+            icon: "clock.fill",
+            category: "Habits"
+        ),
+        LearningTip(
+            id: "habits-5",
+            title: "Track one small metric",
+            body: "Count something simple like minutes studied or words reviewed. Visible progress keeps motivation steady.",
+            icon: "clock.fill",
+            category: "Habits"
+        ),
+        LearningTip(
+            id: "habits-6",
+            title: "Leave a tiny next step",
+            body: "End each session by choosing the first thing you'll do tomorrow. Starting becomes much easier when the decision is already made.",
+            icon: "clock.fill",
+            category: "Habits"
+        ),
 
         // Motivation
         LearningTip(
@@ -166,6 +271,27 @@ struct LearningTip: Identifiable, Equatable {
             id: "motivation-3",
             title: "Compare yourself to your past self",
             body: "Don't measure your English against native speakers. Compare it to where you were 3 months ago. That's your real progress.",
+            icon: "star.fill",
+            category: "Motivation"
+        ),
+        LearningTip(
+            id: "motivation-4",
+            title: "Fluency is built, not found",
+            body: "Nobody suddenly becomes fluent overnight. Every short session is one more brick in the wall you're building.",
+            icon: "star.fill",
+            category: "Motivation"
+        ),
+        LearningTip(
+            id: "motivation-5",
+            title: "Confidence follows repetition",
+            body: "You don't need to feel ready before you practice. Repeating small actions is what creates confidence later.",
+            icon: "star.fill",
+            category: "Motivation"
+        ),
+        LearningTip(
+            id: "motivation-6",
+            title: "Progress can feel quiet",
+            body: "Some of your biggest improvements happen before you notice them. Stay consistent long enough for the quiet progress to show.",
             icon: "star.fill",
             category: "Motivation"
         ),

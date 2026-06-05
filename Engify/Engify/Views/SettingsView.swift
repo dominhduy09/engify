@@ -35,6 +35,11 @@ struct SettingsView: View {
     @State private var settingsSnapshot = ""
     @State private var showPresetConfirmation = false
     @State private var showDeleteAccountConfirmation = false
+    @State private var showAppIconPicker = false
+    @State private var selectedAppIconOption = AppIconOption.current(from: nil)
+    @State private var appIconStatusMessage: String?
+    @State private var appIconStatusType: StatusBanner.BannerType = .success
+    @State private var appIconStatusTask: DispatchWorkItem?
     @State private var pendingPreset: SettingsPreset?
     private let betaTag = "Beta"
 
@@ -79,6 +84,7 @@ struct SettingsView: View {
         .animation(.spring(response: 0.3, dampingFraction: 0.82), value: showSaveConfirmation)
         .onAppear {
             settingsSnapshot = currentSettingsSnapshot
+            refreshCurrentAppIconSelection()
         }
         .onChange(of: currentSettingsSnapshot) { newSnapshot in
             guard !settingsSnapshot.isEmpty, newSnapshot != settingsSnapshot else { return }
@@ -87,6 +93,7 @@ struct SettingsView: View {
         }
         .onDisappear {
             saveConfirmationTask?.cancel()
+            appIconStatusTask?.cancel()
         }
         .alert("Storage Warning", isPresented: $showStorageWarning) {
             Button("Delete", role: .destructive) {
@@ -124,6 +131,16 @@ struct SettingsView: View {
         } message: {
             Text("This permanently removes your Engify account and associated synced learning data. This action cannot be undone.")
         }
+        .sheet(isPresented: $showAppIconPicker) {
+            AppIconPickerSheet(
+                selectedOption: selectedAppIconOption,
+                onSelect: { option in
+                    Task {
+                        await applyAppIcon(option)
+                    }
+                }
+            )
+        }
     }
 
     @ViewBuilder
@@ -135,37 +152,47 @@ struct SettingsView: View {
         if let deletionMessage = authManager.accountDeletionMessage, !deletionMessage.isEmpty {
             StatusBanner(message: deletionMessage, type: .success)
         }
+
+        if let appIconStatusMessage, !appIconStatusMessage.isEmpty {
+            StatusBanner(message: appIconStatusMessage, type: appIconStatusType)
+        }
     }
 
     private var overviewCard: some View {
         EngifyCard(tint: theme.accentColor) {
-            HStack(alignment: .center, spacing: Spacing.lg) {
-                Image("EngifyBrandLogo")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 64, height: 64)
-                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                    .shadow(color: theme.accentColor.opacity(0.16), radius: 10, x: 0, y: 6)
+            VStack(alignment: .center, spacing: Spacing.md) {
+                Button {
+                    showAppIconPicker = true
+                } label: {
+                    AppIconPreview(option: selectedAppIconOption, size: 78)
+                        .shadow(color: theme.accentColor.opacity(0.16), radius: 10, x: 0, y: 6)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Change Home Screen app icon")
+                .accessibilityHint("Opens Home Screen icon choices for Engify")
 
-                VStack(alignment: .leading, spacing: Spacing.xs) {
+                VStack(alignment: .center, spacing: Spacing.xs) {
                     Text("Learning preferences")
                         .font(.headline)
                         .foregroundStyle(EngifyColors.textPrimary)
 
-                    Text("Customize how Engify teaches, corrects, and motivates you.")
+                    Text("Adjust how Engify teaches you.")
                         .font(.subheadline)
                         .foregroundStyle(EngifyColors.textSecondary)
+                        .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
+
+                    Button {
+                        showAppIconPicker = true
+                    } label: {
+                        Text("Tap to change the app icon")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(theme.accentColor)
+                    }
+                    .buttonStyle(.plain)
                 }
-
-                Spacer()
-
-                Image("EngifyBrandLogo")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 42, height: 42)
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
+            .frame(maxWidth: .infinity)
         }
     }
 
@@ -867,6 +894,78 @@ struct SettingsView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.8, execute: hideTask)
     }
 
+    private func refreshCurrentAppIconSelection() {
+        selectedAppIconOption = AppIconOption.current(
+            from: UIApplication.shared.alternateIconName
+        )
+    }
+
+    private func applyAppIcon(_ option: AppIconOption) async {
+#if targetEnvironment(simulator)
+        showAppIconStatus(
+            message: "Home Screen app icon changes are currently unreliable in iOS Simulator. Please test this feature on a physical iPhone or iPad.",
+            type: .info
+        )
+        return
+#endif
+
+        guard UIApplication.shared.supportsAlternateIcons else {
+            showAppIconStatus(
+                message: "This device does not support alternate app icons.",
+                type: .error
+            )
+            return
+        }
+
+        let currentAlternateIconName = UIApplication.shared.alternateIconName
+        guard currentAlternateIconName != option.alternateIconName else {
+            showAppIconPicker = false
+            return
+        }
+
+        do {
+            try await setAlternateAppIconName(option.alternateIconName)
+            refreshCurrentAppIconSelection()
+            showAppIconPicker = false
+            showAppIconStatus(
+                message: "App icon changed to \(option.title).",
+                type: .success
+            )
+        } catch {
+            showAppIconStatus(
+                message: "Engify could not change the app icon: \(error.localizedDescription)",
+                type: .error
+            )
+        }
+    }
+
+    private func setAlternateAppIconName(_ name: String?) async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            UIApplication.shared.setAlternateIconName(name) { error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume(returning: ())
+                }
+            }
+        }
+    }
+
+    private func showAppIconStatus(message: String, type: StatusBanner.BannerType) {
+        appIconStatusTask?.cancel()
+        appIconStatusMessage = message
+        appIconStatusType = type
+
+        let hideTask = DispatchWorkItem {
+            withAnimation {
+                appIconStatusMessage = nil
+            }
+        }
+
+        appIconStatusTask = hideTask
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.4, execute: hideTask)
+    }
+
     @State private var showResetConfirmation = false
 
     private var resetSection: some View {
@@ -1048,6 +1147,197 @@ struct SettingsView: View {
             )
         }
         .buttonStyle(.plain)
+    }
+}
+
+private enum AppIconOption: String, CaseIterable, Identifiable {
+    case `default`
+    case base
+    case dark
+    case premium
+    case tinted
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .default:
+            return "Any Appearance"
+        case .base:
+            return "Base"
+        case .dark:
+            return "Dark"
+        case .premium:
+            return "EngifyBrandLogo"
+        case .tinted:
+            return "Tinted"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .default:
+            return "Default Home Screen icon"
+        case .base:
+            return "Clean classic icon"
+        case .dark:
+            return "A deeper, darker icon style"
+        case .premium:
+            return "Premium signature icon"
+        case .tinted:
+            return "A lighter, color-forward icon style"
+        }
+    }
+
+    var badgeText: String? {
+        switch self {
+        case .premium:
+            return "Premium"
+        case .default, .base, .dark, .tinted:
+            return nil
+        }
+    }
+
+    var alternateIconName: String? {
+        switch self {
+        case .default:
+            return nil
+        case .base:
+            return "AppIconBase"
+        case .dark:
+            return "AppIconDark"
+        case .premium:
+            return "AppIconPremium"
+        case .tinted:
+            return "AppIconTinted"
+        }
+    }
+
+    var previewAssetName: String {
+        switch self {
+        case .default:
+            return "AppIconPreviewDefault"
+        case .base:
+            return "AppIconPreviewBase"
+        case .dark:
+            return "AppIconPreviewDark"
+        case .premium:
+            return "AppIconPreviewPremium"
+        case .tinted:
+            return "AppIconPreviewTinted"
+        }
+    }
+
+    static func current(from alternateIconName: String?) -> AppIconOption {
+        switch alternateIconName {
+        case "AppIconBase":
+            return .base
+        case "AppIconDark":
+            return .dark
+        case "AppIconPremium":
+            return .premium
+        case "AppIconTinted":
+            return .tinted
+        default:
+            return .default
+        }
+    }
+}
+
+private struct AppIconPreview: View {
+    let option: AppIconOption
+    let size: CGFloat
+
+    var body: some View {
+        Image(option.previewAssetName)
+            .resizable()
+            .scaledToFit()
+        .frame(width: size, height: size)
+        .clipShape(RoundedRectangle(cornerRadius: size * 0.28, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
+                .stroke(Color.white.opacity(0.28), lineWidth: 1)
+        )
+    }
+}
+
+private struct AppIconPickerSheet: View {
+    let selectedOption: AppIconOption
+    let onSelect: (AppIconOption) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationView {
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: Spacing.lg) {
+                    Text("Choose the Engify Home Screen app icon you want to use.")
+                        .font(EngifyTypography.body)
+                        .foregroundStyle(EngifyColors.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    ForEach(AppIconOption.allCases) { option in
+                        Button {
+                            dismiss()
+
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                                onSelect(option)
+                            }
+                        } label: {
+                            HStack(spacing: Spacing.md) {
+                                AppIconPreview(option: option, size: 58)
+
+                                VStack(alignment: .leading, spacing: Spacing.xxs) {
+                                    HStack(spacing: Spacing.xs) {
+                                        Text(option.title)
+                                            .font(.subheadline.weight(.semibold))
+                                            .foregroundStyle(EngifyColors.textPrimary)
+
+                                        if let badgeText = option.badgeText {
+                                            Text(badgeText)
+                                                .font(.caption2.weight(.bold))
+                                                .foregroundStyle(EngifyColors.warning)
+                                                .padding(.horizontal, 8)
+                                                .padding(.vertical, 3)
+                                                .background(EngifyColors.warning.opacity(0.14))
+                                                .clipShape(Capsule())
+                                        }
+                                    }
+
+                                    Text(option.subtitle)
+                                        .font(.caption)
+                                        .foregroundStyle(EngifyColors.textSecondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+
+                                Spacer()
+
+                                Image(systemName: selectedOption == option ? "checkmark.circle.fill" : "circle")
+                                    .font(.title3)
+                                    .foregroundStyle(selectedOption == option ? EngifyColors.accent : EngifyColors.textSecondary.opacity(0.45))
+                            }
+                            .padding(.horizontal, Spacing.md)
+                            .padding(.vertical, Spacing.md)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(
+                                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                    .fill(selectedOption == option ? EngifyColors.accentLight.opacity(0.36) : EngifyColors.surface)
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                    .stroke(selectedOption == option ? EngifyColors.accent.opacity(0.24) : EngifyColors.border.opacity(0.75), lineWidth: 1)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, Spacing.screenPadding)
+                .padding(.top, Spacing.xl)
+                .padding(.bottom, Spacing.xl)
+            }
+            .background(EngifyAppBackground())
+            .navigationTitle("Home Screen App Icon")
+            .navigationBarTitleDisplayMode(.inline)
+        }
     }
 }
 

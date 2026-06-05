@@ -60,15 +60,18 @@ final class SupabaseManager: ObservableObject {
     func saveUserProgress(_ progress: UserProgress) async throws {
         guard let userID = currentUser?.id.uuidString else { return }
 
+        var normalized = progress
+        normalized.normalizeLevel()
+
         let data = UserProgressData(
             userId: userID,
-            xp: progress.xp,
-            level: progress.level,
-            streakDays: progress.streakDays,
-            hearts: progress.hearts,
-            maxHearts: progress.maxHearts,
-            lingots: progress.lingots,
-            lastActiveDate: progress.lastActiveDate
+            xp: normalized.xp,
+            level: normalized.resolvedLevel,
+            streakDays: normalized.streakDays,
+            hearts: normalized.hearts,
+            maxHearts: normalized.maxHearts,
+            lingots: normalized.lingots,
+            lastActiveDate: normalized.lastActiveDate
         )
 
         try await configuredClient()
@@ -86,7 +89,7 @@ final class SupabaseManager: ObservableObject {
                 .single()
                 .execute()
 
-            return UserProgress(
+            var progress = UserProgress(
                 xp: response.value.xp,
                 level: response.value.level,
                 streakDays: response.value.streakDays,
@@ -95,6 +98,8 @@ final class SupabaseManager: ObservableObject {
                 lingots: response.value.lingots,
                 lastActiveDate: response.value.lastActiveDate
             )
+            progress.normalizeLevel()
+            return progress
         } catch {
             return nil
         }
