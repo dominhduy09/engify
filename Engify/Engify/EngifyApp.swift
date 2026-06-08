@@ -24,24 +24,29 @@
 
 import SwiftUI
 
+@MainActor
 @main
 struct EngifyApp: App {
     @StateObject private var savedWordsManager = SavedWordsManager()
     @StateObject private var themeManager = ThemeManager()
     @StateObject private var gamificationManager = GamificationManager()
     @StateObject private var learningSettingsManager = LearningSettingsManager()
+    @StateObject private var surveyManager: OnboardingSurveyManager
     @StateObject private var authManager: AuthenticationManager
 
     init() {
         let savedWordsManager = SavedWordsManager()
         let gamificationManager = GamificationManager()
+        let surveyManager = OnboardingSurveyManager()
 
         _savedWordsManager = StateObject(wrappedValue: savedWordsManager)
         _gamificationManager = StateObject(wrappedValue: gamificationManager)
+        _surveyManager = StateObject(wrappedValue: surveyManager)
         _authManager = StateObject(
             wrappedValue: AuthenticationManager(
                 savedWordsManager: savedWordsManager,
-                gamificationManager: gamificationManager
+                gamificationManager: gamificationManager,
+                surveyManager: surveyManager
             )
         )
     }
@@ -54,6 +59,7 @@ struct EngifyApp: App {
                 .environmentObject(themeManager)
                 .environmentObject(gamificationManager)
                 .environmentObject(learningSettingsManager)
+                .environmentObject(surveyManager)
                 .environment(\.themeAccentColor, themeManager.accentColor)
                 .tint(themeManager.accentColor)
                 .preferredColorScheme(themeManager.preferredColorScheme)

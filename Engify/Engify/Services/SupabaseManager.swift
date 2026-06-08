@@ -57,6 +57,24 @@ final class SupabaseManager: ObservableObject {
             .execute()
     }
 
+    func saveOnboardingSurvey(_ response: OnboardingSurveyResponse) async throws {
+        guard let userID = currentUser?.id.uuidString else { return }
+
+        let payload = OnboardingSurveyData(
+            userId: userID,
+            learningGoal: response.learningGoal,
+            englishLevel: response.englishLevel,
+            dailyStudyMinutes: response.dailyStudyMinutes,
+            biggestChallenge: response.biggestChallenge,
+            submittedAt: response.submittedAt
+        )
+
+        try await configuredClient()
+            .from("onboarding_surveys")
+            .upsert(payload)
+            .execute()
+    }
+
     func saveUserProgress(_ progress: UserProgress) async throws {
         guard let userID = currentUser?.id.uuidString else { return }
 
@@ -238,6 +256,24 @@ struct UserProgressData: Codable {
         case streakDays = "streak_days"
         case maxHearts = "max_hearts"
         case lastActiveDate = "last_active_date"
+    }
+}
+
+struct OnboardingSurveyData: Codable {
+    let userId: String
+    let learningGoal: String
+    let englishLevel: String
+    let dailyStudyMinutes: Int
+    let biggestChallenge: String
+    let submittedAt: Date
+
+    enum CodingKeys: String, CodingKey {
+        case userId = "user_id"
+        case learningGoal = "learning_goal"
+        case englishLevel = "english_level"
+        case dailyStudyMinutes = "daily_study_minutes"
+        case biggestChallenge = "biggest_challenge"
+        case submittedAt = "submitted_at"
     }
 }
 

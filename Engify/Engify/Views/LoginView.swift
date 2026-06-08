@@ -176,7 +176,7 @@ struct LoginView: View {
         .padding(Spacing.xxs)
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(EngifyColors.canvasRaised.opacity(0.85))
+                .fill(EngifyColors.surfaceMuted.opacity(0.92))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
@@ -643,11 +643,14 @@ struct ShakeEffect: GeometryEffect {
 #Preview {
     let savedWordsManager = SavedWordsManager()
     let gamificationManager = GamificationManager()
+    let surveyManager = OnboardingSurveyManager()
 
     LoginView()
         .environmentObject(AuthenticationManager(
             savedWordsManager: savedWordsManager,
-            gamificationManager: gamificationManager
+            gamificationManager: gamificationManager,
+            surveyManager: surveyManager
         ))
         .environmentObject(ThemeManager())
+        .environmentObject(surveyManager)
 }

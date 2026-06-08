@@ -48,6 +48,28 @@ struct User: Identifiable, Codable, Hashable {
     }
 }
 
+struct OnboardingSurveyResponse: Codable, Equatable {
+    let learningGoal: String
+    let englishLevel: String
+    let dailyStudyMinutes: Int
+    let biggestChallenge: String
+    let submittedAt: Date
+
+    init(
+        learningGoal: String,
+        englishLevel: String,
+        dailyStudyMinutes: Int,
+        biggestChallenge: String,
+        submittedAt: Date = Date()
+    ) {
+        self.learningGoal = learningGoal
+        self.englishLevel = englishLevel
+        self.dailyStudyMinutes = dailyStudyMinutes
+        self.biggestChallenge = biggestChallenge
+        self.submittedAt = submittedAt
+    }
+}
+
 /// A vocabulary flashcard word with pronunciation, meaning, and example.
 /// Displayed one at a time in VocabularyView with navigation between cards.
 struct Word: Identifiable, Codable, Hashable {
@@ -303,6 +325,11 @@ struct UserProgress: Codable {
     var lingots: Int
     var lastActiveDate: Date?
 
+    var points: Int {
+        get { lingots }
+        set { lingots = max(0, newValue) }
+    }
+
     var xpForNextLevel: Int { Self.xpRequired(for: level) }
 
     var levelProgress: Double {
@@ -373,7 +400,15 @@ struct UserProgress: Codable {
     }
 
     mutating func addLingots(_ count: Int) {
-        lingots += count
+        addPoints(count)
+    }
+
+    mutating func addPoints(_ count: Int) {
+        points += max(0, count)
+    }
+
+    mutating func spendPoints(_ count: Int) {
+        points = max(0, points - max(0, count))
     }
 
     mutating func incrementStreak() {
@@ -408,4 +443,37 @@ enum LessonType: String, Codable {
     case practice
     case dictionary
     case news
+}
+
+enum PointsRewardEvent: Hashable {
+    case savedWord(wordID: String)
+    case perfectPractice(sessionID: UUID)
+    case completedNewsQuiz(articleID: UUID)
+
+    var rewardKey: String {
+        switch self {
+        case let .savedWord(wordID):
+            return "saved-word:\(wordID)"
+        case let .perfectPractice(sessionID):
+            return "perfect-practice:\(sessionID.uuidString)"
+        case let .completedNewsQuiz(articleID):
+            return "completed-news-quiz:\(articleID.uuidString)"
+        }
+    }
+
+    var pointsAwarded: Int {
+        switch self {
+        case .savedWord:
+            return 5
+        case .completedNewsQuiz:
+            return 15
+        case .perfectPractice:
+            return 20
+        }
+    }
+}
+
+enum PointsRewardResult: Equatable {
+    case awarded(amount: Int, totalPoints: Int)
+    case alreadyAwarded(totalPoints: Int)
 }

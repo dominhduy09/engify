@@ -118,10 +118,26 @@ struct DictionaryService {
         }
     }
 
-    func fetchRandomWordBatch(limit: Int = 24) async throws -> [String] {
-        if let remoteWords = try await fetchSupabaseWordBatch(limit: limit),
+    func fetchRandomWordBatch(limit: Int = 24, allowedWordLevels: Set<String>? = nil) async throws -> [String] {
+        if let remoteWords = try await fetchSupabaseWordBatch(limit: max(limit * 3, limit)),
            !remoteWords.isEmpty {
-            return remoteWords
+            let resolvedRemoteWords = remoteWords.filter { word in
+                guard let allowedWordLevels else { return true }
+                return allowedWordLevels.contains(word.wordLevel.uppercased())
+            }
+
+            let candidateWords = resolvedRemoteWords.isEmpty ? remoteWords : resolvedRemoteWords
+            let normalizedWords = candidateWords.compactMap { result -> String? in
+                let normalized = result.word.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                guard Self.isSupportedLessonWord(normalized) else { return nil }
+                return normalized
+            }
+
+            return Array(
+                NSOrderedSet(array: normalizedWords.shuffled())
+                    .compactMap { $0 as? String }
+                    .prefix(limit)
+            )
         }
 
         var components = URLComponents(string: Self.datamuseWordsBaseURL)
@@ -211,7 +227,7 @@ struct DictionaryService {
         }
     }
 
-    private func fetchSupabaseWordBatch(limit: Int) async throws -> [String]? {
+    private func fetchSupabaseWordBatch(limit: Int) async throws -> [SupabaseVocabularyWord]? {
         guard let client = supabaseProvider.client else { return nil }
 
         let response: PostgrestResponse<[SupabaseVocabularyWord]> = try await client
@@ -222,7 +238,7 @@ struct DictionaryService {
             .limit(max(limit, 24))
             .execute()
 
-        return Array(response.value.map { $0.word.lowercased() }.shuffled().prefix(limit))
+        return response.value
     }
 }
 

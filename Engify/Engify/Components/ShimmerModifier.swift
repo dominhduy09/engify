@@ -20,15 +20,16 @@ import SwiftUI
 struct ShimmerModifier: ViewModifier {
     @State private var isShimmering = false
     let isActive: Bool
+    @Environment(\.colorScheme) private var colorScheme
 
     func body(content: Content) -> some View {
         content
             .overlay(
                 LinearGradient(
                     gradient: Gradient(colors: [
-                        Color.white.opacity(0),
-                        Color.white.opacity(0.3),
-                        Color.white.opacity(0)
+                        shimmerColor.opacity(0),
+                        shimmerColor.opacity(colorScheme == .dark ? 0.24 : 0.30),
+                        shimmerColor.opacity(0)
                     ]),
                     startPoint: .leading,
                     endPoint: .trailing
@@ -40,6 +41,10 @@ struct ShimmerModifier: ViewModifier {
                 )
             )
             .onAppear { isShimmering = true }
+    }
+
+    private var shimmerColor: Color {
+        colorScheme == .dark ? EngifyColors.surfaceMuted : EngifyColors.surface
     }
 }
 
@@ -68,7 +73,7 @@ struct SkeletonSuggestionRow: View {
             
             Image(systemName: "arrow.up.left")
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(EngifyColors.textSecondary)
                 .opacity(0)
         }
         .padding(12)
@@ -84,5 +89,6 @@ struct SkeletonSuggestionRow_Previews: PreviewProvider {
             SkeletonSuggestionRow()
         }
         .padding()
+        .background(EngifyAppBackground())
     }
 }

@@ -256,6 +256,8 @@ struct PointsCounter: View {
     @Environment(\.themeAccentColor) private var accentColor
 
     var body: some View {
+        let displayedCount = isLocked ? 5 : max(0, count)
+
         HStack(spacing: Spacing.xs) {
             Circle()
                 .fill(isLocked ? EngifyColors.textSecondary.opacity(0.55) : accentColor)
@@ -266,7 +268,7 @@ struct PointsCounter: View {
                         .foregroundStyle(EngifyColors.textInverse)
                 )
 
-            Text("\(isLocked ? 5 : max(5, count))")
+            Text("\(displayedCount)")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(EngifyColors.textPrimary)
         }
@@ -328,6 +330,7 @@ struct CompletionButton: View {
 }
 
 struct ScoreToast: View {
+    @Environment(\.themeAccentColor) private var accentColor
     let amount: Int
     @State private var isVisible = false
 
@@ -335,7 +338,7 @@ struct ScoreToast: View {
         HStack(spacing: Spacing.xs) {
             Image(systemName: "star.fill")
                 .font(.caption.weight(.bold))
-                .foregroundStyle(EngifyColors.accent)
+                .foregroundStyle(accentColor)
 
             Text("+\(amount)")
                 .font(.caption.weight(.bold))
@@ -371,6 +374,7 @@ typealias XPGainToast = ScoreToast
 // MARK: - Completion View
 
 struct CompletionView: View {
+    @Environment(\.themeAccentColor) private var accentColor
     let title: String
     let message: String
     let pointsEarned: Int
@@ -402,7 +406,7 @@ struct CompletionView: View {
                     HStack(spacing: Spacing.xs) {
                         Image(systemName: "star.fill")
                             .font(.caption.weight(.bold))
-                            .foregroundStyle(EngifyColors.accent)
+                            .foregroundStyle(accentColor)
                         Text("+\(pointsEarned) XP")
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(EngifyColors.textPrimary)
@@ -431,6 +435,7 @@ struct CompletionView: View {
 // MARK: - Celebration View
 
 struct CelebrationView: View {
+    @Environment(\.themeAccentColor) private var accentColor
     let isActive: Bool
     var particleCount: Int = 20
     @State private var dots: [DotParticle] = []
@@ -465,13 +470,13 @@ struct CelebrationView: View {
     }
 
     private func spawnDots(width: CGFloat, height: CGFloat) {
-        let colors: [Color] = [EngifyColors.accent, EngifyColors.sky, EngifyColors.sage, EngifyColors.coral]
+        let colors: [Color] = [accentColor, EngifyColors.sky, EngifyColors.sage, EngifyColors.coral]
         animationProgress = 0
         dots = (0..<particleCount).map { _ in
             DotParticle(
                 x: CGFloat.random(in: 0...max(width, 100)),
                 y: CGFloat.random(in: -50...max(height * 0.25, 100)),
-                color: colors.randomElement() ?? EngifyColors.accent,
+                color: colors.randomElement() ?? accentColor,
                 opacity: 1
             )
         }
@@ -570,6 +575,7 @@ struct LevelUpOverlay: View {
 }
 
 private struct MilestoneLevelUpCard: View {
+    @Environment(\.themeAccentColor) private var accentColor
     let level: Int
     let message: String
     let onContinue: () -> Void
@@ -596,7 +602,7 @@ private struct MilestoneLevelUpCard: View {
 
                     Text(isMaxLevel ? "You reached Level MAX" : "You reached Level \(level)")
                         .font(EngifyTypography.cardTitle)
-                        .foregroundStyle(EngifyColors.accent)
+                        .foregroundStyle(accentColor)
 
                     Text(message)
                         .font(EngifyTypography.body)
@@ -641,7 +647,7 @@ private struct MilestoneLevelUpCard: View {
                 Capsule()
                     .fill(
                         LinearGradient(
-                            colors: [EngifyColors.warning, EngifyColors.accent],
+                            colors: [EngifyColors.warning, accentColor],
                             startPoint: .leading,
                             endPoint: .trailing
                         )

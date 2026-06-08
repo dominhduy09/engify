@@ -228,7 +228,7 @@ struct SettingsView: View {
                                     if settings.activePreset == preset {
                                         Text("Active")
                                             .font(.caption2.weight(.bold))
-                                            .foregroundStyle(.white)
+                                            .foregroundStyle(EngifyColors.textInverse)
                                             .padding(.horizontal, 8)
                                             .padding(.vertical, 2)
                                             .background(preset.tintColor)
@@ -326,8 +326,7 @@ struct SettingsView: View {
 
         return EngifySettingsSection(
             title: "AI tutor customization",
-            subtitle: "Tune how much help and how strongly the tutor corrects you.",
-            tag: betaTag
+            subtitle: "Tune how much help and how strongly the tutor corrects you."
         ) {
             VStack(alignment: .leading, spacing: Spacing.lg) {
                 VStack(alignment: .leading, spacing: Spacing.sm) {
@@ -367,14 +366,12 @@ struct SettingsView: View {
                 EngifySettingToggleRow(
                     title: "Show example sentences",
                     subtitle: "Display more examples when you tap a difficult word.",
-                    tag: betaTag,
                     isOn: $settings.generateExtraExamples
                 )
 
                 EngifySettingToggleRow(
                     title: "Show grammar corrections",
                     subtitle: "Inline hints for grammar and usage mistakes.",
-                    tag: betaTag,
                     isOn: $settings.showGrammarCorrections
                 )
             }
@@ -396,8 +393,7 @@ struct SettingsView: View {
 
         return EngifySettingsSection(
             title: "Speaking practice",
-            subtitle: "Customize pronunciation feedback and audio settings.",
-            tag: betaTag
+            subtitle: "Customize pronunciation feedback and audio settings."
         ) {
             VStack(alignment: .leading, spacing: Spacing.lg) {
                 HStack(spacing: Spacing.md) {
@@ -474,21 +470,18 @@ struct SettingsView: View {
                 EngifySettingToggleRow(
                     title: "Pronunciation feedback",
                     subtitle: "Show transcript and scoring after you speak.",
-                    tag: betaTag,
                     isOn: $settings.speechFeedbackEnabled
                 )
 
                 EngifySettingToggleRow(
                     title: "Show transcript",
                     subtitle: "Display the typed version of your speech for comparison.",
-                    tag: betaTag,
                     isOn: $settings.transcriptVisible
                 )
 
                 EngifySettingToggleRow(
                     title: "Repeat pronunciation",
                     subtitle: "Automatically replay word audio after each phrase.",
-                    tag: betaTag,
                     isOn: $settings.repeatPronunciation
                 )
             }
@@ -517,7 +510,6 @@ struct SettingsView: View {
                 EngifySettingSliderRow(
                     title: "Review limit per day",
                     subtitle: "Caps how many review items before Engify suggests a break.",
-                    tag: betaTag,
                     value: Binding(
                         get: { Double(settings.reviewLimitPerDay) },
                         set: { settings.reviewLimitPerDay = Int($0) }
@@ -531,7 +523,6 @@ struct SettingsView: View {
                 EngifySettingToggleRow(
                     title: "Difficulty lock",
                     subtitle: "Prevent jumping to harder levels without mastering current level.",
-                    tag: betaTag,
                     isOn: $settings.difficultyLock
                 )
             }
@@ -612,7 +603,6 @@ struct SettingsView: View {
                         EngifySettingToggleRow(
                             title: "Streak protection reminder",
                             subtitle: "Warn you when a streak is at risk of breaking.",
-                            tag: betaTag,
                             isOn: $settings.streakReminderEnabled
                         )
 
@@ -621,7 +611,6 @@ struct SettingsView: View {
                         EngifySettingToggleRow(
                             title: "Weekly progress summary",
                             subtitle: "Get a recap of wins, weak areas, and next steps.",
-                            tag: betaTag,
                             isOn: $settings.weeklySummaryEnabled
                         )
                     }
@@ -684,7 +673,6 @@ struct SettingsView: View {
                 EngifySettingToggleRow(
                     title: "Show definitions by default",
                     subtitle: "Automatically expand word details in the Dictionary tab.",
-                    tag: betaTag,
                     isOn: $settings.showDefinitionsByDefault
                 )
 
@@ -756,12 +744,12 @@ struct SettingsView: View {
                                     .frame(height: 40)
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                            .stroke(theme.accent == accent ? Color.white : Color.clear, lineWidth: 2)
+                                            .stroke(theme.accent == accent ? EngifyColors.surface : Color.clear, lineWidth: 2)
                                     )
                                     .overlay(alignment: .bottomTrailing) {
                                         if theme.accent == accent {
                                             Image(systemName: "checkmark.circle.fill")
-                                                .foregroundStyle(.white)
+                                                .foregroundStyle(EngifyColors.textInverse)
                                                 .padding(6)
                                         }
                                     }
@@ -1027,8 +1015,7 @@ struct SettingsView: View {
     private var privacySection: some View {
         EngifySettingsSection(
             title: "Privacy",
-            subtitle: "Voice and learning history stay on-device unless you add cloud sync.",
-            tag: betaTag
+            subtitle: "Voice and learning history stay on-device unless you add cloud sync."
         ) {
             VStack(alignment: .leading, spacing: Spacing.md) {
                 HStack(spacing: Spacing.md) {
@@ -1256,7 +1243,7 @@ private struct AppIconPreview: View {
         .clipShape(RoundedRectangle(cornerRadius: size * 0.28, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
-                .stroke(Color.white.opacity(0.28), lineWidth: 1)
+                .stroke(EngifyColors.border.opacity(0.82), lineWidth: 1)
         )
     }
 }
@@ -1320,7 +1307,7 @@ private struct AppIconPickerSheet: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .background(
                                 RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                    .fill(selectedOption == option ? EngifyColors.accentLight.opacity(0.36) : EngifyColors.surface)
+                                    .fill(selectedOption == option ? EngifyColors.accentLight.opacity(0.72) : EngifyColors.surface)
                             )
                             .overlay(
                                 RoundedRectangle(cornerRadius: 20, style: .continuous)
@@ -1461,14 +1448,17 @@ struct SettingsView_Previews: PreviewProvider {
     static var previews: some View {
         let savedWordsManager = SavedWordsManager()
         let gamificationManager = GamificationManager()
+        let surveyManager = OnboardingSurveyManager()
 
         SettingsView()
             .environmentObject(AuthenticationManager(
                 savedWordsManager: savedWordsManager,
-                gamificationManager: gamificationManager
+                gamificationManager: gamificationManager,
+                surveyManager: surveyManager
             ))
             .environmentObject(ThemeManager())
             .environmentObject(gamificationManager)
             .environmentObject(LearningSettingsManager())
+            .environmentObject(surveyManager)
     }
 }

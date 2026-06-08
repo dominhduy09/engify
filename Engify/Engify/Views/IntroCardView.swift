@@ -39,13 +39,13 @@ struct IntroCardView: View {
 
                     Image(systemName: card.systemImage)
                         .font(.system(size: 32, weight: .bold))
-                        .foregroundColor(.white)
+                        .foregroundColor(EngifyColors.textInverse)
                 }
 
                 VStack(alignment: .leading, spacing: Spacing.xs) {
                     Text(card.title)
                         .font(.system(size: 22, weight: .bold, design: .rounded))
-                        .foregroundColor(.primary)
+                        .foregroundColor(EngifyColors.textPrimary)
 
                     Text(card.subtitle)
                         .font(.subheadline.weight(.semibold))
@@ -57,7 +57,7 @@ struct IntroCardView: View {
 
             Text(card.description)
                 .font(.body)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(EngifyColors.textSecondary)
                 .padding(.top, Spacing.md)
 
             Spacer()
@@ -65,8 +65,12 @@ struct IntroCardView: View {
         .padding(Spacing.lg)
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color(.systemBackground))
-                .shadow(color: Color.black.opacity(0.03), radius: 8, x: 0, y: 6)
+                .fill(EngifyColors.surface)
+                .shadow(color: EngifyColors.primary.opacity(0.16), radius: 8, x: 0, y: 6)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(EngifyColors.border.opacity(0.7), lineWidth: 1)
         )
     }
 }

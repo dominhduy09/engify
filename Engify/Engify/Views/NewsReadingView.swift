@@ -4,6 +4,7 @@ struct NewsReadingView: View {
     @StateObject private var viewModel = NewsViewModel()
     @EnvironmentObject private var authManager: AuthenticationManager
     @EnvironmentObject private var savedWordsManager: SavedWordsManager
+    @EnvironmentObject private var gamification: GamificationManager
     @EnvironmentObject private var theme: ThemeManager
     @EnvironmentObject private var learningSettings: LearningSettingsManager
     @State private var showSettingsSheet = false
@@ -61,6 +62,7 @@ struct NewsReadingView: View {
         .sheet(item: $selectedArticle) { article in
             NavigationView {
                 NewsArticleDetailView(article: article, onSaveWord: handleSaveWord)
+                    .environmentObject(gamification)
             }
             .navigationViewStyle(StackNavigationViewStyle())
         }
@@ -105,7 +107,7 @@ struct NewsReadingView: View {
     }
 
     private var filterBar: some View {
-        CardView(tint: EngifyColors.sky) {
+        CardView(tint: theme.accentColor) {
             VStack(alignment: .leading, spacing: Spacing.lg) {
                 SearchBar(
                     text: Binding(
@@ -203,7 +205,7 @@ struct NewsReadingView: View {
     }
 
     private func articleCard(_ article: Article) -> some View {
-        EngifyCard(tint: EngifyColors.accent) {
+        EngifyCard(tint: theme.accentColor) {
             VStack(alignment: .leading, spacing: Spacing.lg) {
                 VStack(alignment: .leading, spacing: Spacing.sm) {
                     Text(article.title)
@@ -213,7 +215,7 @@ struct NewsReadingView: View {
 
                     HStack(spacing: Spacing.sm) {
                         ArticlePreviewTag(text: article.category)
-                        ArticlePreviewTag(text: article.readingTime, tint: EngifyColors.sky)
+                        ArticlePreviewTag(text: article.readingTime, tint: theme.accentColor)
                         Spacer(minLength: 0)
                     }
                 }
@@ -243,7 +245,7 @@ struct NewsReadingView: View {
                         Image(systemName: "arrow.right")
                             .font(.caption.weight(.semibold))
                     }
-                    .foregroundStyle(EngifyColors.accent)
+                    .foregroundStyle(theme.accentColor)
                 }
             }
         }
@@ -257,6 +259,8 @@ struct NewsReadingView: View {
         }
         EngifyFeedback.shared.play(.successPop, settings: learningSettings)
         if !wasSaved, savedWordsManager.isSaved(word: word) {
+            let rewardWordID = word.word.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            _ = gamification.awardPoints(for: .savedWord(wordID: rewardWordID))
             showSavedWordToast(for: word.word)
         }
     }
@@ -333,7 +337,10 @@ struct NewsArticleDetailView: View {
     @State private var selectedAnswers: [UUID: Int] = [:]
     @State private var showResult = false
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @EnvironmentObject private var gamification: GamificationManager
     @EnvironmentObject private var savedWordsManager: SavedWordsManager
+    @EnvironmentObject private var learningSettings: LearningSettingsManager
+    @EnvironmentObject private var theme: ThemeManager
 
     private var score: Int {
         article.questions.reduce(into: 0) { result, question in
@@ -357,7 +364,7 @@ struct NewsArticleDetailView: View {
     }
 
     private var articleHeader: some View {
-        EngifyCard(tint: EngifyColors.accent) {
+        EngifyCard(tint: theme.accentColor) {
             VStack(alignment: .leading, spacing: Spacing.md) {
                 Text(article.title)
                     .font(EngifyTypography.cardTitle)
@@ -372,7 +379,7 @@ struct NewsArticleDetailView: View {
 
                         HStack(spacing: Spacing.sm) {
                             ArticlePreviewTag(text: article.category)
-                            ArticlePreviewTag(text: article.readingTime, tint: EngifyColors.sky)
+                            ArticlePreviewTag(text: article.readingTime, tint: theme.accentColor)
                         }
                     }
                 } else {
@@ -385,7 +392,7 @@ struct NewsArticleDetailView: View {
 
                         HStack(spacing: Spacing.sm) {
                             ArticlePreviewTag(text: article.category)
-                            ArticlePreviewTag(text: article.readingTime, tint: EngifyColors.sky)
+                            ArticlePreviewTag(text: article.readingTime, tint: theme.accentColor)
                         }
                     }
                 }
@@ -394,13 +401,13 @@ struct NewsArticleDetailView: View {
     }
 
     private var summarySection: some View {
-        articleDetailCard(title: "Summary", icon: "text.alignleft", tint: EngifyColors.accent) {
+        articleDetailCard(title: "Summary", icon: "text.alignleft", tint: theme.accentColor) {
             Text(article.summary)
         }
     }
 
     private var contentSection: some View {
-        articleDetailCard(title: "Article Content", icon: "doc.text", tint: EngifyColors.sky) {
+        articleDetailCard(title: "Article Content", icon: "doc.text", tint: theme.accentColor) {
             HighlightedArticleText(
                 text: article.content,
                 vocabulary: article.keyVocabulary
@@ -409,11 +416,11 @@ struct NewsArticleDetailView: View {
     }
 
     private var vocabularySection: some View {
-        EngifyCard(tint: EngifyColors.accent) {
+        EngifyCard(tint: theme.accentColor) {
             VStack(alignment: .leading, spacing: Spacing.md) {
                 Label("Key Vocabulary", systemImage: "book.fill")
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(EngifyColors.accent)
+                    .foregroundStyle(theme.accentColor)
 
                 Text("Focus on these words to better understand the article.")
                     .font(EngifyTypography.caption)
@@ -439,11 +446,11 @@ struct NewsArticleDetailView: View {
     }
 
     private var linkSection: some View {
-        EngifyCard(tint: EngifyColors.sky) {
+        EngifyCard(tint: theme.accentColor) {
             VStack(alignment: .leading, spacing: Spacing.md) {
                 Label("Full Article", systemImage: "arrow.up.right.square.fill")
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(EngifyColors.sky)
+                    .foregroundStyle(theme.accentColor)
 
                 if let url = article.url {
                     Link(destination: url) {
@@ -453,7 +460,7 @@ struct NewsArticleDetailView: View {
                             Spacer(minLength: 0)
                             Image(systemName: "arrow.up.right")
                         }
-                        .foregroundStyle(EngifyColors.sky)
+                        .foregroundStyle(theme.accentColor)
                     }
                 } else {
                     Text("No article URL is available for this item.")
@@ -476,14 +483,20 @@ struct NewsArticleDetailView: View {
                     question: question,
                     selectedAnswer: selectedAnswers[question.id],
                     revealAnswer: showResult && selectedAnswers[question.id] != nil,
+                    showsExplanation: learningSettings.showGrammarCorrections,
                     onSelect: { selectedAnswers[question.id] = $0 }
                 )
             }
 
-            EngifyCard(tint: EngifyColors.accent) {
+            EngifyCard(tint: theme.accentColor) {
                 VStack(alignment: .leading, spacing: Spacing.lg) {
                     PrimaryButton(title: "Check Answers", systemImage: "checkmark.circle.fill", action: {
+                        guard !showResult else { return }
                         showResult = true
+                        if score == article.questions.count, !article.questions.isEmpty {
+                            _ = gamification.awardPoints(for: .completedNewsQuiz(articleID: article.id))
+                            gamification.completeLesson(type: .news, xpEarned: 15)
+                        }
                     })
 
                     if showResult {
@@ -497,13 +510,15 @@ struct NewsArticleDetailView: View {
 
                                 Text(score == article.questions.count ? "Excellent!" : "Keep practicing!")
                                     .font(EngifyTypography.caption.weight(.semibold))
-                                    .foregroundStyle(score == article.questions.count ? EngifyColors.sage : EngifyColors.warning)
+                                    .foregroundStyle(theme.accentColor)
                             }
 
                             Text(
                                 score == article.questions.count
                                     ? "Great job! You understood the article perfectly."
-                                    : "Review the explanations above and try again."
+                                    : learningSettings.showGrammarCorrections
+                                        ? "Review the explanations above and try again."
+                                        : "Try another round to improve your score."
                             )
                             .font(EngifyTypography.body)
                             .foregroundStyle(EngifyColors.textSecondary)
@@ -562,10 +577,10 @@ struct NewsArticleDetailView: View {
                                 Text(savedWordsManager.isSaved(word: item.asWord) ? "Saved" : "Save")
                             }
                             .font(EngifyTypography.caption.weight(.semibold))
-                            .foregroundStyle(savedWordsManager.isSaved(word: item.asWord) ? EngifyColors.accent : EngifyColors.textSecondary)
+                            .foregroundStyle(savedWordsManager.isSaved(word: item.asWord) ? theme.accentColor : EngifyColors.textSecondary)
                             .padding(.horizontal, Spacing.md)
                             .frame(minHeight: 38)
-                            .background((savedWordsManager.isSaved(word: item.asWord) ? EngifyColors.accent : EngifyColors.border).opacity(0.12))
+                            .background((savedWordsManager.isSaved(word: item.asWord) ? theme.accentColor : EngifyColors.border).opacity(0.12))
                             .clipShape(Capsule())
                         }
                         .buttonStyle(.plain)
@@ -600,6 +615,7 @@ struct NewsArticleDetailView: View {
 private struct HighlightedArticleText: View {
     let text: String
     let vocabulary: [NewsVocabularyItem]
+    @EnvironmentObject private var theme: ThemeManager
 
     var body: some View {
         composedText
@@ -610,7 +626,7 @@ private struct HighlightedArticleText: View {
         highlightedSegments.reduce(Text("")) { partial, segment in
             let piece = Text(segment.text)
             if segment.isHighlighted {
-                return partial + piece.foregroundColor(EngifyColors.accent).underline()
+                return partial + piece.foregroundColor(theme.accentColor).underline()
             } else {
                 return partial + piece
             }

@@ -30,7 +30,7 @@ struct ThemePickerView: View {
                                     Group {
                                         if theme.accent == accent {
                                             Image(systemName: "checkmark")
-                                                .foregroundColor(.white)
+                                                .foregroundColor(EngifyColors.textInverse)
                                         }
                                     }
                                 )

@@ -66,6 +66,26 @@ CREATE POLICY "Users can manage own progress"
     USING (auth.uid() = user_id);
 
 -- =====================================================
+-- ONBOARDING SURVEYS TABLE
+-- Stores first-launch survey responses for personalization
+-- =====================================================
+CREATE TABLE IF NOT EXISTS public.onboarding_surveys (
+    user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    learning_goal TEXT NOT NULL,
+    english_level TEXT NOT NULL,
+    daily_study_minutes INTEGER NOT NULL,
+    biggest_challenge TEXT NOT NULL,
+    submitted_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.onboarding_surveys ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can manage own onboarding survey"
+    ON public.onboarding_surveys FOR ALL
+    USING (auth.uid() = user_id);
+
+-- =====================================================
 -- SAVED WORDS TABLE
 -- Stores vocabulary words saved by users
 -- =====================================================

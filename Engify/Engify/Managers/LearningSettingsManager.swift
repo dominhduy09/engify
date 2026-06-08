@@ -110,11 +110,19 @@ final class LearningSettingsManager: ObservableObject {
     }
     
     @Published var streakReminderEnabled: Bool {
-        didSet { save("streak_reminder", streakReminderEnabled) }
+        didSet {
+            guard streakReminderEnabled != oldValue else { return }
+            save("streak_reminder", streakReminderEnabled)
+            Task { await syncNotificationSettings() }
+        }
     }
     
     @Published var weeklySummaryEnabled: Bool {
-        didSet { save("weekly_summary", weeklySummaryEnabled) }
+        didSet {
+            guard weeklySummaryEnabled != oldValue else { return }
+            save("weekly_summary", weeklySummaryEnabled)
+            Task { await syncNotificationSettings() }
+        }
     }
     
     // MARK: - Microphone & Voice
@@ -359,12 +367,16 @@ final class LearningSettingsManager: ObservableObject {
     }
 
     private func syncNotificationSettings() async {
+        let identifiers = ["daily_reminder", "streak_reminder", "weekly_summary"]
+
         guard notificationsEnabled, notificationPermissionStatus == .granted else {
-            UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["daily_reminder"])
+            UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: identifiers)
             return
         }
 
         await scheduleDailyReminder()
+        await scheduleStreakReminder()
+        await scheduleWeeklySummary()
     }
     
     private func scheduleDailyReminder() async {
@@ -395,6 +407,73 @@ final class LearningSettingsManager: ObservableObject {
             logAnalytics("daily_reminder_scheduled", ["time": dailyReminderTime.description])
         } catch {
             logError("Failed to schedule daily reminder", error)
+        }
+    }
+
+    private func scheduleStreakReminder() async {
+        let identifier = "streak_reminder"
+
+        guard notificationsEnabled, streakReminderEnabled else {
+            UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [identifier])
+            return
+        }
+
+        guard notificationPermissionStatus == .granted else {
+            logWarning("Cannot schedule streak reminder: notifications not permitted")
+            return
+        }
+
+        let content = UNMutableNotificationContent()
+        content.title = "Protect your streak"
+        content.body = "Spend a minute in Engify today to keep your streak going."
+        content.sound = .default
+
+        var dateComponents = DateComponents()
+        dateComponents.hour = 20
+        dateComponents.minute = 0
+
+        let trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: true)
+        let request = UNNotificationRequest(identifier: identifier, content: content, trigger: trigger)
+
+        do {
+            try await UNUserNotificationCenter.current().add(request)
+            logAnalytics("streak_reminder_scheduled", [:])
+        } catch {
+            logError("Failed to schedule streak reminder", error)
+        }
+    }
+
+    private func scheduleWeeklySummary() async {
+        let identifier = "weekly_summary"
+
+        guard notificationsEnabled, weeklySummaryEnabled else {
+            UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [identifier])
+            return
+        }
+
+        guard notificationPermissionStatus == .granted else {
+            logWarning("Cannot schedule weekly summary: notifications not permitted")
+            return
+        }
+
+        let content = UNMutableNotificationContent()
+        content.title = "Your weekly progress is ready"
+        content.body = "See your streak, points, and what to focus on next."
+        content.sound = .default
+
+        var dateComponents = DateComponents()
+        dateComponents.weekday = 1
+        dateComponents.hour = 18
+        dateComponents.minute = 0
+
+        let trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: true)
+        let request = UNNotificationRequest(identifier: identifier, content: content, trigger: trigger)
+
+        do {
+            try await UNUserNotificationCenter.current().add(request)
+            logAnalytics("weekly_summary_scheduled", [:])
+        } catch {
+            logError("Failed to schedule weekly summary", error)
         }
     }
     

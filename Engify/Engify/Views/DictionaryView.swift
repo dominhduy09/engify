@@ -4,6 +4,7 @@ import SwiftUI
 struct DictionaryView: View {
     @StateObject private var viewModel = DictionaryViewModel(persistLookupState: true)
     @EnvironmentObject private var savedWordsManager: SavedWordsManager
+    @EnvironmentObject private var gamification: GamificationManager
     @EnvironmentObject private var theme: ThemeManager
     @EnvironmentObject private var learningSettings: LearningSettingsManager
     @FocusState private var isSearchFieldFocused: Bool
@@ -11,6 +12,7 @@ struct DictionaryView: View {
     @State private var showSettingsSheet = false
     @State private var savedToastWordTitle: String?
     @State private var showSavedWordBank = false
+    @State private var detailsExpanded = false
 
     var body: some View {
         EngifyScreenScroll {
@@ -31,6 +33,15 @@ struct DictionaryView: View {
         .sheet(isPresented: $showSavedWordBank) {
             SavedWordBankSheet()
                 .environmentObject(savedWordsManager)
+        }
+        .onAppear {
+            detailsExpanded = learningSettings.showDefinitionsByDefault
+        }
+        .onChange(of: learningSettings.showDefinitionsByDefault) { newValue in
+            detailsExpanded = newValue
+        }
+        .onChange(of: viewModel.currentEntry?.id) { _ in
+            detailsExpanded = learningSettings.showDefinitionsByDefault
         }
     }
 
@@ -69,60 +80,114 @@ struct DictionaryView: View {
     @ViewBuilder
     private func resultContent(for displayedEntry: DictionaryEntry) -> some View {
         wordSummary(for: displayedEntry)
-        Divider()
-        formsSection(for: displayedEntry)
-        detailBlock(
-            title: "Definition",
-            icon: "list.bullet.rectangle.portrait",
-            tint: theme.accentColor
+        EngifyCollapsibleCard(
+            title: "Word details",
+            subtitle: detailsExpanded ? "Full definition, meaning, and examples" : "Tap to expand this word",
+            systemImage: "text.book.closed.fill",
+            tint: theme.accentColor,
+            isExpanded: $detailsExpanded
         ) {
             VStack(alignment: .leading, spacing: Spacing.sm) {
-                dictionaryLine(label: "Part of speech", value: displayValue(displayedEntry.partOfSpeech.capitalizedIfAvailable))
-                dictionaryLine(label: "Specific sense", value: displayValue(displayedEntry.definition))
-            }
-        }
-        detailBlock(
-            title: "Vietnamese Meaning",
-            icon: "globe",
-            tint: EngifyColors.sage
-        ) {
-            VStack(alignment: .leading, spacing: Spacing.sm) {
-                dictionaryLine(label: "Translation", value: displayValue(displayedEntry.vietnameseMeaning))
-            }
-        }
-        detailBlock(
-            title: "Example",
-            icon: "quote.opening",
-            tint: EngifyColors.sky
-        ) {
-            if #available(iOS 16.0, *) {
-                Text(exampleText(for: displayedEntry))
-                    .font(.system(size: 16, weight: .regular, design: .serif))
+                Text(displayValue(displayedEntry.definition))
+                    .font(EngifyTypography.bodyStrong)
                     .foregroundStyle(EngifyColors.textPrimary)
-                    .italic()
-                    .fixedSize(horizontal: false, vertical: true)
-            } else {
-                // Fallback on earlier versions
+
+                Text(displayValue(displayedEntry.vietnameseMeaning))
+                    .font(EngifyTypography.caption)
+                    .foregroundStyle(EngifyColors.textSecondary)
             }
-        }
-        if displayValue(displayedEntry.idiom) != "N/A" {
-            detailBlock(
-                title: "Idiom",
-                icon: "text.quote",
-                tint: EngifyColors.warning
-            ) {
-                dictionaryLine(label: "Common phrase", value: displayValue(displayedEntry.idiom))
-            }
-        }
-        if !displayedEntry.phrasalVerbs.isEmpty {
-            detailBlock(
-                title: "Phrasal Verbs",
-                icon: "arrow.triangle.branch",
-                tint: EngifyColors.sage
-            ) {
-                VStack(alignment: .leading, spacing: Spacing.sm) {
-                    ForEach(displayedEntry.phrasalVerbs, id: \.self) { phrasalVerb in
-                        dictionaryLine(label: "Related form", value: displayValue(phrasalVerb))
+        } detail: {
+            VStack(alignment: .leading, spacing: Spacing.lg) {
+                formsSection(for: displayedEntry)
+
+                if learningSettings.explanationDepth != "simple" {
+                    detailBlock(
+                        title: "Tutor Note",
+                        icon: "sparkles",
+                        tint: theme.accentColor
+                    ) {
+                        Text(tutorNote(for: displayedEntry))
+                            .font(EngifyTypography.body)
+                            .foregroundStyle(EngifyColors.textPrimary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
+                detailBlock(
+                    title: "Definition",
+                    icon: "list.bullet.rectangle.portrait",
+                    tint: theme.accentColor
+                ) {
+                    VStack(alignment: .leading, spacing: Spacing.sm) {
+                        dictionaryLine(label: "Part of speech", value: displayValue(displayedEntry.partOfSpeech.capitalizedIfAvailable))
+                        dictionaryLine(label: "Specific sense", value: displayValue(displayedEntry.definition))
+                    }
+                }
+
+                detailBlock(
+                    title: "Vietnamese Meaning",
+                    icon: "globe",
+                    tint: theme.accentColor
+                ) {
+                    VStack(alignment: .leading, spacing: Spacing.sm) {
+                        dictionaryLine(label: "Translation", value: displayValue(displayedEntry.vietnameseMeaning))
+                    }
+                }
+
+                detailBlock(
+                    title: "Example",
+                    icon: "quote.opening",
+                    tint: theme.accentColor
+                ) {
+                    if #available(iOS 16.0, *) {
+                        Text(exampleText(for: displayedEntry))
+                            .font(.system(size: 16, weight: .regular, design: .serif))
+                            .foregroundStyle(EngifyColors.textPrimary)
+                            .italic()
+                            .fixedSize(horizontal: false, vertical: true)
+                    } else {
+                        // Fallback on earlier versions
+                    }
+                }
+
+                if displayValue(displayedEntry.idiom) != "N/A" {
+                    detailBlock(
+                        title: "Idiom",
+                        icon: "text.quote",
+                        tint: theme.accentColor
+                    ) {
+                        dictionaryLine(label: "Common phrase", value: displayValue(displayedEntry.idiom))
+                    }
+                }
+
+                if !displayedEntry.phrasalVerbs.isEmpty {
+                    detailBlock(
+                        title: "Phrasal Verbs",
+                        icon: "arrow.triangle.branch",
+                        tint: theme.accentColor
+                    ) {
+                        VStack(alignment: .leading, spacing: Spacing.sm) {
+                            ForEach(displayedEntry.phrasalVerbs, id: \.self) { phrasalVerb in
+                                dictionaryLine(label: "Related form", value: displayValue(phrasalVerb))
+                            }
+                        }
+                    }
+                }
+
+                if learningSettings.generateExtraExamples {
+                    detailBlock(
+                        title: "Extra Examples",
+                        icon: "text.quote",
+                        tint: theme.accentColor
+                    ) {
+                        VStack(alignment: .leading, spacing: Spacing.sm) {
+                            ForEach(extraExamples(for: displayedEntry), id: \.self) { example in
+                                Text(example)
+                                    .font(EngifyTypography.body)
+                                    .foregroundStyle(EngifyColors.textPrimary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
                     }
                 }
             }
@@ -257,10 +322,10 @@ struct DictionaryView: View {
                     tint: theme.accentColor
                 )
                 if displayValue(displayedEntry.category) != "N/A" {
-                    VocabularyBadge(text: displayValue(displayedEntry.category), tint: EngifyColors.sky)
+                    VocabularyBadge(text: displayValue(displayedEntry.category), tint: theme.accentColor)
                 }
                 if displayValue(displayedEntry.wordLevel) != "N/A" {
-                    VocabularyBadge(text: displayValue(displayedEntry.wordLevel), tint: EngifyColors.sage)
+                    VocabularyBadge(text: displayValue(displayedEntry.wordLevel), tint: theme.accentColor)
                 }
                 bookmarkButton(for: displayedEntry)
                 Spacer(minLength: 0)
@@ -300,36 +365,35 @@ struct DictionaryView: View {
             }
             EngifyFeedback.shared.play(.successPop, settings: learningSettings)
             if !wasSaved, savedWordsManager.isSaved(displayedEntry) {
+                let rewardWordID = displayedEntry.word.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                _ = gamification.awardPoints(for: .savedWord(wordID: rewardWordID))
                 showSavedWordToast(for: displayedEntry.word)
             }
         } label: {
-            HStack(spacing: Spacing.sm) {
-                Image(systemName: isSaved ? "bookmark.fill" : "bookmark")
-                Text("Bookmark")
-            }
-            .font(EngifyTypography.caption.weight(.semibold))
+            Image(systemName: isSaved ? "bookmark.fill" : "bookmark")
+                .font(.subheadline.weight(.semibold))
             .foregroundStyle(isSaved ? EngifyColors.textInverse : theme.accentColor)
-            .padding(.horizontal, Spacing.md)
-            .frame(minHeight: 42)
+            .frame(width: 42, height: 42)
             .background(
-                Capsule()
+                Circle()
                     .fill(isSaved ? theme.accentColor : theme.accentColor.opacity(0.12))
             )
         }
         .buttonStyle(.plain)
         .engifyJellyPress()
+        .accessibilityLabel(isSaved ? "Remove bookmark" : "Save word")
     }
 
     private func formsSection(for displayedEntry: DictionaryEntry) -> some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
             Label("Forms", systemImage: "tag.fill")
                 .font(.subheadline.weight(.semibold))
-                .foregroundStyle(EngifyColors.warning)
+                .foregroundStyle(theme.accentColor)
 
             HStack(spacing: Spacing.sm) {
-                VocabularyBadge(text: "N: \(displayValue(displayedEntry.nounForm))", tint: EngifyColors.warning)
-                VocabularyBadge(text: "Adj: \(displayValue(displayedEntry.adjectiveForm))", tint: EngifyColors.warning)
-                VocabularyBadge(text: "V: \(displayValue(displayedEntry.verbForm))", tint: EngifyColors.warning)
+                VocabularyBadge(text: "N: \(displayValue(displayedEntry.nounForm))", tint: theme.accentColor)
+                VocabularyBadge(text: "Adj: \(displayValue(displayedEntry.adjectiveForm))", tint: theme.accentColor)
+                VocabularyBadge(text: "V: \(displayValue(displayedEntry.verbForm))", tint: theme.accentColor)
             }
         }
     }
@@ -375,6 +439,59 @@ struct DictionaryView: View {
 
         audioPlayer = AVPlayer(url: url)
         audioPlayer?.play()
+
+        guard learningSettings.repeatPronunciation else { return }
+
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_600_000_000)
+            guard audioPlayer != nil else { return }
+            await audioPlayer?.seek(to: .zero)
+            audioPlayer?.play()
+        }
+    }
+
+    private func tutorNote(for entry: DictionaryEntry) -> String {
+        let word = displayValue(entry.word)
+        let partOfSpeech = displayValue(entry.partOfSpeech).lowercased()
+        let meaning = displayValue(entry.vietnameseMeaning) == "N/A" ? displayValue(entry.definition) : displayValue(entry.vietnameseMeaning)
+
+        switch learningSettings.explanationDepth {
+        case "detailed":
+            if partOfSpeech.contains("verb") {
+                return "\"\(word)\" works best in a full action. Try adding who does it, what happens, and when."
+            } else if partOfSpeech.contains("adjective") {
+                return "Use \"\(word)\" to describe a person, thing, or situation. Pair it with a noun you already know."
+            }
+            return "\"\(word)\" means \(meaning). Read the example once, then make a similar sentence about your own life."
+        case "balanced":
+            return "\"\(word)\" means \(meaning). Try using it in one simple sentence."
+        default:
+            return meaning
+        }
+    }
+
+    private func extraExamples(for entry: DictionaryEntry) -> [String] {
+        let word = displayValue(entry.word)
+        let partOfSpeech = displayValue(entry.partOfSpeech).lowercased()
+
+        if partOfSpeech.contains("verb") {
+            return [
+                "I can \(word) this word more confidently now.",
+                "We will \(word) the phrase again in practice."
+            ]
+        }
+
+        if partOfSpeech.contains("adjective") {
+            return [
+                "The explanation was more \(word) after one review.",
+                "A \(word) example is easier to remember."
+            ]
+        }
+
+        return [
+            "This lesson introduced the word \(word).",
+            "I want to review \(word) again tomorrow."
+        ]
     }
 
     private func displayValue(_ value: String) -> String {

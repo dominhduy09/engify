@@ -39,7 +39,7 @@ struct IntroPagerView: View {
             HStack(spacing: Spacing.sm) {
                 ForEach(cards.indices, id: \ .self) { i in
                     Circle()
-                        .fill(i == index ? Color.primary : Color.secondary.opacity(0.4))
+                        .fill(i == index ? EngifyColors.textPrimary : EngifyColors.textSecondary.opacity(0.4))
                         .frame(width: i == index ? 10 : 6, height: i == index ? 10 : 6)
                 }
             }
@@ -51,9 +51,17 @@ struct IntroPagerView: View {
                         Image(systemName: "chevron.left")
                         Text("Previous")
                     }
+                    .foregroundStyle(EngifyColors.textPrimary)
                     .padding(.vertical, Spacing.sm)
                     .padding(.horizontal, Spacing.lg)
-                    .background(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Color.secondary.opacity(0.2)))
+                    .background(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(EngifyColors.surface)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(EngifyColors.border.opacity(0.85), lineWidth: 1)
+                    )
                 }
                 .disabled(index == 0)
 
@@ -67,7 +75,7 @@ struct IntroPagerView: View {
                     .padding(.vertical, Spacing.sm)
                     .padding(.horizontal, Spacing.xl)
                     .background(LinearGradient(colors: [Color(red: 0.25, green: 0.55, blue: 0.95), Color(red: 0.28, green: 0.74, blue: 0.85)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(EngifyColors.textInverse)
                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
             }

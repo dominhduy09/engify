@@ -26,12 +26,20 @@ import SwiftUI
 struct ContentView: View {
     @AppStorage("hasSeenOnboarding") private var hasSeenOnboarding = false
     @AppStorage("engify_has_seen_intro") private var legacyHasSeenIntro = false
+    @EnvironmentObject private var surveyManager: OnboardingSurveyManager
 
     var body: some View {
         ZStack {
-            if hasSeenOnboarding {
+            if hasSeenOnboarding && surveyManager.hasCompletedSurvey {
                 AuthGateView()
                     .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity), removal: .opacity))
+            } else if hasSeenOnboarding {
+                OnboardingSurveyView {
+                    withAnimation(.spring(response: 0.42, dampingFraction: 0.86)) {
+                        // Survey manager persists completion locally.
+                    }
+                }
+                .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity), removal: .opacity))
             } else {
                 IntroView {
                     withAnimation(.spring(response: 0.42, dampingFraction: 0.86)) {
@@ -42,6 +50,7 @@ struct ContentView: View {
             }
         }
         .animation(.spring(response: 0.42, dampingFraction: 0.86), value: hasSeenOnboarding)
+        .animation(.spring(response: 0.42, dampingFraction: 0.86), value: surveyManager.hasCompletedSurvey)
         .onAppear {
             guard !hasSeenOnboarding, legacyHasSeenIntro else { return }
             hasSeenOnboarding = true
@@ -50,17 +59,25 @@ struct ContentView: View {
     }
 }
 
-#Preview {
+@MainActor
+private func makeContentViewPreview() -> some View {
     let savedWordsManager = SavedWordsManager()
     let gamificationManager = GamificationManager()
+    let surveyManager = OnboardingSurveyManager()
 
-    ContentView()
+    return ContentView()
         .environmentObject(AuthenticationManager(
             savedWordsManager: savedWordsManager,
-            gamificationManager: gamificationManager
+            gamificationManager: gamificationManager,
+            surveyManager: surveyManager
         ))
         .environmentObject(savedWordsManager)
         .environmentObject(ThemeManager())
         .environmentObject(gamificationManager)
         .environmentObject(LearningSettingsManager())
+        .environmentObject(surveyManager)
+}
+
+#Preview {
+    makeContentViewPreview()
 }

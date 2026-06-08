@@ -5,6 +5,7 @@ struct HomeView: View {
     @EnvironmentObject private var authManager: AuthenticationManager
     @EnvironmentObject private var theme: ThemeManager
     @EnvironmentObject private var gamification: GamificationManager
+    @EnvironmentObject private var savedWordsManager: SavedWordsManager
     @EnvironmentObject private var learningSettings: LearningSettingsManager
     @State private var showSettingsSheet = false
     @State private var dailyQuote: QuoteService.DailyQuote?
@@ -16,6 +17,7 @@ struct HomeView: View {
             dailyQuoteCard
             dailyTipCard
             continueLearningSection
+            lookupSection
             newsAndReadingSection
             practiceSection
             recommendedSection
@@ -55,6 +57,23 @@ struct HomeView: View {
                 systemImage: "newspaper.fill"
             ) {
                 navigate(to: .news)
+            }
+        }
+    }
+
+    private var lookupSection: some View {
+        VStack(alignment: .leading, spacing: Spacing.md) {
+            EngifySectionHeader(
+                title: "Lookup",
+                subtitle: "Jump straight into the dictionary to check meanings, pronunciation, and examples."
+            )
+
+            EngifyFeatureButton(
+                title: "Open Dictionary Lookup",
+                subtitle: "Search any word quickly and review the definition in one place.",
+                systemImage: "magnifyingglass"
+            ) {
+                navigate(to: .dictionary)
             }
         }
     }
@@ -109,33 +128,25 @@ struct HomeView: View {
     }
 
     private var recentActivitySection: some View {
-        VStack(alignment: .leading, spacing: Spacing.md) {
-            EngifySectionHeader(
-                title: "Recent Activity",
-                subtitle: "A quick look at the habits you’ve built."
-            )
+        Group {
+            if !recentActivities.isEmpty {
+                VStack(spacing: Spacing.md) {
+                    EngifySectionHeader(
+                        title: "Recent Activity",
+                        subtitle: "A quick look at the habits you’ve built."
+                    )
 
-            VStack(spacing: Spacing.md) {
-                activityRow(
-                    icon: "book.fill",
-                    iconColor: EngifyColors.sage,
-                    title: "Reviewed Essential Verbs",
-                    subtitle: "2 days ago"
-                )
-
-                activityRow(
-                    icon: "newspaper.fill",
-                    iconColor: EngifyColors.sky,
-                    title: "Read Climate News",
-                    subtitle: "4 days ago"
-                )
-
-                activityRow(
-                    icon: "pencil.circle.fill",
-                    iconColor: theme.accentColor,
-                    title: "Practiced Grammar Quiz",
-                    subtitle: "1 week ago"
-                )
+                    VStack(spacing: Spacing.md) {
+                        ForEach(recentActivities) { activity in
+                            activityRow(
+                                icon: activity.icon,
+                                iconColor: activity.iconColor,
+                                title: activity.title,
+                                subtitle: activity.subtitle
+                            )
+                        }
+                    }
+                }
             }
         }
     }
@@ -167,17 +178,54 @@ struct HomeView: View {
         EngifyFeedback.shared.play(.tabSwitch, settings: learningSettings)
     }
 
+    private var recentActivities: [RecentActivityItem] {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .full
+
+        var items = gamification.recentLessonResults.prefix(6).map { result in
+            RecentActivityItem(
+                icon: result.lessonType.activityIcon,
+                iconColor: result.lessonType.activityColor(themeAccent: theme.accentColor),
+                title: result.lessonType.activityTitle,
+                subtitle: formatter.localizedString(for: result.completedAt, relativeTo: Date()),
+                timestamp: result.completedAt
+            )
+        }
+
+        if let savedWordEvent = savedWordsManager.lastSavedWordEvent {
+            items.append(
+                RecentActivityItem(
+                    icon: savedWordEvent.activityIcon,
+                    iconColor: savedWordEvent.activityColor(themeAccent: theme.accentColor),
+                    title: savedWordEvent.activityTitle,
+                    subtitle: "Just now",
+                    timestamp: Date()
+                )
+            )
+        }
+
+        var seenTitles = Set<String>()
+
+        return items
+            .sorted { $0.timestamp > $1.timestamp }
+            .filter { activity in
+                seenTitles.insert(activity.title).inserted
+            }
+            .prefix(3)
+            .map { $0 }
+    }
+
     // MARK: - Daily Quote Card
 
     private var dailyQuoteCard: some View {
         Group {
             if let quote = dailyQuote {
-                EngifyCard(tint: EngifyColors.sky) {
+                EngifyCard(tint: theme.accentColor) {
                     VStack(alignment: .leading, spacing: Spacing.md) {
                         HStack(spacing: Spacing.sm) {
                             Image(systemName: "quote.opening")
                                 .font(.title3.weight(.bold))
-                                .foregroundStyle(EngifyColors.sky)
+                                .foregroundStyle(theme.accentColor)
 
                             Text("Quote of the Day")
                                 .font(EngifyTypography.headline)
@@ -187,10 +235,10 @@ struct HomeView: View {
 
                             Text("Daily")
                                 .font(.caption2.weight(.bold))
-                                .foregroundStyle(.white)
+                                .foregroundStyle(EngifyColors.textInverse)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 3)
-                                .background(EngifyColors.sky)
+                                .background(theme.accentColor)
                                 .clipShape(Capsule())
                         }
 
@@ -211,12 +259,12 @@ struct HomeView: View {
                 }
             } else {
                 // Shimmer placeholder while loading
-                EngifyCard(tint: EngifyColors.sky) {
+                EngifyCard(tint: theme.accentColor) {
                     VStack(alignment: .leading, spacing: Spacing.md) {
                         HStack(spacing: Spacing.sm) {
                             Image(systemName: "quote.opening")
                                 .font(.title3.weight(.bold))
-                                .foregroundStyle(EngifyColors.sky)
+                                .foregroundStyle(theme.accentColor)
 
                             Text("Quote of the Day")
                                 .font(EngifyTypography.headline)
@@ -241,12 +289,12 @@ struct HomeView: View {
     // MARK: - Daily Tip Card
 
     private var dailyTipCard: some View {
-        EngifyCard(tint: EngifyColors.sage) {
+        EngifyCard(tint: theme.accentColor) {
             VStack(alignment: .leading, spacing: Spacing.md) {
                 HStack(spacing: Spacing.sm) {
                     Image(systemName: dailyTip.icon)
                         .font(.title3.weight(.bold))
-                        .foregroundStyle(EngifyColors.sage)
+                        .foregroundStyle(theme.accentColor)
 
                     Text("Tip of the Day")
                         .font(EngifyTypography.headline)
@@ -256,10 +304,10 @@ struct HomeView: View {
 
                     Text(dailyTip.category)
                         .font(.caption2.weight(.bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(EngifyColors.textInverse)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 3)
-                        .background(EngifyColors.sage)
+                        .background(theme.accentColor)
                         .clipShape(Capsule())
                 }
 
@@ -317,6 +365,71 @@ struct HomeView: View {
                 tab: .vocabulary,
                 requiresAccount: true
             )
+        }
+    }
+}
+
+private struct RecentActivityItem: Identifiable {
+    let id = UUID()
+    let icon: String
+    let iconColor: Color
+    let title: String
+    let subtitle: String
+    let timestamp: Date
+}
+
+private extension LessonType {
+    var activityIcon: String {
+        switch self {
+        case .vocabulary:
+            return "book.fill"
+        case .practice:
+            return "pencil.circle.fill"
+        case .dictionary:
+            return "magnifyingglass"
+        case .news:
+            return "newspaper.fill"
+        }
+    }
+
+    func activityColor(themeAccent: Color) -> Color {
+        themeAccent
+    }
+
+    var activityTitle: String {
+        switch self {
+        case .vocabulary:
+            return "Completed a vocabulary lesson"
+        case .practice:
+            return "Finished a practice session"
+        case .dictionary:
+            return "Used dictionary lookup"
+        case .news:
+            return "Completed a news reading lesson"
+        }
+    }
+}
+
+private extension SavedWordEvent {
+    var activityIcon: String {
+        switch self {
+        case .dictionary:
+            return "bookmark.fill"
+        case .vocabulary:
+            return "bookmark.circle.fill"
+        }
+    }
+
+    func activityColor(themeAccent: Color) -> Color {
+        themeAccent
+    }
+
+    var activityTitle: String {
+        switch self {
+        case let .dictionary(entry):
+            return "Saved \(entry.word) from Dictionary"
+        case let .vocabulary(word):
+            return "Saved \(word.word) to Vocabulary"
         }
     }
 }

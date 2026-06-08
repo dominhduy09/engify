@@ -46,11 +46,11 @@ final class ThemeManager: ObservableObject {
 
         var color: Color {
             switch self {
-            case .Meadow: return EngifyColors.accent
-            case .Forest: return EngifyColors.sage
-            case .Mint: return EngifyColors.sky
-            case .Olive: return Color(red: 0.41, green: 0.56, blue: 0.27)
-            case .Teal: return Color(red: 0.24, green: 0.58, blue: 0.49)
+            case .Meadow: return Color(red: 0.28, green: 0.62, blue: 0.41)
+            case .Forest: return Color(red: 0.17, green: 0.43, blue: 0.29)
+            case .Mint: return Color(red: 0.22, green: 0.68, blue: 0.73)
+            case .Olive: return Color(red: 0.70, green: 0.56, blue: 0.18)
+            case .Teal: return Color(red: 0.18, green: 0.48, blue: 0.78)
             }
         }
     }

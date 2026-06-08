@@ -3,7 +3,10 @@ import SwiftUI
 struct MainTabView: View {
     @State private var selectedTab: EngifyTab = .home
     @State private var tabTransitionDirection: TabTransitionDirection = .forward
+    @State private var appearanceRefreshID = UUID()
+    @State private var isRefreshingAppearance = false
     @EnvironmentObject private var authManager: AuthenticationManager
+    @EnvironmentObject private var theme: ThemeManager
 
     private static let orderedTabs: [EngifyTab] = [
         .home,
@@ -24,7 +27,12 @@ struct MainTabView: View {
 
     var body: some View {
         ZStack {
-            currentTabContent
+            if isRefreshingAppearance {
+                appearanceRefreshingView
+            } else {
+                currentTabContent
+                    .id(appearanceRefreshID)
+            }
         }
         .contentShape(Rectangle())
         .gesture(tabSwipeGesture)
@@ -58,6 +66,9 @@ struct MainTabView: View {
             } else {
                 // Fallback on earlier versions
             }
+        }
+        .onChange(of: theme.appearance) { _ in
+            refreshVisibleContentForAppearanceChange()
         }
     }
 
@@ -144,6 +155,41 @@ struct MainTabView: View {
         }
 
         tabTransitionDirection = newIndex >= currentIndex ? .forward : .backward
+    }
+
+    private var appearanceRefreshingView: some View {
+        EngifyScreenScroll(alignment: .center, spacing: Spacing.lg, bottomInset: 40) {
+            VStack(spacing: Spacing.md) {
+                ProgressView()
+                    .scaleEffect(1.1)
+
+                Text("Updating appearance...")
+                    .font(EngifyTypography.headline)
+                    .foregroundStyle(EngifyColors.textPrimary)
+
+                Text("Applying your light or dark theme.")
+                    .font(EngifyTypography.body)
+                    .foregroundStyle(EngifyColors.textSecondary)
+                    .multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: 320)
+            .frame(maxWidth: .infinity)
+            .padding(.top, 120)
+        }
+    }
+
+    private func refreshVisibleContentForAppearanceChange() {
+        isRefreshingAppearance = true
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+            appearanceRefreshID = UUID()
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
+            withAnimation(.easeInOut(duration: 0.18)) {
+                isRefreshingAppearance = false
+            }
+        }
     }
 }
 
@@ -238,12 +284,13 @@ struct TabBarButton: View {
     let usesCompactLabel: Bool
     let namespace: Namespace.ID
     let action: () -> Void
+    @Environment(\.themeAccentColor) private var accentColor
 
     var body: some View {
         Button(action: action) {
             ZStack {
                 if isSelected {
-                    EngifyGelCapsuleSurface(tint: EngifyColors.accent)
+                    EngifyGelCapsuleSurface(tint: accentColor)
                         .matchedGeometryEffect(id: "active-tab-pill", in: namespace)
                 }
 
@@ -274,14 +321,17 @@ struct TabBarButton: View {
 #Preview {
     let savedWordsManager = SavedWordsManager()
     let gamificationManager = GamificationManager()
+    let surveyManager = OnboardingSurveyManager()
 
     MainTabView()
         .environmentObject(savedWordsManager)
         .environmentObject(ThemeManager())
         .environmentObject(AuthenticationManager(
             savedWordsManager: savedWordsManager,
-            gamificationManager: gamificationManager
+            gamificationManager: gamificationManager,
+            surveyManager: surveyManager
         ))
         .environmentObject(gamificationManager)
         .environmentObject(LearningSettingsManager())
+        .environmentObject(surveyManager)
 }

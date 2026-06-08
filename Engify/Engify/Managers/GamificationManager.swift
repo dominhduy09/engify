@@ -28,6 +28,7 @@ final class GamificationManager: ObservableObject {
     private enum Keys {
         static let progress = "engify.gamification.progress"
         static let completedLessons = "engify.gamification.completed-lessons"
+        static let awardedPointRewards = "engify.gamification.awarded-point-rewards"
     }
 
     // MARK: - Published State
@@ -48,11 +49,13 @@ final class GamificationManager: ObservableObject {
     private let supabaseManager: SupabaseManager
     private var currentUserID: String?
     private var isApplyingRemoteState = false
+    private var awardedPointRewardKeys: Set<String>
 
     // MARK: - Init
 
     init(supabaseManager: SupabaseManager = .shared) {
         self.supabaseManager = supabaseManager
+        self.awardedPointRewardKeys = Self.loadAwardedPointRewardKeys()
         if let data = UserDefaults.standard.data(forKey: Keys.progress),
            let decoded = try? JSONDecoder().decode(UserProgress.self, from: data) {
             var normalized = decoded
@@ -62,7 +65,7 @@ final class GamificationManager: ObservableObject {
             self.progress = .initial
         }
 
-        checkStreak()
+        reconcileDailyStreak()
         subscribeToLessonCompletion()
     }
 
@@ -113,6 +116,30 @@ final class GamificationManager: ObservableObject {
         save()
     }
 
+    @discardableResult
+    func awardPoints(for event: PointsRewardEvent) -> PointsRewardResult {
+        let rewardKey = event.rewardKey
+
+        guard !awardedPointRewardKeys.contains(rewardKey) else {
+            return .alreadyAwarded(totalPoints: progress.points)
+        }
+
+        progress.addPoints(event.pointsAwarded)
+        awardedPointRewardKeys.insert(rewardKey)
+        persistAwardedPointRewardKeys()
+        save()
+
+        return .awarded(amount: event.pointsAwarded, totalPoints: progress.points)
+    }
+
+    @discardableResult
+    func spendPoints(_ count: Int) -> Bool {
+        guard progress.points >= count, count > 0 else { return false }
+        progress.spendPoints(count)
+        save()
+        return true
+    }
+
     /// Increments the daily streak counter.
     func incrementStreak() {
         progress.incrementStreak()
@@ -146,8 +173,11 @@ final class GamificationManager: ObservableObject {
                 var normalized = remoteProgress
                 normalized.normalizeLevel()
                 progress = normalized
-                save()
                 isApplyingRemoteState = false
+                reconcileDailyStreak()
+            } else {
+                reconcileDailyStreak()
+                await supabaseManager.syncUserData(progress: progress)
             }
         } catch {
             print("Failed to load remote progress: \(error.localizedDescription)")
@@ -156,6 +186,10 @@ final class GamificationManager: ObservableObject {
 
     func clearRemoteSession() {
         currentUserID = nil
+    }
+
+    var recentLessonResults: [LessonResult] {
+        completedLessons.sorted { $0.completedAt > $1.completedAt }
     }
 
     // MARK: - Private Methods
@@ -199,6 +233,17 @@ final class GamificationManager: ObservableObject {
         return decoded
     }
 
+    private static func loadAwardedPointRewardKeys() -> Set<String> {
+        guard let values = UserDefaults.standard.array(forKey: Keys.awardedPointRewards) as? [String] else {
+            return []
+        }
+        return Set(values)
+    }
+
+    private func persistAwardedPointRewardKeys() {
+        UserDefaults.standard.set(Array(awardedPointRewardKeys).sorted(), forKey: Keys.awardedPointRewards)
+    }
+
     private func subscribeToLessonCompletion() {
         lessonCompletionRequest
             .receive(on: DispatchQueue.main)
@@ -209,9 +254,8 @@ final class GamificationManager: ObservableObject {
             .store(in: &cancellables)
     }
 
-    /// Checks if the user was active yesterday. If so, increments streak;
-    /// if they were active today already, does nothing; otherwise resets streak.
-    private func checkStreak() {
+    /// Reconciles the streak for the current calendar day, then persists the result.
+    private func reconcileDailyStreak() {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
 
@@ -235,6 +279,7 @@ final class GamificationManager: ObservableObject {
 
         // Update last active date
         progress.lastActiveDate = Date()
+        progress.normalizeLevel()
         save()
     }
 

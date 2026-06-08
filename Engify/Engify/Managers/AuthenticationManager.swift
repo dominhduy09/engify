@@ -76,12 +76,14 @@ final class AuthenticationManager: ObservableObject {
     private let authService: AuthServicing
     private let savedWordsManager: SavedWordsManager
     private let gamificationManager: GamificationManager
+    private let surveyManager: OnboardingSurveyManager
     private var authStateTask: Task<Void, Never>?
 
     init(
         authService: AuthServicing? = nil,
         savedWordsManager: SavedWordsManager,
-        gamificationManager: GamificationManager
+        gamificationManager: GamificationManager,
+        surveyManager: OnboardingSurveyManager
     ) {
         self.authService = authService ?? SupabaseAuthService(
             provider: .shared,
@@ -89,6 +91,7 @@ final class AuthenticationManager: ObservableObject {
         )
         self.savedWordsManager = savedWordsManager
         self.gamificationManager = gamificationManager
+        self.surveyManager = surveyManager
         restoreInitialState()
         observeAuthStateChanges()
     }
@@ -348,6 +351,7 @@ final class AuthenticationManager: ObservableObject {
         Task {
             await savedWordsManager.loadFromRemote(for: userID)
             await gamificationManager.loadFromRemote(for: userID)
+            await surveyManager.syncIfPossible()
         }
     }
 

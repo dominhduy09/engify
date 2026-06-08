@@ -1,3 +1,4 @@
+import AVFoundation
 import SwiftUI
 
 struct VocabularyView: View {
@@ -27,9 +28,11 @@ struct VocabularyView: View {
     @EnvironmentObject private var theme: ThemeManager
     @EnvironmentObject private var gamification: GamificationManager
     @EnvironmentObject private var learningSettings: LearningSettingsManager
+    @EnvironmentObject private var surveyManager: OnboardingSurveyManager
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var showSettingsSheet = false
     @State private var showSavedWordBank = false
+    @State private var audioPlayer: AVPlayer?
 
     private let randomWordService = DictionaryService()
 
@@ -98,10 +101,10 @@ struct VocabularyView: View {
                     VocabularyBadge(text: currentWordBadgeText)
                     VocabularyBadge(text: displayValue(currentEntry.partOfSpeech.capitalizedIfAvailable), tint: theme.accentColor)
                     if displayValue(currentEntry.category) != "N/A" {
-                        VocabularyBadge(text: displayValue(currentEntry.category), tint: EngifyColors.sky)
+                        VocabularyBadge(text: displayValue(currentEntry.category), tint: theme.accentColor)
                     }
                     if displayValue(currentEntry.wordLevel) != "N/A" {
-                        VocabularyBadge(text: displayValue(currentEntry.wordLevel), tint: EngifyColors.sage)
+                        VocabularyBadge(text: displayValue(currentEntry.wordLevel), tint: theme.accentColor)
                     }
                     bookmarkButton
                     Spacer(minLength: 0)
@@ -118,9 +121,14 @@ struct VocabularyView: View {
                             .font(.system(.body, design: .monospaced))
                             .foregroundStyle(EngifyColors.textSecondary)
 
-                        Image(systemName: "speaker.wave.2.fill")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(theme.accentColor)
+                        Button {
+                            playAudioForCurrentWord()
+                        } label: {
+                            Image(systemName: "speaker.wave.2.fill")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(theme.accentColor)
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
 
@@ -137,6 +145,16 @@ struct VocabularyView: View {
 
     private var structuredBreakdown: some View {
         VStack(alignment: .leading, spacing: Spacing.lg) {
+            if learningSettings.explanationDepth != "simple" {
+                lessonDetailBlock(
+                    title: "Tutor Note",
+                    icon: "sparkles",
+                    tint: theme.accentColor
+                ) {
+                    Text(tutorNote(for: currentEntry))
+                }
+            }
+
             lessonDetailBlock(
                 title: "Definition",
                 icon: "list.bullet.rectangle.portrait",
@@ -148,7 +166,7 @@ struct VocabularyView: View {
             lessonDetailBlock(
                 title: "Vietnamese Meaning",
                 icon: "globe",
-                tint: EngifyColors.sage
+                tint: theme.accentColor
             ) {
                 Text(displayValue(preferredMeaning(for: currentEntry)))
             }
@@ -156,7 +174,7 @@ struct VocabularyView: View {
             lessonDetailBlock(
                 title: "Example",
                 icon: "quote.opening",
-                tint: EngifyColors.sky
+                tint: theme.accentColor
             ) {
                 Text(exampleText)
                     .font(.system(size: 16, weight: .regular, design: .serif))
@@ -167,7 +185,7 @@ struct VocabularyView: View {
                 lessonDetailBlock(
                     title: "Idiom",
                     icon: "text.quote",
-                    tint: EngifyColors.warning
+                    tint: theme.accentColor
                 ) {
                     Text(displayValue(currentEntry.idiom))
                 }
@@ -177,9 +195,23 @@ struct VocabularyView: View {
                 lessonDetailBlock(
                     title: "Phrasal Verbs",
                     icon: "arrow.triangle.branch",
-                    tint: EngifyColors.sage
+                    tint: theme.accentColor
                 ) {
                     Text(currentEntry.phrasalVerbs.joined(separator: ", "))
+                }
+            }
+
+            if learningSettings.generateExtraExamples {
+                lessonDetailBlock(
+                    title: "Extra Examples",
+                    icon: "text.quote",
+                    tint: theme.accentColor
+                ) {
+                    VStack(alignment: .leading, spacing: Spacing.sm) {
+                        ForEach(extraExamples(for: currentEntry), id: \.self) { example in
+                            Text(example)
+                        }
+                    }
                 }
             }
         }
@@ -198,21 +230,18 @@ struct VocabularyView: View {
                 showSavedWordToast(for: currentWord.word)
             }
         } label: {
-            HStack(spacing: Spacing.sm) {
-                Image(systemName: isSaved ? "bookmark.fill" : "bookmark")
-                Text("Bookmark")
-            }
-            .font(EngifyTypography.caption.weight(.semibold))
+            Image(systemName: isSaved ? "bookmark.fill" : "bookmark")
+                .font(.subheadline.weight(.semibold))
             .foregroundStyle(isSaved ? EngifyColors.textInverse : theme.accentColor)
-            .padding(.horizontal, Spacing.md)
-            .frame(minHeight: 42)
+            .frame(width: 42, height: 42)
             .background(
-                Capsule()
+                Circle()
                     .fill(isSaved ? theme.accentColor : theme.accentColor.opacity(0.12))
             )
         }
         .buttonStyle(.plain)
         .engifyJellyPress()
+        .accessibilityLabel(isSaved ? "Remove bookmark" : "Save word")
     }
 
     private var progressIndicator: some View {
@@ -224,7 +253,7 @@ struct VocabularyView: View {
 
                 Spacer(minLength: 0)
 
-                Text("\(min(wordsReviewedThisSession, 8))/8")
+                Text("\(min(wordsReviewedThisSession, learningSettings.newWordsPerDay))/\(learningSettings.newWordsPerDay)")
                     .font(EngifyTypography.caption.weight(.semibold))
                     .foregroundStyle(theme.accentColor)
                     .padding(.horizontal, Spacing.md)
@@ -233,10 +262,17 @@ struct VocabularyView: View {
                     .clipShape(Capsule())
             }
 
-            Text("\(max(0, 8 - wordsReviewedThisSession)) more words to reach today’s target.")
+            Text("\(max(0, learningSettings.newWordsPerDay - wordsReviewedThisSession)) more words to reach today’s target.")
                 .font(EngifyTypography.caption)
                 .foregroundStyle(EngifyColors.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
+
+            if learningSettings.difficultyLock {
+                Text(difficultyLockSummary)
+                    .font(EngifyTypography.caption)
+                    .foregroundStyle(EngifyColors.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 
@@ -294,7 +330,7 @@ struct VocabularyView: View {
     }
 
     private var reviewSection: some View {
-        EngifyCard(tint: EngifyColors.sky) {
+        EngifyCard(tint: theme.accentColor) {
             VStack(alignment: .leading, spacing: Spacing.cardGap) {
                 HStack(alignment: .top, spacing: Spacing.md) {
                     VStack(alignment: .leading, spacing: Spacing.xxs) {
@@ -317,7 +353,7 @@ struct VocabularyView: View {
                             }
                         }
                         .font(EngifyTypography.caption.weight(.semibold))
-                        .foregroundStyle(EngifyColors.sky)
+                        .foregroundStyle(theme.accentColor)
                     }
                 }
 
@@ -415,6 +451,9 @@ struct VocabularyView: View {
         lessonWord = lessonWords[0]
         dictionaryViewModel.searchText = lessonWord
         await dictionaryViewModel.search()
+        if learningSettings.repeatPronunciation {
+            playAudioForCurrentWord()
+        }
     }
 
     private func moveToNextWord(countAsReviewed: Bool) async {
@@ -446,6 +485,7 @@ struct VocabularyView: View {
         saveWordForReview(currentWord)
         completedCurrentWordIDs.insert(normalized)
         gamification.completeLesson(type: .vocabulary, xpEarned: 10)
+        _ = gamification.awardPoints(for: .savedWord(wordID: normalized))
 
         Task {
             await moveToNextWord(countAsReviewed: false)
@@ -464,7 +504,8 @@ struct VocabularyView: View {
     }
 
     private func refillLessonWordsIfNeeded(force: Bool = false) async {
-        guard force || lessonWords.count < 3 else { return }
+        let bufferTarget = max(3, min(learningSettings.newWordsPerDay, 8))
+        guard force || lessonWords.count < bufferTarget else { return }
         guard !isLoadingNewWords else { return }
 
         isLoadingNewWords = true
@@ -472,7 +513,10 @@ struct VocabularyView: View {
 
         let batch: [String]
         do {
-            batch = try await randomWordService.fetchRandomWordBatch(limit: 24)
+            batch = try await randomWordService.fetchRandomWordBatch(
+                limit: max(24, learningSettings.newWordsPerDay * 3),
+                allowedWordLevels: allowedDifficultyLevels
+            )
         } catch {
             batch = fallbackLessonWords.shuffled()
         }
@@ -541,7 +585,7 @@ struct VocabularyView: View {
                     .font(EngifyTypography.bodyStrong)
                     .foregroundStyle(EngifyColors.textPrimary)
 
-                VocabularyBadge(text: displayValue(word.partOfSpeech.capitalizedIfAvailable), tint: EngifyColors.sky)
+                VocabularyBadge(text: displayValue(word.partOfSpeech.capitalizedIfAvailable), tint: theme.accentColor)
                 Spacer(minLength: 0)
             }
 
@@ -570,7 +614,7 @@ struct VocabularyView: View {
             } label: {
                 Label("Review This Word", systemImage: "arrow.up.left.circle.fill")
                     .font(EngifyTypography.caption.weight(.semibold))
-                    .foregroundStyle(EngifyColors.sky)
+                    .foregroundStyle(theme.accentColor)
             }
             .buttonStyle(.plain)
         }
@@ -578,7 +622,7 @@ struct VocabularyView: View {
         .padding(Spacing.md)
         .background(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(EngifyColors.sky.opacity(0.08))
+                .fill(theme.accentColor.opacity(0.08))
         )
     }
 
@@ -592,6 +636,73 @@ struct VocabularyView: View {
             return translated
         }
         return displayValue(entry.definition)
+    }
+
+    private var allowedDifficultyLevels: Set<String>? {
+        guard learningSettings.difficultyLock else { return nil }
+
+        switch surveyManager.cachedResponse?.englishLevel {
+        case "advanced":
+            return ["A1", "A2", "B1", "B2", "C1"]
+        case "intermediate":
+            return ["A1", "A2", "B1", "B2"]
+        case "beginner", .none:
+            return ["A1", "A2"]
+        default:
+            return ["A1", "A2"]
+        }
+    }
+
+    private var difficultyLockSummary: String {
+        guard let allowedDifficultyLevels else {
+            return "Difficulty lock is off."
+        }
+
+        return "Difficulty lock is on. Engify prefers \(allowedDifficultyLevels.sorted().joined(separator: ", ")) words when level data is available."
+    }
+
+    private func tutorNote(for entry: DictionaryEntry) -> String {
+        let word = displayValue(entry.word)
+        let partOfSpeech = displayValue(entry.partOfSpeech).lowercased()
+        let meaning = preferredMeaning(for: entry)
+
+        switch learningSettings.explanationDepth {
+        case "detailed":
+            if partOfSpeech.contains("verb") {
+                return "\"\(word)\" is an action word. Build one sentence with who does it and one sentence with when it happens."
+            } else if partOfSpeech.contains("adjective") {
+                return "\"\(word)\" describes something. Pair it with a familiar noun so the meaning feels easier to remember."
+            }
+            return "\"\(word)\" means \(meaning). Use it once in a personal sentence and once in an everyday situation."
+        case "balanced":
+            return "\"\(word)\" means \(meaning). Try saying it once in your own sentence."
+        default:
+            return meaning
+        }
+    }
+
+    private func extraExamples(for entry: DictionaryEntry) -> [String] {
+        let word = displayValue(entry.word)
+        let partOfSpeech = displayValue(entry.partOfSpeech).lowercased()
+
+        if partOfSpeech.contains("verb") {
+            return [
+                "I want to \(word) this idea more clearly.",
+                "We can \(word) the new word again tomorrow."
+            ]
+        }
+
+        if partOfSpeech.contains("adjective") {
+            return [
+                "The lesson felt more \(word) after one review.",
+                "A \(word) example can make difficult vocabulary easier."
+            ]
+        }
+
+        return [
+            "\"\(word)\" appeared in today's study session.",
+            "I added \(word) to my review list for later."
+        ]
     }
 
     private func savedWordToast(wordTitle: String) -> some View {
@@ -679,6 +790,22 @@ struct VocabularyView: View {
 
         Task {
             await searchLessonWord()
+        }
+    }
+
+    private func playAudioForCurrentWord() {
+        guard let url = currentEntry.audioURL else { return }
+
+        audioPlayer = AVPlayer(url: url)
+        audioPlayer?.play()
+
+        guard learningSettings.repeatPronunciation else { return }
+
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_600_000_000)
+            guard audioPlayer != nil else { return }
+            await audioPlayer?.seek(to: .zero)
+            audioPlayer?.play()
         }
     }
 }

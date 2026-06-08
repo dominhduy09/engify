@@ -23,14 +23,59 @@ struct GamificationInfoSheet: View {
             systemImage: "sun.max.fill"
         ),
         BadgePreview(
+            title: "Night Owl",
+            detail: "Finish a lesson after 10:00 PM.",
+            systemImage: "moon.stars.fill"
+        ),
+        BadgePreview(
             title: "Word Smith",
             detail: "Save 50 vocabulary words in total.",
             systemImage: "textformat.abc"
         ),
         BadgePreview(
+            title: "Word Collector",
+            detail: "Save 10 new words to your Word Bank.",
+            systemImage: "books.vertical.fill"
+        ),
+        BadgePreview(
             title: "Consistent Learner",
             detail: "Achieve a 7-day milestone streak.",
             systemImage: "flame.fill"
+        ),
+        BadgePreview(
+            title: "Streak Keeper",
+            detail: "Reach a 30-day learning streak.",
+            systemImage: "flame.circle.fill"
+        ),
+        BadgePreview(
+            title: "Quiz Ace",
+            detail: "Get a perfect score in Practice.",
+            systemImage: "checkmark.seal.fill"
+        ),
+        BadgePreview(
+            title: "Sharp Reader",
+            detail: "Finish 5 News quizzes with full marks.",
+            systemImage: "newspaper.fill"
+        ),
+        BadgePreview(
+            title: "Explorer",
+            detail: "Use Lookup on 25 different words.",
+            systemImage: "magnifyingglass.circle.fill"
+        ),
+        BadgePreview(
+            title: "Momentum",
+            detail: "Earn points from 3 activities in one day.",
+            systemImage: "bolt.heart.fill"
+        ),
+        BadgePreview(
+            title: "Level Climber",
+            detail: "Reach Level 10.",
+            systemImage: "flag.fill"
+        ),
+        BadgePreview(
+            title: "Century Star",
+            detail: "Collect 100 total points.",
+            systemImage: "star.circle.fill"
         )
     ]
 
@@ -40,6 +85,7 @@ struct GamificationInfoSheet: View {
                 VStack(alignment: .leading, spacing: Spacing.lg) {
                     streakBlock
                     xpBlock
+                    pointsBlock
                     milestoneLevelsBlock
                     badgesBlock
 
@@ -91,17 +137,17 @@ struct GamificationInfoSheet: View {
     }
 
     private var xpBlock: some View {
-        EngifyCard(tint: EngifyColors.warning) {
+        EngifyCard(tint: accentColor) {
             VStack(alignment: .leading, spacing: Spacing.md) {
                 infoHeader(
-                    systemImage: "star.fill",
-                    title: "Experience Points (XP) & Stars",
-                    tint: EngifyColors.warning
+                    systemImage: "bolt.fill",
+                    title: "Experience Points (XP)",
+                    tint: accentColor
                 )
 
                 infoRow(
                     title: "What it is",
-                    body: "Stars are your redeemable points currency, while XP measures your lifelong learning progression and levels up your main tracker bar automatically."
+                    body: "XP measures your learning progress. As your XP grows, the progress bar fills and your level increases automatically."
                 )
 
                 VStack(alignment: .leading, spacing: Spacing.sm) {
@@ -109,21 +155,48 @@ struct GamificationInfoSheet: View {
                         .font(EngifyTypography.caption.weight(.semibold))
                         .foregroundStyle(EngifyColors.textSecondary)
 
-                    rewardRow(value: "+5 XP / Stars", detail: "Save a new vocabulary word to your deck.")
-                    rewardRow(value: "+15 XP / Stars", detail: "Complete a full News Article reading brief.")
-                    rewardRow(value: "+20 XP / Stars", detail: "Execute a Quick Practice Sprint perfectly.")
+                    rewardRow(value: "+5 XP", detail: "Save a new vocabulary word to your deck.")
+                    rewardRow(value: "+15 XP", detail: "Complete a full News Article reading brief.")
+                    rewardRow(value: "+20 XP", detail: "Execute a Quick Practice Sprint perfectly.")
+                }
+            }
+        }
+    }
+
+    private var pointsBlock: some View {
+        EngifyCard(tint: accentColor) {
+            VStack(alignment: .leading, spacing: Spacing.md) {
+                infoHeader(
+                    systemImage: "star.fill",
+                    title: "Points",
+                    tint: accentColor
+                )
+
+                infoRow(
+                    title: "What it is",
+                    body: "Points are your reward currency. You earn them by completing learning activities and building steady study habits."
+                )
+
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    Text("How to achieve")
+                        .font(EngifyTypography.caption.weight(.semibold))
+                        .foregroundStyle(EngifyColors.textSecondary)
+
+                    rewardRow(value: "+5 Points", detail: "Save a new vocabulary word to your deck.")
+                    rewardRow(value: "+15 Points", detail: "Complete a full News Article reading brief.")
+                    rewardRow(value: "+20 Points", detail: "Execute a Quick Practice Sprint perfectly.")
                 }
             }
         }
     }
 
     private var milestoneLevelsBlock: some View {
-        EngifyCard(tint: EngifyColors.accent) {
+        EngifyCard(tint: accentColor) {
             VStack(alignment: .leading, spacing: Spacing.md) {
                 infoHeader(
                     systemImage: "flag.checkered.2.crossed",
                     title: "Level Milestones",
-                    tint: EngifyColors.accent
+                    tint: accentColor
                 )
 
                 Text("Big congratulations appear at level 2, level 5, and every 10 levels after that until Level MAX.")
@@ -141,12 +214,12 @@ struct GamificationInfoSheet: View {
     }
 
     private var badgesBlock: some View {
-        EngifyCard(tint: EngifyColors.sage) {
+        EngifyCard(tint: accentColor) {
             VStack(alignment: .leading, spacing: Spacing.md) {
                 infoHeader(
                     systemImage: "rosette",
                     title: "Achievements & Badges",
-                    tint: EngifyColors.sage
+                    tint: accentColor
                 )
 
                 Text("Special milestone rewards unlock as your habits become more consistent.")
@@ -177,7 +250,7 @@ struct GamificationInfoSheet: View {
         let isReached = currentLevel >= level
         let isCurrent = currentLevel == level
         let isMaxLevel = level == 100
-        let tint = isReached ? (isMaxLevel ? EngifyColors.warning : EngifyColors.accent) : EngifyColors.textSecondary
+        let tint = isReached ? (isMaxLevel ? EngifyColors.warning : accentColor) : EngifyColors.textSecondary
 
         return VStack(alignment: .leading, spacing: Spacing.xs) {
             HStack(spacing: Spacing.xs) {

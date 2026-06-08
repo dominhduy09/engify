@@ -4,16 +4,87 @@ import Combine
 // MARK: - Design Tokens
 
 enum EngifyColors {
+    private struct AccentPalette {
+        let base: Color
+        let dark: Color
+        let light: Color
+        let darkModeLight: Color
+    }
+
     private static var isHighContrastEnabled: Bool {
         UserDefaults.standard.bool(forKey: "engify.settings.high_contrast")
+    }
+
+    private static var preferredAccent: String {
+        UserDefaults.standard.string(forKey: "engify_accent") ?? ThemeManager.Accent.Meadow.rawValue
+    }
+
+    private static var preferredAppearance: String {
+        UserDefaults.standard.string(forKey: "engify_appearance") ?? "system"
+    }
+
+    private static var followsDarkAppearance: Bool {
+        if preferredAppearance == "dark" {
+            return true
+        }
+
+        if preferredAppearance == "light" {
+            return false
+        }
+
+        return UITraitCollection.current.userInterfaceStyle == .dark
+    }
+
+    private static var accentPalette: AccentPalette {
+        switch preferredAccent {
+        case ThemeManager.Accent.Forest.rawValue:
+            return AccentPalette(
+                base: Color(red: 0.17, green: 0.43, blue: 0.29),
+                dark: Color(red: 0.11, green: 0.30, blue: 0.20),
+                light: Color(red: 0.79, green: 0.90, blue: 0.83),
+                darkModeLight: Color(red: 0.18, green: 0.25, blue: 0.21)
+            )
+        case ThemeManager.Accent.Mint.rawValue:
+            return AccentPalette(
+                base: Color(red: 0.22, green: 0.68, blue: 0.73),
+                dark: Color(red: 0.14, green: 0.49, blue: 0.53),
+                light: Color(red: 0.82, green: 0.95, blue: 0.96),
+                darkModeLight: Color(red: 0.18, green: 0.28, blue: 0.30)
+            )
+        case ThemeManager.Accent.Olive.rawValue:
+            return AccentPalette(
+                base: Color(red: 0.70, green: 0.56, blue: 0.18),
+                dark: Color(red: 0.51, green: 0.40, blue: 0.12),
+                light: Color(red: 0.96, green: 0.91, blue: 0.78),
+                darkModeLight: Color(red: 0.33, green: 0.27, blue: 0.18)
+            )
+        case ThemeManager.Accent.Teal.rawValue:
+            return AccentPalette(
+                base: Color(red: 0.18, green: 0.48, blue: 0.78),
+                dark: Color(red: 0.12, green: 0.33, blue: 0.55),
+                light: Color(red: 0.81, green: 0.89, blue: 0.97),
+                darkModeLight: Color(red: 0.18, green: 0.23, blue: 0.32)
+            )
+        default:
+            return AccentPalette(
+                base: Color(red: 0.28, green: 0.62, blue: 0.41),
+                dark: Color(red: 0.19, green: 0.47, blue: 0.31),
+                light: Color(red: 0.82, green: 0.94, blue: 0.86),
+                darkModeLight: Color(red: 0.21, green: 0.31, blue: 0.26)
+            )
+        }
     }
 
     static let primary = Color(red: 0.11, green: 0.12, blue: 0.16)
     static let primaryLight = Color(red: 0.20, green: 0.22, blue: 0.28)
 
-    static let accent = Color(red: 0.28, green: 0.62, blue: 0.41)
-    static let accentDark = Color(red: 0.19, green: 0.47, blue: 0.31)
-    static let accentLight = Color(red: 0.82, green: 0.94, blue: 0.86)
+    static var accent: Color { accentPalette.base }
+    static var accentDark: Color { accentPalette.dark }
+    static var accentLight: Color {
+        followsDarkAppearance
+            ? accentPalette.darkModeLight
+            : accentPalette.light
+    }
 
     static let sky = Color(red: 0.45, green: 0.73, blue: 0.60)
     static let sage = Color(red: 0.22, green: 0.55, blue: 0.35)
@@ -21,26 +92,46 @@ enum EngifyColors {
     static let warning = Color(red: 0.86, green: 0.59, blue: 0.19)
 
     static var canvas: Color {
-        isHighContrastEnabled ? Color.white : Color(red: 0.98, green: 0.97, blue: 0.95)
+        if followsDarkAppearance {
+            return isHighContrastEnabled ? Color.black : Color(red: 0.10, green: 0.11, blue: 0.14)
+        }
+
+        return isHighContrastEnabled ? Color.white : Color(red: 0.98, green: 0.97, blue: 0.95)
     }
 
     static var canvasRaised: Color {
-        isHighContrastEnabled ? Color(red: 0.94, green: 0.94, blue: 0.92) : Color(red: 0.95, green: 0.94, blue: 0.91)
+        if followsDarkAppearance {
+            return isHighContrastEnabled ? Color(red: 0.14, green: 0.14, blue: 0.16) : Color(red: 0.15, green: 0.16, blue: 0.20)
+        }
+
+        return isHighContrastEnabled ? Color(red: 0.94, green: 0.94, blue: 0.92) : Color(red: 0.95, green: 0.94, blue: 0.91)
     }
 
     static var surface: Color {
-        isHighContrastEnabled ? Color.white : Color(red: 1.00, green: 0.99, blue: 0.98)
+        if followsDarkAppearance {
+            return isHighContrastEnabled ? Color(red: 0.10, green: 0.10, blue: 0.12) : Color(red: 0.13, green: 0.14, blue: 0.18)
+        }
+
+        return isHighContrastEnabled ? Color.white : Color(red: 1.00, green: 0.99, blue: 0.98)
     }
 
     static var surfaceMuted: Color {
-        isHighContrastEnabled ? Color(red: 0.93, green: 0.94, blue: 0.95) : Color(red: 0.95, green: 0.94, blue: 0.92)
+        if followsDarkAppearance {
+            return isHighContrastEnabled ? Color(red: 0.16, green: 0.17, blue: 0.20) : Color(red: 0.18, green: 0.19, blue: 0.24)
+        }
+
+        return isHighContrastEnabled ? Color(red: 0.93, green: 0.94, blue: 0.95) : Color(red: 0.95, green: 0.94, blue: 0.92)
     }
 
     static let surfaceDark = Color(red: 0.12, green: 0.13, blue: 0.17)
     static let surfaceDarkRaised = Color(red: 0.16, green: 0.17, blue: 0.22)
 
     static var border: Color {
-        isHighContrastEnabled ? Color(red: 0.58, green: 0.56, blue: 0.52) : Color(red: 0.87, green: 0.84, blue: 0.80)
+        if followsDarkAppearance {
+            return isHighContrastEnabled ? Color(red: 0.62, green: 0.64, blue: 0.70) : Color(red: 0.30, green: 0.32, blue: 0.38)
+        }
+
+        return isHighContrastEnabled ? Color(red: 0.58, green: 0.56, blue: 0.52) : Color(red: 0.87, green: 0.84, blue: 0.80)
     }
 
     static var borderDark: Color {
@@ -48,20 +139,30 @@ enum EngifyColors {
     }
 
     static var textPrimary: Color {
-        isHighContrastEnabled ? Color.black : Color(red: 0.14, green: 0.14, blue: 0.18)
+        if followsDarkAppearance {
+            return isHighContrastEnabled ? Color.white : Color(red: 0.94, green: 0.95, blue: 0.98)
+        }
+
+        return isHighContrastEnabled ? Color.black : Color(red: 0.14, green: 0.14, blue: 0.18)
     }
 
     static var textSecondary: Color {
-        isHighContrastEnabled ? Color(red: 0.22, green: 0.24, blue: 0.28) : Color(red: 0.46, green: 0.47, blue: 0.54)
+        if followsDarkAppearance {
+            return isHighContrastEnabled ? Color(red: 0.88, green: 0.89, blue: 0.92) : Color(red: 0.72, green: 0.74, blue: 0.80)
+        }
+
+        return isHighContrastEnabled ? Color(red: 0.22, green: 0.24, blue: 0.28) : Color(red: 0.46, green: 0.47, blue: 0.54)
     }
 
     static let textInverse = Color.white
 
-    static let accentGradient = LinearGradient(
-        colors: [accent, accentDark],
-        startPoint: .topLeading,
-        endPoint: .bottomTrailing
-    )
+    static var accentGradient: LinearGradient {
+        LinearGradient(
+            colors: [accent, accentDark],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
 }
 
 enum EngifyTypography {
@@ -92,13 +193,24 @@ enum EngifyTypography {
 
 struct EngifyAppBackground: View {
     @Environment(\.colorScheme) private var colorScheme
+    @AppStorage("engify_accent") private var preferredAccent = ThemeManager.Accent.Meadow.rawValue
+    @AppStorage("engify_appearance") private var preferredAppearance = ThemeManager.AppearanceMode.system.rawValue
+    @AppStorage("engify.settings.high_contrast") private var isHighContrastEnabled = false
 
     var body: some View {
+        let _ = preferredAccent
+        let _ = preferredAppearance
+        let _ = isHighContrastEnabled
+
         ZStack {
             LinearGradient(
                 colors: colorScheme == .dark
-                    ? [EngifyColors.surfaceDark, EngifyColors.primary, Color.black]
-                    : [EngifyColors.canvas, EngifyColors.canvasRaised, Color.white],
+                    ? [
+                        EngifyColors.canvas,
+                        EngifyColors.surfaceDark,
+                        EngifyColors.surfaceDarkRaised
+                    ]
+                    : [EngifyColors.canvas, EngifyColors.canvasRaised, EngifyColors.surface],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
@@ -134,6 +246,10 @@ struct EngifyScreenScroll<Content: View>: View {
     let spacing: CGFloat
     let bottomInset: CGFloat
     let content: Content
+    @AppStorage("engify_accent") private var preferredAccent = ThemeManager.Accent.Meadow.rawValue
+    @AppStorage("engify_appearance") private var preferredAppearance = ThemeManager.AppearanceMode.system.rawValue
+    @AppStorage("engify.settings.high_contrast") private var isHighContrastEnabled = false
+    @AppStorage("engify_font_size") private var preferredFontSize = 16.0
     @StateObject private var overlayCoordinator = EngifyOverlayCoordinator()
 
     init(
@@ -149,6 +265,11 @@ struct EngifyScreenScroll<Content: View>: View {
     }
 
     var body: some View {
+        let _ = preferredAccent
+        let _ = preferredAppearance
+        let _ = isHighContrastEnabled
+        let _ = preferredFontSize
+
         ZStack {
             EngifyAppBackground()
 
@@ -218,21 +339,22 @@ struct EngifyGlassPanelModifier: ViewModifier {
     let cornerRadius: CGFloat
     let tint: Color
     let shadowOpacity: Double
+    @Environment(\.colorScheme) private var colorScheme
 
     func body(content: Content) -> some View {
         content
             .background {
                 ZStack {
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .fill(.ultraThinMaterial)
+                        .fill(baseFill)
 
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                         .fill(
                             LinearGradient(
                                 colors: [
-                                    Color.white.opacity(0.32),
-                                    tint.opacity(0.10),
-                                    Color.white.opacity(0.08)
+                                    tint.opacity(colorScheme == .dark ? 0.18 : 0.10),
+                                    highlightColor,
+                                    raisedFill.opacity(colorScheme == .dark ? 0.94 : 0.84)
                                 ],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
@@ -243,9 +365,9 @@ struct EngifyGlassPanelModifier: ViewModifier {
                         .fill(
                             LinearGradient(
                                 colors: [
-                                    Color.white.opacity(0.24),
+                                    highlightColor.opacity(colorScheme == .dark ? 0.82 : 0.68),
                                     Color.clear,
-                                    tint.opacity(0.10)
+                                    tint.opacity(colorScheme == .dark ? 0.16 : 0.08)
                                 ],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
@@ -258,9 +380,9 @@ struct EngifyGlassPanelModifier: ViewModifier {
                     .stroke(
                         LinearGradient(
                             colors: [
-                                Color.white.opacity(0.72),
-                                tint.opacity(0.22),
-                                Color.white.opacity(0.16)
+                                borderHighlight,
+                                tint.opacity(colorScheme == .dark ? 0.24 : 0.18),
+                                borderBase
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
@@ -269,6 +391,37 @@ struct EngifyGlassPanelModifier: ViewModifier {
                     )
             }
             .shadow(color: EngifyColors.primary.opacity(shadowOpacity), radius: 24, x: 0, y: 14)
+    }
+
+    private var baseFill: LinearGradient {
+        LinearGradient(
+            colors: [
+                raisedFill.opacity(0.98),
+                baseSurface.opacity(0.96)
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+
+    private var baseSurface: Color {
+        colorScheme == .dark ? EngifyColors.surfaceDark : EngifyColors.surface
+    }
+
+    private var raisedFill: Color {
+        colorScheme == .dark ? EngifyColors.surfaceDarkRaised : EngifyColors.canvasRaised
+    }
+
+    private var highlightColor: Color {
+        colorScheme == .dark ? EngifyColors.surfaceMuted : EngifyColors.surface
+    }
+
+    private var borderHighlight: Color {
+        colorScheme == .dark ? EngifyColors.border.opacity(0.92) : EngifyColors.surface.opacity(0.92)
+    }
+
+    private var borderBase: Color {
+        colorScheme == .dark ? EngifyColors.borderDark.opacity(0.92) : EngifyColors.border.opacity(0.72)
     }
 }
 
@@ -286,6 +439,7 @@ struct EngifyLiquidGlassCardModifier: ViewModifier {
     let cornerRadius: CGFloat
     let tint: Color
     let shadowOpacity: Double
+    @Environment(\.colorScheme) private var colorScheme
 
     func body(content: Content) -> some View {
         content
@@ -295,9 +449,9 @@ struct EngifyLiquidGlassCardModifier: ViewModifier {
                         .fill(
                             LinearGradient(
                                 colors: [
-                                    Color.white.opacity(0.94),
-                                    tint.opacity(0.10),
-                                    tint.opacity(0.18)
+                                    baseSurface.opacity(0.98),
+                                    tint.opacity(colorScheme == .dark ? 0.20 : 0.10),
+                                    raisedSurface.opacity(colorScheme == .dark ? 0.98 : 0.94)
                                 ],
                                 startPoint: .top,
                                 endPoint: .bottom
@@ -308,8 +462,8 @@ struct EngifyLiquidGlassCardModifier: ViewModifier {
                         .fill(
                             LinearGradient(
                                 colors: [
-                                    Color.white.opacity(0.56),
-                                    Color.white.opacity(0.12),
+                                    highlightColor.opacity(colorScheme == .dark ? 0.62 : 0.56),
+                                    highlightColor.opacity(colorScheme == .dark ? 0.10 : 0.12),
                                     Color.clear
                                 ],
                                 startPoint: .top,
@@ -321,8 +475,8 @@ struct EngifyLiquidGlassCardModifier: ViewModifier {
                         .fill(
                             LinearGradient(
                                 colors: [
-                                    Color.white.opacity(0.42),
-                                    Color.white.opacity(0.04)
+                                    highlightColor.opacity(colorScheme == .dark ? 0.30 : 0.42),
+                                    Color.clear
                                 ],
                                 startPoint: .top,
                                 endPoint: .bottom
@@ -339,9 +493,9 @@ struct EngifyLiquidGlassCardModifier: ViewModifier {
                     .stroke(
                         LinearGradient(
                             colors: [
-                                Color.white.opacity(0.96),
-                                tint.opacity(0.20),
-                                Color.white.opacity(0.18)
+                                borderHighlight,
+                                tint.opacity(colorScheme == .dark ? 0.26 : 0.20),
+                                borderBase
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
@@ -367,12 +521,33 @@ struct EngifyLiquidGlassCardModifier: ViewModifier {
     private var highlightBlur: CGFloat {
         cornerRadius <= 18 ? 1.2 : 1.6
     }
+
+    private var baseSurface: Color {
+        colorScheme == .dark ? EngifyColors.surfaceDarkRaised : EngifyColors.surface
+    }
+
+    private var raisedSurface: Color {
+        colorScheme == .dark ? EngifyColors.surfaceMuted : EngifyColors.canvasRaised
+    }
+
+    private var highlightColor: Color {
+        colorScheme == .dark ? EngifyColors.border : EngifyColors.surface
+    }
+
+    private var borderHighlight: Color {
+        colorScheme == .dark ? EngifyColors.border.opacity(0.90) : EngifyColors.surface.opacity(0.96)
+    }
+
+    private var borderBase: Color {
+        colorScheme == .dark ? EngifyColors.borderDark.opacity(0.96) : EngifyColors.border.opacity(0.74)
+    }
 }
 
 struct EngifyLiquidGlassInputModifier: ViewModifier {
     let cornerRadius: CGFloat
     let tint: Color
     let isFocused: Bool
+    @Environment(\.colorScheme) private var colorScheme
 
     func body(content: Content) -> some View {
         content
@@ -382,9 +557,9 @@ struct EngifyLiquidGlassInputModifier: ViewModifier {
                         .fill(
                             LinearGradient(
                                 colors: [
-                                    Color.white.opacity(isFocused ? 0.96 : 0.92),
-                                    tint.opacity(isFocused ? 0.14 : 0.07),
-                                    tint.opacity(isFocused ? 0.18 : 0.10)
+                                    inputBase.opacity(0.98),
+                                    tint.opacity(isFocused ? focusedTintOpacity : idleTintOpacity),
+                                    inputRaised.opacity(0.98)
                                 ],
                                 startPoint: .top,
                                 endPoint: .bottom
@@ -395,8 +570,8 @@ struct EngifyLiquidGlassInputModifier: ViewModifier {
                         .fill(
                             LinearGradient(
                                 colors: [
-                                    Color.white.opacity(isFocused ? 0.58 : 0.46),
-                                    Color.white.opacity(isFocused ? 0.16 : 0.10),
+                                    highlightColor.opacity(isFocused ? highlightTopOpacity : idleHighlightTopOpacity),
+                                    highlightColor.opacity(isFocused ? highlightMidOpacity : idleHighlightMidOpacity),
                                     Color.clear
                                 ],
                                 startPoint: .top,
@@ -408,8 +583,8 @@ struct EngifyLiquidGlassInputModifier: ViewModifier {
                         .fill(
                             LinearGradient(
                                 colors: [
-                                    Color.white.opacity(isFocused ? 0.44 : 0.30),
-                                    Color.white.opacity(0.03)
+                                    highlightColor.opacity(isFocused ? glowTopOpacity : idleGlowTopOpacity),
+                                    Color.clear
                                 ],
                                 startPoint: .top,
                                 endPoint: .bottom
@@ -425,9 +600,9 @@ struct EngifyLiquidGlassInputModifier: ViewModifier {
                     .stroke(
                         LinearGradient(
                             colors: [
-                                Color.white.opacity(0.98),
-                                tint.opacity(isFocused ? 0.46 : 0.16),
-                                Color.white.opacity(0.18)
+                                borderHighlight,
+                                tint.opacity(isFocused ? focusedBorderTintOpacity : idleBorderTintOpacity),
+                                borderBase
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
@@ -437,6 +612,37 @@ struct EngifyLiquidGlassInputModifier: ViewModifier {
             }
             .shadow(color: tint.opacity(isFocused ? 0.18 : 0.08), radius: isFocused ? 14 : 8, x: 0, y: 6)
     }
+
+    private var inputBase: Color {
+        colorScheme == .dark ? EngifyColors.surfaceDarkRaised : EngifyColors.surface
+    }
+
+    private var inputRaised: Color {
+        colorScheme == .dark ? EngifyColors.surfaceMuted : EngifyColors.canvasRaised
+    }
+
+    private var highlightColor: Color {
+        colorScheme == .dark ? EngifyColors.border : EngifyColors.surface
+    }
+
+    private var borderHighlight: Color {
+        colorScheme == .dark ? EngifyColors.border.opacity(0.88) : EngifyColors.surface.opacity(0.98)
+    }
+
+    private var borderBase: Color {
+        colorScheme == .dark ? EngifyColors.borderDark.opacity(0.94) : EngifyColors.border.opacity(0.74)
+    }
+
+    private var focusedTintOpacity: Double { colorScheme == .dark ? 0.20 : 0.14 }
+    private var idleTintOpacity: Double { colorScheme == .dark ? 0.12 : 0.07 }
+    private var highlightTopOpacity: Double { colorScheme == .dark ? 0.38 : 0.58 }
+    private var idleHighlightTopOpacity: Double { colorScheme == .dark ? 0.24 : 0.46 }
+    private var highlightMidOpacity: Double { colorScheme == .dark ? 0.08 : 0.16 }
+    private var idleHighlightMidOpacity: Double { colorScheme == .dark ? 0.04 : 0.10 }
+    private var glowTopOpacity: Double { colorScheme == .dark ? 0.20 : 0.44 }
+    private var idleGlowTopOpacity: Double { colorScheme == .dark ? 0.12 : 0.30 }
+    private var focusedBorderTintOpacity: Double { colorScheme == .dark ? 0.52 : 0.46 }
+    private var idleBorderTintOpacity: Double { colorScheme == .dark ? 0.22 : 0.16 }
 }
 
 extension View {
@@ -524,6 +730,9 @@ struct EngifyCard<Content: View>: View {
     var padding: CGFloat = Spacing.cardPadding
 
     @Environment(\.colorScheme) private var colorScheme
+    @AppStorage("engify_accent") private var preferredAccent = ThemeManager.Accent.Meadow.rawValue
+    @AppStorage("engify_appearance") private var preferredAppearance = ThemeManager.AppearanceMode.system.rawValue
+    @AppStorage("engify.settings.high_contrast") private var isHighContrastEnabled = false
 
     init(
         tint: Color = .clear,
@@ -536,6 +745,10 @@ struct EngifyCard<Content: View>: View {
     }
 
     var body: some View {
+        let _ = preferredAccent
+        let _ = preferredAppearance
+        let _ = isHighContrastEnabled
+
         content
             .padding(padding)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -743,14 +956,16 @@ struct EngifyStateCard: View {
 }
 
 struct EngifyLoadingCard: View {
+    @Environment(\.themeAccentColor) private var accentColor
     let title: String
     let message: String
 
     var body: some View {
-        EngifyCard(tint: EngifyColors.sky) {
+        EngifyCard(tint: accentColor) {
             HStack(spacing: Spacing.lg) {
                 ProgressView()
                     .scaleEffect(1.1)
+                    .tint(accentColor)
 
                 VStack(alignment: .leading, spacing: Spacing.xs) {
                     Text(title)
@@ -1091,10 +1306,19 @@ struct EngifyTopMetricsBar: View {
             }
             .buttonStyle(.plain)
             .engifyJellyPress()
-            .accessibilityLabel("Experience points and stars")
-            .accessibilityHint("Opens information about XP, stars, and badges")
+            .accessibilityLabel("Experience points and points")
+            .accessibilityHint("Opens information about XP, points, and badges")
 
-            ProgressBar()
+            Button {
+                showGamificationInfoSheet = true
+                EngifyFeedback.shared.play(.tabSwitch)
+            } label: {
+                ProgressBar()
+            }
+            .buttonStyle(.plain)
+            .engifyJellyPress()
+            .accessibilityLabel("Level progress")
+            .accessibilityHint("Opens information about level progress and rewards")
         }
         .sheet(isPresented: $showGamificationInfoSheet) {
             if #available(iOS 16.0, *) {
@@ -1176,7 +1400,7 @@ struct EngifyProfileAvatar: View {
                 )
 
             Circle()
-                .fill(.white.opacity(0.16))
+                .fill(EngifyColors.surface.opacity(0.18))
                 .padding(size * 0.08)
 
             Image(systemName: "person.fill")
@@ -1193,7 +1417,7 @@ struct EngifyProfileAvatar: View {
                         .font(.system(size: size * 0.20, weight: .bold))
                         .foregroundStyle(ringColor)
                         .padding(size * 0.10)
-                        .background(.white, in: Circle())
+                        .background(EngifyColors.surface, in: Circle())
                 }
             }
             .padding(size * 0.06)
@@ -1204,7 +1428,7 @@ struct EngifyProfileAvatar: View {
             Circle()
                 .strokeBorder(
                     LinearGradient(
-                        colors: [Color.white.opacity(0.92), ringColor.opacity(0.75)],
+                        colors: [EngifyColors.surface.opacity(0.92), ringColor.opacity(0.75)],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     ),
@@ -1338,10 +1562,14 @@ private struct EngifyProfileMenu: View {
     @Binding var isPresented: Bool
     @EnvironmentObject private var authManager: AuthenticationManager
     @Environment(\.themeAccentColor) private var accentColor
+    @Environment(\.colorScheme) private var colorScheme
+    @AppStorage("engify_appearance") private var preferredAppearance = ThemeManager.AppearanceMode.system.rawValue
     @State private var menuScale: CGFloat = 0.8
     @State private var menuOpacity = 0.0
 
     var body: some View {
+        let _ = preferredAppearance
+
         VStack(alignment: .leading, spacing: 0) {
             compactMenuAction(title: "Profile", systemImage: "person.crop.circle") {
                 if authManager.isGuestMode {
@@ -1387,19 +1615,31 @@ private struct EngifyProfileMenu: View {
         .scaleEffect(menuScale, anchor: .topLeading)
         .opacity(menuOpacity)
         .background {
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            Color.white.opacity(0.72),
-                            accentColor.opacity(0.18)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
+            ZStack {
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: backgroundBaseColors,
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
                     )
-                )
+
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: backgroundTintColors,
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+            }
         }
-        .engifyLiquidGlassCard(cornerRadius: 24, tint: accentColor, shadowOpacity: 0.18)
+        .overlay {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .stroke(menuBorderColor, lineWidth: 1)
+        }
+        .shadow(color: menuShadowColor, radius: 18, x: 0, y: 10)
         .onAppear {
             animateMenuAppearance()
         }
@@ -1444,18 +1684,14 @@ private struct EngifyProfileMenu: View {
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .fill(
                         LinearGradient(
-                            colors: [
-                                Color.white.opacity(0.16),
-                                (tint ?? accentColor).opacity(0.03),
-                                Color.clear
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
+                            colors: actionBackgroundColors(tint: tint),
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
                         )
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .stroke(Color.white.opacity(0.14), lineWidth: 0.75)
+                            .stroke(actionBorderColor, lineWidth: 0.9)
                     )
             }
         }
@@ -1485,9 +1721,9 @@ private struct EngifyProfileMenu: View {
             .fill(
                 LinearGradient(
                     colors: [
-                        Color.white.opacity(0.04),
-                        accentColor.opacity(0.18),
-                        Color.white.opacity(0.04)
+                        dividerEdgeColor,
+                        accentColor.opacity(0.28),
+                        dividerEdgeColor
                     ],
                     startPoint: .leading,
                     endPoint: .trailing
@@ -1502,10 +1738,7 @@ private struct EngifyProfileMenu: View {
         RoundedRectangle(cornerRadius: 10, style: .continuous)
             .fill(
                 LinearGradient(
-                    colors: [
-                        Color.white.opacity(0.42),
-                        (tint ?? accentColor).opacity(0.14)
-                    ],
+                    colors: iconBackgroundColors(tint: tint),
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
@@ -1513,13 +1746,99 @@ private struct EngifyProfileMenu: View {
             .frame(width: 28, height: 28)
             .overlay(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(Color.white.opacity(0.34), lineWidth: 0.8)
+                    .stroke(iconBorderColor, lineWidth: 0.8)
             )
             .overlay(
                 Image(systemName: systemImage)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(tint ?? accentColor)
             )
+    }
+
+    private var backgroundBaseColors: [Color] {
+        if colorScheme == .dark {
+            return [
+                EngifyColors.surfaceDarkRaised.opacity(0.98),
+                EngifyColors.surfaceDark.opacity(0.96)
+            ]
+        }
+
+        return [
+            EngifyColors.surface.opacity(0.98),
+            EngifyColors.canvasRaised.opacity(0.96)
+        ]
+    }
+
+    private var backgroundTintColors: [Color] {
+        if colorScheme == .dark {
+            return [
+                accentColor.opacity(0.18),
+                EngifyColors.surfaceMuted.opacity(0.78)
+            ]
+        }
+
+        return [
+            accentColor.opacity(0.10),
+            EngifyColors.surface.opacity(0.76)
+        ]
+    }
+
+    private var menuBorderColor: Color {
+        colorScheme == .dark
+            ? EngifyColors.border.opacity(0.92)
+            : EngifyColors.border.opacity(0.82)
+    }
+
+    private var menuShadowColor: Color {
+        colorScheme == .dark
+            ? .black.opacity(0.24)
+            : EngifyColors.primary.opacity(0.12)
+    }
+
+    private var actionBorderColor: Color {
+        colorScheme == .dark
+            ? EngifyColors.border.opacity(0.86)
+            : EngifyColors.border.opacity(0.60)
+    }
+
+    private var dividerEdgeColor: Color {
+        colorScheme == .dark
+            ? EngifyColors.border.opacity(0.34)
+            : EngifyColors.border.opacity(0.22)
+    }
+
+    private var iconBorderColor: Color {
+        colorScheme == .dark
+            ? EngifyColors.border.opacity(0.84)
+            : EngifyColors.border.opacity(0.58)
+    }
+
+    private func actionBackgroundColors(tint: Color?) -> [Color] {
+        if colorScheme == .dark {
+            return [
+                EngifyColors.surfaceMuted.opacity(0.94),
+                (tint ?? accentColor).opacity(0.14)
+            ]
+        }
+
+        return [
+            EngifyColors.surface.opacity(0.96),
+            (tint ?? accentColor).opacity(0.08)
+        ]
+    }
+
+    private func iconBackgroundColors(tint: Color?) -> [Color] {
+        if colorScheme == .dark {
+            return [
+                EngifyColors.surfaceMuted.opacity(0.94),
+                (tint ?? accentColor).opacity(0.16)
+            ]
+        }
+
+        return [
+            EngifyColors.canvasRaised.opacity(0.96),
+            (tint ?? accentColor).opacity(0.10)
+        ]
     }
 }
 
@@ -2157,9 +2476,11 @@ struct MultipleChoiceQuestionCard: View {
     let question: Question
     let selectedAnswer: Int?
     let revealAnswer: Bool
+    var showsExplanation: Bool = true
     let onSelect: (Int) -> Void
 
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.themeAccentColor) private var accentColor
 
     var body: some View {
         EngifyCard {
@@ -2187,7 +2508,7 @@ struct MultipleChoiceQuestionCard: View {
                             if revealAnswer {
                                 if isCorrect {
                                     Image(systemName: "checkmark.circle.fill")
-                                        .foregroundStyle(EngifyColors.sage)
+                                        .foregroundStyle(accentColor)
                                 } else if isSelected {
                                     Image(systemName: "xmark.circle.fill")
                                         .foregroundStyle(EngifyColors.coral)
@@ -2208,11 +2529,13 @@ struct MultipleChoiceQuestionCard: View {
                     VStack(alignment: .leading, spacing: Spacing.xs) {
                         Text(selectedAnswer == question.answerIndex ? "Correct" : "Incorrect")
                             .font(.footnote.weight(.semibold))
-                            .foregroundStyle(selectedAnswer == question.answerIndex ? EngifyColors.sage : EngifyColors.coral)
+                            .foregroundStyle(selectedAnswer == question.answerIndex ? accentColor : EngifyColors.coral)
 
-                        Text(question.explanation)
-                            .font(.footnote)
-                            .foregroundStyle(EngifyColors.textSecondary)
+                        if showsExplanation {
+                            Text(question.explanation)
+                                .font(.footnote)
+                                .foregroundStyle(EngifyColors.textSecondary)
+                        }
                     }
                 }
             }
@@ -2222,12 +2545,12 @@ struct MultipleChoiceQuestionCard: View {
     private func optionBackground(isCorrect: Bool, isSelected: Bool) -> Color {
         if revealAnswer {
             if isCorrect {
-                return EngifyColors.sage.opacity(0.14)
+                return accentColor.opacity(0.14)
             } else if isSelected {
                 return EngifyColors.coral.opacity(0.12)
             }
         } else if isSelected {
-            return EngifyColors.accent.opacity(0.08)
+            return accentColor.opacity(0.08)
         }
 
         return colorScheme == .dark ? EngifyColors.surfaceDark : EngifyColors.surfaceMuted

@@ -56,7 +56,7 @@ struct IntroView: View {
 
     private var onboardingBackground: some View {
         ZStack {
-            Color.white
+            EngifyColors.surface
                 .ignoresSafeArea()
 
             LinearGradient(
@@ -218,7 +218,7 @@ private struct OnboardingSlideCard: View {
             Circle()
                 .fill(
                     LinearGradient(
-                        colors: [slide.accentTint.opacity(0.22), Color.white],
+                        colors: [slide.accentTint.opacity(0.22), EngifyColors.surface],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
@@ -238,7 +238,7 @@ private struct OnboardingSlideCard: View {
 
             Image(systemName: slide.systemImage)
                 .font(.system(size: 40, weight: .bold))
-                .foregroundStyle(.white)
+                .foregroundStyle(EngifyColors.textInverse)
         }
     }
 
@@ -273,7 +273,7 @@ private struct OnboardingSlideCard: View {
     private var cardBackground: some ShapeStyle {
         LinearGradient(
             colors: [
-                Color.white.opacity(0.98),
+                EngifyColors.surface.opacity(0.98),
                 slide.accentTint.opacity(0.05)
             ],
             startPoint: .topLeading,
@@ -290,11 +290,14 @@ private struct OnboardingSlideCard: View {
 #Preview {
     let savedWordsManager = SavedWordsManager()
     let gamificationManager = GamificationManager()
+    let surveyManager = OnboardingSurveyManager()
 
     IntroView(onContinue: {})
         .environmentObject(AuthenticationManager(
             savedWordsManager: savedWordsManager,
-            gamificationManager: gamificationManager
+            gamificationManager: gamificationManager,
+            surveyManager: surveyManager
         ))
         .environmentObject(ThemeManager())
+        .environmentObject(surveyManager)
 }

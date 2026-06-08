@@ -7,6 +7,7 @@ struct PracticeView: View {
     @State private var quizAnswers: [UUID: Int] = [:]
     @State private var showQuizResult = false
     @State private var currentQuizQuestions: [QuizQuestion] = []
+    @State private var currentPracticeSessionID = UUID()
     @EnvironmentObject private var authManager: AuthenticationManager
     @EnvironmentObject private var theme: ThemeManager
     @EnvironmentObject private var gamification: GamificationManager
@@ -125,7 +126,8 @@ struct PracticeView: View {
                 DedicatedSpeakingPracticeView(
                     accentColor: theme.accentColor,
                     speakingSentence: EngifySampleData.speakingSentence,
-                    speakingHintVisible: $speakingHintVisible
+                    speakingHintVisible: $speakingHintVisible,
+                    learningSettings: learningSettings
                 )
 
             case .grammar:
@@ -140,6 +142,7 @@ struct PracticeView: View {
                 DedicatedQuizView(
                     accentColor: theme.accentColor,
                     theme: theme,
+                    learningSettings: learningSettings,
                     questions: currentQuizQuestions,
                     quizAnswers: $quizAnswers,
                     showQuizResult: $showQuizResult,
@@ -193,20 +196,22 @@ struct PracticeView: View {
     }
 
     private func checkQuizScore() {
+        guard !showQuizResult else { return }
+
         showQuizResult = true
         let earnedXP = quizScore * 5
 
-        if earnedXP > 0 {
-            gamification.earnXP(earnedXP)
-        }
-
         if quizScore == currentQuizQuestions.count, !currentQuizQuestions.isEmpty {
-            gamification.completeLesson(type: .practice, xpEarned: earnedXP, lingotsEarned: 1)
+            gamification.completeLesson(type: .practice, xpEarned: earnedXP)
+            _ = gamification.awardPoints(for: .perfectPractice(sessionID: currentPracticeSessionID))
             showBadge = true
+        } else if earnedXP > 0 {
+            gamification.earnXP(earnedXP)
         }
     }
 
     private func refreshQuiz() {
+        currentPracticeSessionID = UUID()
         currentQuizQuestions = randomizedQuizQuestions()
         quizAnswers.removeAll()
         showQuizResult = false
@@ -419,6 +424,24 @@ private struct DedicatedSpeakingPracticeView: View {
     let accentColor: Color
     let speakingSentence: String
     @Binding var speakingHintVisible: Bool
+    let learningSettings: LearningSettingsManager
+    @State private var typedTranscript = ""
+    @State private var hasReviewedRep = false
+
+    private var pronunciationModelLabel: String {
+        switch learningSettings.pronunciationModel {
+        case "uk_english":
+            return "UK English"
+        case "australian":
+            return "Australian English"
+        default:
+            return "US English"
+        }
+    }
+
+    private var speakingSpeedLabel: String {
+        learningSettings.speakingSpeed.capitalized
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.xl) {
@@ -454,7 +477,7 @@ private struct DedicatedSpeakingPracticeView: View {
                                 Circle()
                                     .fill(
                                         LinearGradient(
-                                            colors: [EngifyColors.sage, accentColor],
+                                            colors: [accentColor.opacity(0.82), accentColor],
                                             startPoint: .topLeading,
                                             endPoint: .bottomTrailing
                                         )
@@ -464,7 +487,7 @@ private struct DedicatedSpeakingPracticeView: View {
 
                                 Image(systemName: "mic.fill")
                                     .font(.system(size: 48, weight: .bold))
-                                    .foregroundStyle(.white)
+                                    .foregroundStyle(EngifyColors.textInverse)
                             }
 
                             Text("Start Speaking")
@@ -478,16 +501,76 @@ private struct DedicatedSpeakingPracticeView: View {
 
                     Spacer(minLength: 0)
 
+                    VStack(spacing: Spacing.sm) {
+                        HStack(spacing: Spacing.sm) {
+                            VocabularyBadge(text: "\(speakingSpeedLabel) pace", tint: accentColor)
+                            VocabularyBadge(text: pronunciationModelLabel, tint: accentColor)
+                            if learningSettings.speechFeedbackEnabled {
+                                VocabularyBadge(text: "Feedback on", tint: accentColor)
+                            }
+                        }
+
+                        if learningSettings.transcriptVisible {
+                            Text("Transcript preview is enabled for speaking reviews.")
+                                .font(EngifyTypography.caption)
+                                .foregroundStyle(EngifyColors.textSecondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+
                     Group {
                         if speakingHintVisible {
-                            HStack(alignment: .top, spacing: Spacing.md) {
-                                Image(systemName: "sparkles")
-                                    .foregroundStyle(accentColor)
+                            VStack(alignment: .leading, spacing: Spacing.md) {
+                                HStack(alignment: .top, spacing: Spacing.md) {
+                                    Image(systemName: "sparkles")
+                                        .foregroundStyle(accentColor)
 
-                                Text("Microphone recording and pronunciation feedback will be available in a future update.")
-                                    .font(EngifyTypography.caption)
-                                    .foregroundStyle(EngifyColors.textSecondary)
-                                    .fixedSize(horizontal: false, vertical: true)
+                                    Text(speakingHintText)
+                                        .font(EngifyTypography.caption)
+                                        .foregroundStyle(EngifyColors.textSecondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+
+                                if learningSettings.microphoneEnabled && learningSettings.microphonePermissionStatus == .granted {
+                                    VStack(alignment: .leading, spacing: Spacing.sm) {
+                                        Text("Type what you said")
+                                            .font(EngifyTypography.caption.weight(.semibold))
+                                            .foregroundStyle(EngifyColors.textPrimary)
+
+                                        TextField("Type your spoken phrase for self-check", text: $typedTranscript)
+                                            .textInputAutocapitalization(.sentences)
+                                            .autocorrectionDisabled()
+                                            .font(EngifyTypography.body)
+                                            .padding(.horizontal, Spacing.md)
+                                            .frame(minHeight: 52)
+                                            .background(
+                                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                                    .fill(EngifyColors.surface)
+                                            )
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                                    .stroke(EngifyColors.border.opacity(0.8), lineWidth: 1)
+                                            )
+
+                                        Button {
+                                            hasReviewedRep = true
+                                        } label: {
+                                            Text("Review My Rep")
+                                                .font(EngifyTypography.caption.weight(.semibold))
+                                                .foregroundStyle(EngifyColors.textInverse)
+                                                .padding(.horizontal, Spacing.md)
+                                                .padding(.vertical, Spacing.sm)
+                                                .background(accentColor)
+                                                .clipShape(Capsule())
+                                        }
+                                        .buttonStyle(.plain)
+                                        .disabled(typedTranscript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                                        if hasReviewedRep {
+                                            speakingReviewCard
+                                        }
+                                    }
+                                }
                             }
                             .padding(Spacing.md)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -504,6 +587,148 @@ private struct DedicatedSpeakingPracticeView: View {
                 .frame(maxWidth: .infinity, minHeight: 460)
             }
         }
+    }
+
+    private var speakingHintText: String {
+        if !learningSettings.microphoneEnabled || learningSettings.microphonePermissionStatus != .granted {
+            return "Enable microphone access in Settings to start speaking practice here."
+        }
+
+        if learningSettings.speechFeedbackEnabled {
+            if learningSettings.transcriptVisible {
+                return "Speak the phrase out loud, then type what you said so Engify can review it with transcript-based feedback."
+            }
+            return "Speak the phrase out loud, then type what you said so Engify can review the accuracy without showing the transcript."
+        }
+
+        return "Microphone practice is on. Speak the phrase out loud, then type what you said for a simple self-check."
+    }
+
+    private var normalizedTargetWords: [String] {
+        normalizedWords(from: speakingSentence)
+    }
+
+    private var normalizedTranscriptWords: [String] {
+        normalizedWords(from: typedTranscript)
+    }
+
+    private var matchedWordsCount: Int {
+        normalizedTranscriptWords.reduce(into: 0) { result, word in
+            if normalizedTargetWords.contains(word) {
+                result += 1
+            }
+        }
+    }
+
+    private var missingWords: [String] {
+        normalizedTargetWords.filter { !normalizedTranscriptWords.contains($0) }
+    }
+
+    private var extraWords: [String] {
+        normalizedTranscriptWords.filter { !normalizedTargetWords.contains($0) }
+    }
+
+    private var selfCheckScore: Int {
+        let total = max(1, normalizedTargetWords.count)
+        return Int((Double(matchedWordsCount) / Double(total)) * 100)
+    }
+
+    private var speakingReviewCard: some View {
+        VStack(alignment: .leading, spacing: Spacing.md) {
+            if learningSettings.speechFeedbackEnabled {
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    Text(feedbackTitle)
+                        .font(EngifyTypography.bodyStrong)
+                        .foregroundStyle(EngifyColors.textPrimary)
+
+                    Text("Self-check score: \(selfCheckScore)%")
+                        .font(EngifyTypography.caption.weight(.semibold))
+                        .foregroundStyle(scoreTint)
+                }
+            }
+
+            if learningSettings.transcriptVisible {
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    Text("Transcript")
+                        .font(EngifyTypography.caption.weight(.semibold))
+                        .foregroundStyle(EngifyColors.textPrimary)
+
+                    Text(typedTranscript.trimmingCharacters(in: .whitespacesAndNewlines))
+                        .font(EngifyTypography.body)
+                        .foregroundStyle(EngifyColors.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            Text(feedbackMessage)
+                .font(EngifyTypography.caption)
+                .foregroundStyle(EngifyColors.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if learningSettings.explanationDepth == "detailed" {
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    if !missingWords.isEmpty {
+                        Text("Missing words: \(missingWords.joined(separator: ", "))")
+                            .font(EngifyTypography.caption)
+                            .foregroundStyle(EngifyColors.textSecondary)
+                    }
+
+                    if !extraWords.isEmpty {
+                        Text("Extra words: \(extraWords.joined(separator: ", "))")
+                            .font(EngifyTypography.caption)
+                            .foregroundStyle(EngifyColors.textSecondary)
+                    }
+                }
+            }
+        }
+        .padding(Spacing.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(EngifyColors.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    private var feedbackTitle: String {
+        switch learningSettings.correctionStyle {
+        case "strict":
+            return selfCheckScore >= 85 ? "Strong rep" : "Needs a cleaner repeat"
+        case "gentle":
+            return selfCheckScore >= 85 ? "Nice progress" : "Good try, refine one more time"
+        default:
+            return selfCheckScore >= 85 ? "Solid speaking rep" : "Try one more focused rep"
+        }
+    }
+
+    private var feedbackMessage: String {
+        switch learningSettings.correctionStyle {
+        case "strict":
+            return learningSettings.explanationDepth == "simple"
+                ? "Match the target phrase more closely."
+                : "Focus on accuracy. Repeat the target phrase and close the gap on any missing words."
+        case "gentle":
+            return learningSettings.explanationDepth == "simple"
+                ? "You are close. Try once more."
+                : "You are building good speaking habits. Repeat the phrase once more and smooth out the missing parts."
+        default:
+            return learningSettings.explanationDepth == "simple"
+                ? "Try another rep to improve the match."
+                : "Repeat the phrase once more and listen for rhythm, word order, and any words you skipped."
+        }
+    }
+
+    private var scoreTint: Color {
+        if selfCheckScore >= 85 {
+            return accentColor
+        } else if selfCheckScore >= 60 {
+            return accentColor
+        }
+        return EngifyColors.coral
+    }
+
+    private func normalizedWords(from text: String) -> [String] {
+        text
+            .lowercased()
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .filter { !$0.isEmpty }
     }
 }
 
@@ -589,7 +814,7 @@ private struct DedicatedGrammarLessonView: View {
                             .font(EngifyTypography.screenTitle)
                             .foregroundStyle(EngifyColors.textPrimary)
 
-                        Text(topic.explanation)
+                        Text(tutorAdjustedExplanation)
                             .font(EngifyTypography.body)
                             .foregroundStyle(EngifyColors.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -613,6 +838,26 @@ private struct DedicatedGrammarLessonView: View {
                         }
                     }
 
+                    if learningSettings.generateExtraExamples {
+                        VStack(alignment: .leading, spacing: Spacing.md) {
+                            Text("More examples")
+                                .font(EngifyTypography.headline)
+                                .foregroundStyle(EngifyColors.textPrimary)
+
+                            ForEach(extraGrammarExamples, id: \.self) { example in
+                                HStack(alignment: .top, spacing: Spacing.md) {
+                                    Image(systemName: "plus.circle.fill")
+                                        .foregroundStyle(accentColor)
+
+                                    Text(example)
+                                        .font(EngifyTypography.body)
+                                        .foregroundStyle(EngifyColors.textPrimary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                            }
+                        }
+                    }
+
                     VStack(alignment: .leading, spacing: Spacing.md) {
                         Text("Translation keys")
                             .font(EngifyTypography.headline)
@@ -628,6 +873,42 @@ private struct DedicatedGrammarLessonView: View {
                 }
                 .frame(maxWidth: .infinity, minHeight: 420, alignment: .topLeading)
             }
+        }
+    }
+
+    private var tutorAdjustedExplanation: String {
+        switch learningSettings.explanationDepth {
+        case "detailed":
+            return topic.explanation + " Focus on one signal pattern, then build two new sentences with different subjects or time markers."
+        case "balanced":
+            return topic.explanation + " Try one short personal example after reading the rule."
+        default:
+            return topic.explanation
+        }
+    }
+
+    private var extraGrammarExamples: [String] {
+        switch topic.title {
+        case "Present Simple":
+            return [
+                "My brother practices English before class.",
+                "We usually review new words after dinner."
+            ]
+        case "There is / There are":
+            return [
+                "There is a notebook beside my laptop.",
+                "There are three useful phrases on the board."
+            ]
+        case "Past Simple":
+            return [
+                "I watched a short English video last night.",
+                "She finished her homework before bed."
+            ]
+        default:
+            return [
+                "Write one sentence about your routine using this pattern.",
+                "Say the sentence aloud once, then change the subject and repeat it."
+            ]
         }
     }
 
@@ -683,6 +964,7 @@ private struct DedicatedGrammarLessonView: View {
 private struct DedicatedQuizView: View {
     let accentColor: Color
     let theme: ThemeManager
+    let learningSettings: LearningSettingsManager
     let questions: [QuizQuestion]
     @Binding var quizAnswers: [UUID: Int]
     @Binding var showQuizResult: Bool
@@ -728,6 +1010,7 @@ private struct DedicatedQuizView: View {
                     question: question,
                     selectedAnswer: quizAnswers[question.id],
                     revealAnswer: showQuizResult && quizAnswers[question.id] != nil,
+                    showsExplanation: learningSettings.showGrammarCorrections,
                     onSelect: { selected in
                         onSelectAnswer(question, selected)
                     }
@@ -768,18 +1051,60 @@ private struct DedicatedQuizView: View {
                             }
 
                             Text(
-                                quizScore == questions.count
-                                    ? "Perfect! You're mastering these concepts."
-                                    : "Keep practicing. Every attempt builds your skills."
+                                tutorResultMessage
                             )
                             .font(EngifyTypography.body)
                             .foregroundStyle(EngifyColors.textSecondary)
+
+                            if learningSettings.explanationDepth != "simple" {
+                                Text(nextStepMessage)
+                                    .font(EngifyTypography.caption)
+                                    .foregroundStyle(EngifyColors.textSecondary)
+                            }
+
+                            if learningSettings.explanationDepth == "detailed" {
+                                Text("Correct answers: \(quizScore). Missed answers: \(max(0, questions.count - quizScore)).")
+                                    .font(EngifyTypography.caption)
+                                    .foregroundStyle(EngifyColors.textSecondary)
+                            }
                         }
                     }
                 }
             }
         }
         .onAppear(perform: onAppear)
+    }
+
+    private var tutorResultMessage: String {
+        guard quizScore != questions.count else {
+            return "Perfect! You're mastering these concepts."
+        }
+
+        switch learningSettings.correctionStyle {
+        case "strict":
+            return learningSettings.showGrammarCorrections
+                ? "Accuracy first. Review the corrections and fix the missed patterns before moving on."
+                : "Accuracy first. Try another round and aim for fewer mistakes."
+        case "gentle":
+            return learningSettings.showGrammarCorrections
+                ? "Nice effort. Review the corrections and give it another calm try."
+                : "Nice effort. Every round helps the pattern feel more natural."
+        default:
+            return learningSettings.showGrammarCorrections
+                ? "Keep practicing. Review the corrections and try again."
+                : "Keep practicing. Every attempt builds your skills."
+        }
+    }
+
+    private var nextStepMessage: String {
+        switch learningSettings.explanationDepth {
+        case "detailed":
+            return "Next step: focus on one missed rule, say one correct sentence aloud, then retake the quiz."
+        case "balanced":
+            return "Next step: revisit one missed pattern, then try again."
+        default:
+            return ""
+        }
     }
 }
 
