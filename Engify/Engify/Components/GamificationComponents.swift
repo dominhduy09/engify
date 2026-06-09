@@ -435,63 +435,166 @@ struct CompletionView: View {
 // MARK: - Celebration View
 
 struct CelebrationView: View {
+    enum Style {
+        case standard
+        case levelUp
+    }
+
     @Environment(\.themeAccentColor) private var accentColor
     let isActive: Bool
+    var style: Style = .standard
     var particleCount: Int = 20
-    @State private var dots: [DotParticle] = []
+    @State private var particles: [ConfettiParticle] = []
     @State private var animationProgress: CGFloat = 0
 
     var body: some View {
         GeometryReader { geo in
             Canvas { context, size in
                 let progress = Double(animationProgress)
-                for dot in dots {
+                for particle in particles {
                     var copy = context
-                    let currentOpacity = max(0, dot.opacity * (1 - progress))
+                    let currentOpacity = max(0, particle.opacity * (1 - progress))
                     copy.opacity = currentOpacity
-                    let currentY = dot.y + (300 * progress)
-                    copy.fill(
-                        Path(ellipseIn: CGRect(x: dot.x - 4, y: currentY - 4, width: 8, height: 8)),
-                        with: .color(dot.color)
+                    let currentX = particle.x + (particle.drift * progress)
+                    let currentY = particle.y + (particle.fallDistance * progress)
+                    let currentRotation = particle.rotation + (particle.spin * progress)
+                    let currentScale = particle.scale * (1 - progress * 0.18)
+                    let rect = CGRect(
+                        x: currentX - particle.size / 2,
+                        y: currentY - particle.size / 2,
+                        width: particle.size,
+                        height: particle.size
                     )
+
+                    let path = confettiPath(for: particle, in: rect)
+                    copy.translateBy(x: currentX, y: currentY)
+                    copy.rotate(by: .degrees(currentRotation))
+                    copy.translateBy(x: -currentX, y: -currentY)
+                    copy.scaleBy(x: currentScale, y: currentScale)
+                    copy.fill(path, with: .color(particle.color))
                 }
             }
             .onAppear {
                 if isActive {
-                    spawnDots(width: geo.size.width, height: geo.size.height)
+                    spawnParticles(width: geo.size.width, height: geo.size.height)
                 }
             }
             .onChange(of: isActive) { isNowActive in
                 if isNowActive {
-                    spawnDots(width: geo.size.width, height: geo.size.height)
+                    spawnParticles(width: geo.size.width, height: geo.size.height)
                 }
             }
         }
     }
 
-    private func spawnDots(width: CGFloat, height: CGFloat) {
+    private func spawnParticles(width: CGFloat, height: CGFloat) {
         let colors: [Color] = [accentColor, EngifyColors.sky, EngifyColors.sage, EngifyColors.coral]
+        let burst = styleMetrics
         animationProgress = 0
-        dots = (0..<particleCount).map { _ in
-            DotParticle(
+        particles = (0..<particleCount).map { _ in
+            ConfettiParticle(
                 x: CGFloat.random(in: 0...max(width, 100)),
-                y: CGFloat.random(in: -50...max(height * 0.25, 100)),
+                y: CGFloat.random(in: burst.spawnYRange(for: height)),
                 color: colors.randomElement() ?? accentColor,
-                opacity: 1
+                opacity: Double.random(in: 0.88...1.0),
+                size: CGFloat.random(in: burst.sizeRange),
+                rotation: Double.random(in: 0...360),
+                spin: Double.random(in: burst.spinRange),
+                drift: CGFloat.random(in: burst.driftRange),
+                fallDistance: CGFloat.random(in: burst.fallDistanceRange),
+                scale: CGFloat.random(in: burst.scaleRange),
+                shape: ConfettiShape.allCases.randomElement() ?? .rectangle
             )
         }
 
-        withAnimation(.easeOut(duration: 1.2)) {
+        withAnimation(.easeOut(duration: burst.duration)) {
             animationProgress = 1
+        }
+    }
+
+    private var styleMetrics: CelebrationBurstMetrics {
+        switch style {
+        case .standard:
+            return CelebrationBurstMetrics(
+                sizeRange: 8...16,
+                spinRange: -220...220,
+                driftRange: -90...90,
+                fallDistanceRange: 220...380,
+                scaleRange: 0.86...1.12,
+                duration: 1.45,
+                spawnBaseY: -80,
+                spawnHeightFactor: 0.12,
+                spawnHeightMinimum: 60
+            )
+        case .levelUp:
+            return CelebrationBurstMetrics(
+                sizeRange: 10...20,
+                spinRange: -320...320,
+                driftRange: -150...150,
+                fallDistanceRange: 280...460,
+                scaleRange: 0.92...1.22,
+                duration: 1.8,
+                spawnBaseY: -120,
+                spawnHeightFactor: 0.18,
+                spawnHeightMinimum: 90
+            )
+        }
+    }
+
+    private func confettiPath(for particle: ConfettiParticle, in rect: CGRect) -> Path {
+        switch particle.shape {
+        case .rectangle:
+            return Path(roundedRect: rect, cornerRadius: rect.width * 0.22)
+        case .circle:
+            return Path(ellipseIn: rect)
+        case .streamer:
+            return Path(
+                roundedRect: CGRect(
+                    x: rect.minX,
+                    y: rect.midY - rect.height * 0.18,
+                    width: rect.width,
+                    height: rect.height * 0.36
+                ),
+                cornerRadius: rect.height * 0.18
+            )
         }
     }
 }
 
-struct DotParticle {
+private enum ConfettiShape: CaseIterable {
+    case rectangle
+    case circle
+    case streamer
+}
+
+private struct CelebrationBurstMetrics {
+    let sizeRange: ClosedRange<CGFloat>
+    let spinRange: ClosedRange<Double>
+    let driftRange: ClosedRange<CGFloat>
+    let fallDistanceRange: ClosedRange<CGFloat>
+    let scaleRange: ClosedRange<CGFloat>
+    let duration: Double
+    let spawnBaseY: CGFloat
+    let spawnHeightFactor: CGFloat
+    let spawnHeightMinimum: CGFloat
+
+    func spawnYRange(for height: CGFloat) -> ClosedRange<CGFloat> {
+        spawnBaseY...max(height * spawnHeightFactor, spawnHeightMinimum)
+    }
+}
+
+private struct ConfettiParticle {
     var x: CGFloat
     var y: CGFloat
     var color: Color
     var opacity: Double
+    var size: CGFloat
+    var rotation: Double
+    var spin: Double
+    var drift: CGFloat
+    var fallDistance: CGFloat
+    var scale: CGFloat
+    var shape: ConfettiShape
 }
 
 // MARK: - Overlay
@@ -538,6 +641,7 @@ struct LevelUpOverlay: View {
             .overlay {
                 CelebrationView(
                     isActive: true,
+                    style: .levelUp,
                     particleCount: gamification.lastLevelUpWasMilestone ? 42 : 20
                 )
                     .allowsHitTesting(false)
@@ -571,6 +675,72 @@ struct LevelUpOverlay: View {
         gamification.lastUnlockedLevel = nil
         gamification.lastLevelUpWasMilestone = false
         gamification.showLevelUp = false
+    }
+}
+
+struct BadgeUnlockedOverlay: View {
+    @EnvironmentObject private var gamification: GamificationManager
+
+    var body: some View {
+        if gamification.showBadgeUnlocked, let badge = gamification.latestUnlockedBadge {
+            BadgeUnlockedPopup(badge: badge) {
+                gamification.dismissBadgeUnlocked()
+            }
+            .overlay {
+                CelebrationView(isActive: true, style: .levelUp, particleCount: 28)
+                    .allowsHitTesting(false)
+            }
+        }
+    }
+}
+
+private struct BadgeUnlockedPopup: View {
+    @Environment(\.themeAccentColor) private var accentColor
+    let badge: AchievementBadge
+    let onDismiss: () -> Void
+    @State private var showContent = false
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.22)
+                .ignoresSafeArea()
+
+            VStack(spacing: Spacing.cardGap) {
+                EngifyIconBadge(systemImage: badge.systemImage, tint: accentColor, size: 82)
+                    .scaleEffect(showContent ? 1 : 0.82)
+
+                VStack(spacing: Spacing.xs) {
+                    Text("Badge Unlocked!")
+                        .font(EngifyTypography.screenTitle)
+                        .foregroundStyle(EngifyColors.textPrimary)
+                        .multilineTextAlignment(.center)
+
+                    Text(badge.title)
+                        .font(EngifyTypography.cardTitle)
+                        .foregroundStyle(accentColor)
+
+                    Text(badge.detail)
+                        .font(EngifyTypography.body)
+                        .foregroundStyle(EngifyColors.textSecondary)
+                        .multilineTextAlignment(.center)
+                }
+
+                CompletionButton(title: "Awesome", systemImage: "sparkles", action: onDismiss)
+            }
+            .padding(Spacing.xl)
+            .frame(maxWidth: 360)
+            .background(EngifyColors.surface)
+            .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
+            .shadow(color: .black.opacity(0.18), radius: 28, x: 0, y: 14)
+            .padding(.horizontal, Spacing.screenPadding)
+            .opacity(showContent ? 1 : 0)
+            .scaleEffect(showContent ? 1 : 0.94)
+        }
+        .onAppear {
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.76)) {
+                showContent = true
+            }
+        }
     }
 }
 

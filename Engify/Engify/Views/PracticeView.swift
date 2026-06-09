@@ -12,19 +12,12 @@ struct PracticeView: View {
     @EnvironmentObject private var theme: ThemeManager
     @EnvironmentObject private var gamification: GamificationManager
     @EnvironmentObject private var learningSettings: LearningSettingsManager
-    @State private var showBadge = false
     @State private var showSettingsSheet = false
 
     var body: some View {
         EngifyScreenScroll {
             globalHeader
             routedContent
-        }
-        .overlay {
-            if showBadge {
-                LessonCompleteOverlay()
-                    .environmentObject(gamification)
-            }
         }
         .overlay(alignment: .bottom) {
             if gamification.showXPGain {
@@ -204,7 +197,6 @@ struct PracticeView: View {
         if quizScore == currentQuizQuestions.count, !currentQuizQuestions.isEmpty {
             gamification.completeLesson(type: .practice, xpEarned: earnedXP)
             _ = gamification.awardPoints(for: .perfectPractice(sessionID: currentPracticeSessionID))
-            showBadge = true
         } else if earnedXP > 0 {
             gamification.earnXP(earnedXP)
         }

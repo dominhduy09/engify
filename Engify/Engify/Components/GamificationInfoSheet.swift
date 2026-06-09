@@ -16,69 +16,6 @@ struct GamificationInfoSheet: View {
         GridItem(.adaptive(minimum: 94), spacing: Spacing.sm)
     ]
 
-    private let badgePreviews: [BadgePreview] = [
-        BadgePreview(
-            title: "Early Bird",
-            detail: "Complete a lesson before 8:00 AM.",
-            systemImage: "sun.max.fill"
-        ),
-        BadgePreview(
-            title: "Night Owl",
-            detail: "Finish a lesson after 10:00 PM.",
-            systemImage: "moon.stars.fill"
-        ),
-        BadgePreview(
-            title: "Word Smith",
-            detail: "Save 50 vocabulary words in total.",
-            systemImage: "textformat.abc"
-        ),
-        BadgePreview(
-            title: "Word Collector",
-            detail: "Save 10 new words to your Word Bank.",
-            systemImage: "books.vertical.fill"
-        ),
-        BadgePreview(
-            title: "Consistent Learner",
-            detail: "Achieve a 7-day milestone streak.",
-            systemImage: "flame.fill"
-        ),
-        BadgePreview(
-            title: "Streak Keeper",
-            detail: "Reach a 30-day learning streak.",
-            systemImage: "flame.circle.fill"
-        ),
-        BadgePreview(
-            title: "Quiz Ace",
-            detail: "Get a perfect score in Practice.",
-            systemImage: "checkmark.seal.fill"
-        ),
-        BadgePreview(
-            title: "Sharp Reader",
-            detail: "Finish 5 News quizzes with full marks.",
-            systemImage: "newspaper.fill"
-        ),
-        BadgePreview(
-            title: "Explorer",
-            detail: "Use Lookup on 25 different words.",
-            systemImage: "magnifyingglass.circle.fill"
-        ),
-        BadgePreview(
-            title: "Momentum",
-            detail: "Earn points from 3 activities in one day.",
-            systemImage: "bolt.heart.fill"
-        ),
-        BadgePreview(
-            title: "Level Climber",
-            detail: "Reach Level 10.",
-            systemImage: "flag.fill"
-        ),
-        BadgePreview(
-            title: "Century Star",
-            detail: "Collect 100 total points.",
-            systemImage: "star.circle.fill"
-        )
-    ]
-
     var body: some View {
         NavigationView {
             ScrollView(showsIndicators: false) {
@@ -228,10 +165,11 @@ struct GamificationInfoSheet: View {
                     .fixedSize(horizontal: false, vertical: true)
 
                 LazyVGrid(columns: badgeColumns, spacing: Spacing.md) {
-                    ForEach(Array(badgePreviews.enumerated()), id: \.element.id) { index, badge in
-                        LockedBadgePreview(
+                    ForEach(Array(AchievementBadge.allCases.enumerated()), id: \.element.id) { index, badge in
+                        AchievementBadgePreview(
                             badge: badge,
                             accentColor: accentColor,
+                            isUnlocked: gamification.isBadgeUnlocked(badge),
                             isVisible: showBadges,
                             index: index
                         )
@@ -333,16 +271,10 @@ struct GamificationInfoSheet: View {
     }
 }
 
-private struct BadgePreview: Identifiable {
-    let id = UUID()
-    let title: String
-    let detail: String
-    let systemImage: String
-}
-
-private struct LockedBadgePreview: View {
-    let badge: BadgePreview
+private struct AchievementBadgePreview: View {
+    let badge: AchievementBadge
     let accentColor: Color
+    let isUnlocked: Bool
     let isVisible: Bool
     let index: Int
 
@@ -354,11 +286,11 @@ private struct LockedBadgePreview: View {
         VStack(alignment: .center, spacing: Spacing.sm) {
             ZStack(alignment: .topTrailing) {
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(accentColor.opacity(0.08))
+                    .fill((isUnlocked ? accentColor : accentColor.opacity(0.55)).opacity(isUnlocked ? 0.14 : 0.08))
                     .frame(height: iconHeight)
                     .overlay(
                         RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .stroke(EngifyColors.border.opacity(0.8), lineWidth: 1)
+                            .stroke((isUnlocked ? accentColor.opacity(0.24) : EngifyColors.border.opacity(0.8)), lineWidth: 1)
                     )
 
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
@@ -367,14 +299,14 @@ private struct LockedBadgePreview: View {
                     .overlay(
                         Image(systemName: badge.systemImage)
                             .font(.system(size: 24, weight: .semibold))
-                            .foregroundStyle(accentColor.opacity(0.45))
+                            .foregroundStyle(isUnlocked ? accentColor : accentColor.opacity(0.45))
                     )
 
-                Image(systemName: "lock.fill")
+                Image(systemName: isUnlocked ? "checkmark.circle.fill" : "lock.fill")
                     .font(.caption2.weight(.bold))
                     .foregroundStyle(EngifyColors.textInverse)
                     .padding(6)
-                    .background(accentColor, in: Circle())
+                    .background(isUnlocked ? EngifyColors.sage : accentColor, in: Circle())
                     .offset(x: 6, y: -6)
             }
 
@@ -390,6 +322,14 @@ private struct LockedBadgePreview: View {
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, minHeight: detailHeight, alignment: .top)
+
+            Text(isUnlocked ? "Unlocked" : "Locked")
+                .font(.system(size: 10, weight: .bold, design: .rounded))
+                .foregroundStyle(isUnlocked ? EngifyColors.sage : EngifyColors.textSecondary)
+                .padding(.horizontal, Spacing.sm)
+                .padding(.vertical, 5)
+                .background((isUnlocked ? EngifyColors.sage : EngifyColors.border).opacity(0.14))
+                .clipShape(Capsule())
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .opacity(isVisible ? 1 : 0)

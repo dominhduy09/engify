@@ -227,6 +227,9 @@ struct VocabularyView: View {
             }
             EngifyFeedback.shared.play(.successPop, settings: learningSettings)
             if !wasSaved, savedWordsManager.isSaved(word: currentWord) {
+                let rewardWordID = normalizedWordID(for: currentWord.word)
+                _ = gamification.awardPoints(for: .savedWord(wordID: rewardWordID))
+                gamification.registerSavedWord(source: .vocabulary(currentWord))
                 showSavedWordToast(for: currentWord.word)
             }
         } label: {
@@ -321,7 +324,6 @@ struct VocabularyView: View {
             systemImage: "checkmark.circle.fill",
             action: {
                 completeCurrentLesson()
-                EngifyFeedback.shared.play(.tabSwitch, settings: learningSettings)
             },
             size: .large,
             feedbackEvent: .successPop
@@ -484,6 +486,7 @@ struct VocabularyView: View {
 
         saveWordForReview(currentWord)
         completedCurrentWordIDs.insert(normalized)
+        gamification.registerSavedWord(source: .vocabulary(currentWord))
         gamification.completeLesson(type: .vocabulary, xpEarned: 10)
         _ = gamification.awardPoints(for: .savedWord(wordID: normalized))
 

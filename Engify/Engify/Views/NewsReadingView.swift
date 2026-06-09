@@ -261,6 +261,7 @@ struct NewsReadingView: View {
         if !wasSaved, savedWordsManager.isSaved(word: word) {
             let rewardWordID = word.word.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
             _ = gamification.awardPoints(for: .savedWord(wordID: rewardWordID))
+            gamification.registerSavedWord(source: .vocabulary(word))
             showSavedWordToast(for: word.word)
         }
     }
@@ -336,6 +337,8 @@ struct NewsArticleDetailView: View {
     let onSaveWord: (NewsVocabularyItem) -> Void
     @State private var selectedAnswers: [UUID: Int] = [:]
     @State private var showResult = false
+    @State private var isVocabularyExpanded = false
+    @State private var isQuizExpanded = false
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @EnvironmentObject private var gamification: GamificationManager
     @EnvironmentObject private var savedWordsManager: SavedWordsManager
@@ -416,29 +419,29 @@ struct NewsArticleDetailView: View {
     }
 
     private var vocabularySection: some View {
-        EngifyCard(tint: theme.accentColor) {
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                Label("Key Vocabulary", systemImage: "book.fill")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(theme.accentColor)
-
-                Text("Focus on these words to better understand the article.")
-                    .font(EngifyTypography.caption)
-                    .foregroundStyle(EngifyColors.textSecondary)
-
-                if article.keyVocabulary.isEmpty {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: Spacing.sm) {
-                            ForEach(article.difficultWords, id: \.self) { word in
-                                ArticlePreviewTag(text: word)
-                            }
+        EngifyCollapsibleCard(
+            title: "Key Vocabulary",
+            subtitle: "Focus on these words to better understand the article.",
+            systemImage: "book.fill",
+            tint: theme.accentColor,
+            isExpanded: $isVocabularyExpanded
+        ) {
+            Text(article.keyVocabulary.isEmpty ? "Quick vocabulary list available" : "\(article.keyVocabulary.count) vocabulary item\(article.keyVocabulary.count == 1 ? "" : "s") ready")
+                .font(EngifyTypography.caption)
+                .foregroundStyle(EngifyColors.textSecondary)
+        } detail: {
+            if article.keyVocabulary.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: Spacing.sm) {
+                        ForEach(article.difficultWords, id: \.self) { word in
+                            ArticlePreviewTag(text: word)
                         }
                     }
-                } else {
-                    VStack(spacing: Spacing.md) {
-                        ForEach(article.keyVocabulary) { word in
-                            vocabularyCard(word)
-                        }
+                }
+            } else {
+                VStack(spacing: Spacing.md) {
+                    ForEach(article.keyVocabulary) { word in
+                        vocabularyCard(word)
                     }
                 }
             }
@@ -472,56 +475,67 @@ struct NewsArticleDetailView: View {
     }
 
     private var quizSection: some View {
-        VStack(alignment: .leading, spacing: Spacing.lg) {
-            EngifySectionHeader(
-                title: "Comprehension Quiz",
-                subtitle: "Check what you understood from the article."
-            )
+        EngifyCollapsibleCard(
+            title: "Comprehension Quiz",
+            subtitle: "Check what you understood from the article.",
+            systemImage: "checkmark.circle.fill",
+            tint: theme.accentColor,
+            isExpanded: $isQuizExpanded
+        ) {
+            Text("\(article.questions.count) question\(article.questions.count == 1 ? "" : "s") ready")
+                .font(EngifyTypography.caption)
+                .foregroundStyle(EngifyColors.textSecondary)
+        } detail: {
+            VStack(alignment: .leading, spacing: Spacing.lg) {
+                ForEach(article.questions) { question in
+                    MultipleChoiceQuestionCard(
+                        question: question,
+                        selectedAnswer: selectedAnswers[question.id],
+                        revealAnswer: showResult && selectedAnswers[question.id] != nil,
+                        showsExplanation: learningSettings.showGrammarCorrections,
+                        onSelect: { selected in
+                            guard !showResult, selectedAnswers[question.id] == nil else { return }
+                            selectedAnswers[question.id] = selected
+                        }
+                    )
+                }
 
-            ForEach(article.questions) { question in
-                MultipleChoiceQuestionCard(
-                    question: question,
-                    selectedAnswer: selectedAnswers[question.id],
-                    revealAnswer: showResult && selectedAnswers[question.id] != nil,
-                    showsExplanation: learningSettings.showGrammarCorrections,
-                    onSelect: { selectedAnswers[question.id] = $0 }
-                )
-            }
-
-            EngifyCard(tint: theme.accentColor) {
-                VStack(alignment: .leading, spacing: Spacing.lg) {
-                    PrimaryButton(title: "Check Answers", systemImage: "checkmark.circle.fill", action: {
+                EngifyCard(tint: theme.accentColor) {
+                    VStack(alignment: .leading, spacing: Spacing.lg) {
+                        PrimaryButton(title: "Check Answers", systemImage: "checkmark.circle.fill", action: {
                         guard !showResult else { return }
                         showResult = true
                         if score == article.questions.count, !article.questions.isEmpty {
                             _ = gamification.awardPoints(for: .completedNewsQuiz(articleID: article.id))
+                            gamification.registerPerfectNewsQuiz()
                             gamification.completeLesson(type: .news, xpEarned: 15)
                         }
                     })
 
-                    if showResult {
-                        VStack(alignment: .leading, spacing: Spacing.sm) {
-                            HStack(alignment: .top) {
-                                Text("Score: \(score)/\(article.questions.count)")
-                                    .font(EngifyTypography.headline)
-                                    .foregroundStyle(EngifyColors.textPrimary)
+                        if showResult {
+                            VStack(alignment: .leading, spacing: Spacing.sm) {
+                                HStack(alignment: .top) {
+                                    Text("Score: \(score)/\(article.questions.count)")
+                                        .font(EngifyTypography.headline)
+                                        .foregroundStyle(EngifyColors.textPrimary)
 
-                                Spacer(minLength: 0)
+                                    Spacer(minLength: 0)
 
-                                Text(score == article.questions.count ? "Excellent!" : "Keep practicing!")
-                                    .font(EngifyTypography.caption.weight(.semibold))
-                                    .foregroundStyle(theme.accentColor)
+                                    Text(score == article.questions.count ? "Excellent!" : "Keep practicing!")
+                                        .font(EngifyTypography.caption.weight(.semibold))
+                                        .foregroundStyle(theme.accentColor)
+                                }
+
+                                Text(
+                                    score == article.questions.count
+                                        ? "Great job! You understood the article perfectly."
+                                        : learningSettings.showGrammarCorrections
+                                            ? "Review the explanations above and try again."
+                                            : "Try another round to improve your score."
+                                )
+                                .font(EngifyTypography.body)
+                                .foregroundStyle(EngifyColors.textSecondary)
                             }
-
-                            Text(
-                                score == article.questions.count
-                                    ? "Great job! You understood the article perfectly."
-                                    : learningSettings.showGrammarCorrections
-                                        ? "Review the explanations above and try again."
-                                        : "Try another round to improve your score."
-                            )
-                            .font(EngifyTypography.body)
-                            .foregroundStyle(EngifyColors.textSecondary)
                         }
                     }
                 }

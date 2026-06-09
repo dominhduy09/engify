@@ -12,7 +12,6 @@ struct DictionaryView: View {
     @State private var showSettingsSheet = false
     @State private var savedToastWordTitle: String?
     @State private var showSavedWordBank = false
-    @State private var detailsExpanded = false
 
     var body: some View {
         EngifyScreenScroll {
@@ -33,15 +32,6 @@ struct DictionaryView: View {
         .sheet(isPresented: $showSavedWordBank) {
             SavedWordBankSheet()
                 .environmentObject(savedWordsManager)
-        }
-        .onAppear {
-            detailsExpanded = learningSettings.showDefinitionsByDefault
-        }
-        .onChange(of: learningSettings.showDefinitionsByDefault) { newValue in
-            detailsExpanded = newValue
-        }
-        .onChange(of: viewModel.currentEntry?.id) { _ in
-            detailsExpanded = learningSettings.showDefinitionsByDefault
         }
     }
 
@@ -80,113 +70,100 @@ struct DictionaryView: View {
     @ViewBuilder
     private func resultContent(for displayedEntry: DictionaryEntry) -> some View {
         wordSummary(for: displayedEntry)
-        EngifyCollapsibleCard(
-            title: "Word details",
-            subtitle: detailsExpanded ? "Full definition, meaning, and examples" : "Tap to expand this word",
-            systemImage: "text.book.closed.fill",
-            tint: theme.accentColor,
-            isExpanded: $detailsExpanded
-        ) {
-            VStack(alignment: .leading, spacing: Spacing.sm) {
-                Text(displayValue(displayedEntry.definition))
-                    .font(EngifyTypography.bodyStrong)
-                    .foregroundStyle(EngifyColors.textPrimary)
+        Divider()
+        structuredBreakdown(for: displayedEntry)
+    }
 
-                Text(displayValue(displayedEntry.vietnameseMeaning))
-                    .font(EngifyTypography.caption)
-                    .foregroundStyle(EngifyColors.textSecondary)
+    private func structuredBreakdown(for displayedEntry: DictionaryEntry) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.lg) {
+            formsSection(for: displayedEntry)
+
+            if learningSettings.explanationDepth != "simple" {
+                detailBlock(
+                    title: "Tutor Note",
+                    icon: "sparkles",
+                    tint: theme.accentColor
+                ) {
+                    Text(tutorNote(for: displayedEntry))
+                        .font(EngifyTypography.body)
+                        .foregroundStyle(EngifyColors.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
-        } detail: {
-            VStack(alignment: .leading, spacing: Spacing.lg) {
-                formsSection(for: displayedEntry)
 
-                if learningSettings.explanationDepth != "simple" {
-                    detailBlock(
-                        title: "Tutor Note",
-                        icon: "sparkles",
-                        tint: theme.accentColor
-                    ) {
-                        Text(tutorNote(for: displayedEntry))
-                            .font(EngifyTypography.body)
-                            .foregroundStyle(EngifyColors.textPrimary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
+            detailBlock(
+                title: "Definition",
+                icon: "list.bullet.rectangle.portrait",
+                tint: theme.accentColor
+            ) {
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    dictionaryLine(label: "Part of speech", value: displayValue(displayedEntry.partOfSpeech.capitalizedIfAvailable))
+                    dictionaryLine(label: "Specific sense", value: displayValue(displayedEntry.definition))
                 }
+            }
 
+            detailBlock(
+                title: "Vietnamese Meaning",
+                icon: "globe",
+                tint: theme.accentColor
+            ) {
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    dictionaryLine(label: "Translation", value: displayValue(displayedEntry.vietnameseMeaning))
+                }
+            }
+
+            detailBlock(
+                title: "Example",
+                icon: "quote.opening",
+                tint: theme.accentColor
+            ) {
+                if #available(iOS 16.0, *) {
+                    Text(exampleText(for: displayedEntry))
+                        .font(.system(size: 16, weight: .regular, design: .serif))
+                        .foregroundStyle(EngifyColors.textPrimary)
+                        .italic()
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    // Fallback on earlier versions
+                }
+            }
+
+            if displayValue(displayedEntry.idiom) != "N/A" {
                 detailBlock(
-                    title: "Definition",
-                    icon: "list.bullet.rectangle.portrait",
+                    title: "Idiom",
+                    icon: "text.quote",
+                    tint: theme.accentColor
+                ) {
+                    dictionaryLine(label: "Common phrase", value: displayValue(displayedEntry.idiom))
+                }
+            }
+
+            if !displayedEntry.phrasalVerbs.isEmpty {
+                detailBlock(
+                    title: "Phrasal Verbs",
+                    icon: "arrow.triangle.branch",
                     tint: theme.accentColor
                 ) {
                     VStack(alignment: .leading, spacing: Spacing.sm) {
-                        dictionaryLine(label: "Part of speech", value: displayValue(displayedEntry.partOfSpeech.capitalizedIfAvailable))
-                        dictionaryLine(label: "Specific sense", value: displayValue(displayedEntry.definition))
-                    }
-                }
-
-                detailBlock(
-                    title: "Vietnamese Meaning",
-                    icon: "globe",
-                    tint: theme.accentColor
-                ) {
-                    VStack(alignment: .leading, spacing: Spacing.sm) {
-                        dictionaryLine(label: "Translation", value: displayValue(displayedEntry.vietnameseMeaning))
-                    }
-                }
-
-                detailBlock(
-                    title: "Example",
-                    icon: "quote.opening",
-                    tint: theme.accentColor
-                ) {
-                    if #available(iOS 16.0, *) {
-                        Text(exampleText(for: displayedEntry))
-                            .font(.system(size: 16, weight: .regular, design: .serif))
-                            .foregroundStyle(EngifyColors.textPrimary)
-                            .italic()
-                            .fixedSize(horizontal: false, vertical: true)
-                    } else {
-                        // Fallback on earlier versions
-                    }
-                }
-
-                if displayValue(displayedEntry.idiom) != "N/A" {
-                    detailBlock(
-                        title: "Idiom",
-                        icon: "text.quote",
-                        tint: theme.accentColor
-                    ) {
-                        dictionaryLine(label: "Common phrase", value: displayValue(displayedEntry.idiom))
-                    }
-                }
-
-                if !displayedEntry.phrasalVerbs.isEmpty {
-                    detailBlock(
-                        title: "Phrasal Verbs",
-                        icon: "arrow.triangle.branch",
-                        tint: theme.accentColor
-                    ) {
-                        VStack(alignment: .leading, spacing: Spacing.sm) {
-                            ForEach(displayedEntry.phrasalVerbs, id: \.self) { phrasalVerb in
-                                dictionaryLine(label: "Related form", value: displayValue(phrasalVerb))
-                            }
+                        ForEach(displayedEntry.phrasalVerbs, id: \.self) { phrasalVerb in
+                            dictionaryLine(label: "Related form", value: displayValue(phrasalVerb))
                         }
                     }
                 }
+            }
 
-                if learningSettings.generateExtraExamples {
-                    detailBlock(
-                        title: "Extra Examples",
-                        icon: "text.quote",
-                        tint: theme.accentColor
-                    ) {
-                        VStack(alignment: .leading, spacing: Spacing.sm) {
-                            ForEach(extraExamples(for: displayedEntry), id: \.self) { example in
-                                Text(example)
-                                    .font(EngifyTypography.body)
-                                    .foregroundStyle(EngifyColors.textPrimary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
+            if learningSettings.generateExtraExamples {
+                detailBlock(
+                    title: "Extra Examples",
+                    icon: "text.quote",
+                    tint: theme.accentColor
+                ) {
+                    VStack(alignment: .leading, spacing: Spacing.sm) {
+                        ForEach(extraExamples(for: displayedEntry), id: \.self) { example in
+                            Text(example)
+                                .font(EngifyTypography.body)
+                                .foregroundStyle(EngifyColors.textPrimary)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                     }
                 }
@@ -223,7 +200,13 @@ struct DictionaryView: View {
                 .onSubmit {
                     isSearchFieldFocused = false
                     viewModel.showSuggestions = false
-                    Task { await viewModel.search() }
+                    Task {
+                        await viewModel.search()
+                        let normalized = viewModel.searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                        if !normalized.isEmpty {
+                            gamification.registerLookup(wordID: normalized)
+                        }
+                    }
                 }
 
             if viewModel.isSuggestionsLoading {
@@ -367,6 +350,7 @@ struct DictionaryView: View {
             if !wasSaved, savedWordsManager.isSaved(displayedEntry) {
                 let rewardWordID = displayedEntry.word.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
                 _ = gamification.awardPoints(for: .savedWord(wordID: rewardWordID))
+                gamification.registerSavedWord(source: .dictionary(displayedEntry))
                 showSavedWordToast(for: displayedEntry.word)
             }
         } label: {

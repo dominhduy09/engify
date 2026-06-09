@@ -93,6 +93,7 @@ final class EngifyFeedback {
     private enum Keys {
         static let prefix = "engify.settings."
         static let soundEffectsEnabled = prefix + "sound_effects_enabled"
+        static let soundEffectStyle = prefix + "sound_effect_style"
         static let hapticFeedbackEnabled = prefix + "haptic_feedback_enabled"
     }
 
@@ -103,6 +104,10 @@ final class EngifyFeedback {
     func play(_ event: EngifyFeedbackEvent, settings: LearningSettingsManager? = nil) {
         let hapticsEnabled = settings?.hapticFeedbackEnabled ?? storedBool(for: Keys.hapticFeedbackEnabled, default: true)
         let soundEnabled = settings?.soundEffectsEnabled ?? storedBool(for: Keys.soundEffectsEnabled, default: true)
+        let soundStyle = settings
+            .flatMap { SoundEffectStyle(rawValue: $0.soundEffectStyle) }
+            ?? SoundEffectStyle(rawValue: UserDefaults.standard.string(forKey: Keys.soundEffectStyle) ?? SoundEffectStyle.classic.rawValue)
+            ?? .classic
 
         if hapticsEnabled {
             switch event {
@@ -125,11 +130,11 @@ final class EngifyFeedback {
 
         switch event {
         case .successPop:
-            synthesizer.playBubblePop()
+            synthesizer.playBubblePop(style: soundStyle)
         case .tabSwitch:
-            synthesizer.playMutedTick()
+            synthesizer.playMutedTick(style: soundStyle)
         case .errorBuzz:
-            synthesizer.playSoftBuzz()
+            synthesizer.playSoftBuzz(style: soundStyle)
         }
     }
 
@@ -155,26 +160,67 @@ private final class EngifySoundSynthesizer {
         engine.mainMixerNode.outputVolume = 0.58
     }
 
-    func playBubblePop() {
-        play(segments: [
-            .init(frequency: 920, duration: 0.045, amplitude: 0.18),
-            .init(frequency: 1360, duration: 0.08, amplitude: 0.12)
-        ])
+    func playBubblePop(style: SoundEffectStyle) {
+        switch style {
+        case .classic:
+            play(segments: [
+                .init(frequency: 920, duration: 0.045, amplitude: 0.18),
+                .init(frequency: 1360, duration: 0.08, amplitude: 0.12)
+            ])
+        case .soft:
+            play(segments: [
+                .init(frequency: 760, duration: 0.04, amplitude: 0.13),
+                .init(frequency: 1120, duration: 0.07, amplitude: 0.08)
+            ])
+        case .bright:
+            play(segments: [
+                .init(frequency: 1080, duration: 0.04, amplitude: 0.20),
+                .init(frequency: 1580, duration: 0.09, amplitude: 0.14)
+            ])
+        }
     }
 
-    func playMutedTick() {
-        play(segments: [
-            .init(frequency: 620, duration: 0.022, amplitude: 0.08),
-            .init(frequency: 410, duration: 0.03, amplitude: 0.04)
-        ])
+    func playMutedTick(style: SoundEffectStyle) {
+        switch style {
+        case .classic:
+            play(segments: [
+                .init(frequency: 620, duration: 0.022, amplitude: 0.08),
+                .init(frequency: 410, duration: 0.03, amplitude: 0.04)
+            ])
+        case .soft:
+            play(segments: [
+                .init(frequency: 520, duration: 0.02, amplitude: 0.05),
+                .init(frequency: 360, duration: 0.026, amplitude: 0.03)
+            ])
+        case .bright:
+            play(segments: [
+                .init(frequency: 760, duration: 0.02, amplitude: 0.10),
+                .init(frequency: 520, duration: 0.03, amplitude: 0.05)
+            ])
+        }
     }
 
-    func playSoftBuzz() {
-        play(segments: [
-            .init(frequency: 180, duration: 0.04, amplitude: 0.07),
-            .init(frequency: 160, duration: 0.045, amplitude: 0.06, silenceAfter: 0.03),
-            .init(frequency: 150, duration: 0.06, amplitude: 0.05)
-        ])
+    func playSoftBuzz(style: SoundEffectStyle) {
+        switch style {
+        case .classic:
+            play(segments: [
+                .init(frequency: 180, duration: 0.04, amplitude: 0.07),
+                .init(frequency: 160, duration: 0.045, amplitude: 0.06, silenceAfter: 0.03),
+                .init(frequency: 150, duration: 0.06, amplitude: 0.05)
+            ])
+        case .soft:
+            play(segments: [
+                .init(frequency: 220, duration: 0.035, amplitude: 0.05),
+                .init(frequency: 200, duration: 0.04, amplitude: 0.045, silenceAfter: 0.025),
+                .init(frequency: 180, duration: 0.05, amplitude: 0.04)
+            ])
+        case .bright:
+            play(segments: [
+                .init(frequency: 240, duration: 0.035, amplitude: 0.08),
+                .init(frequency: 210, duration: 0.04, amplitude: 0.07, silenceAfter: 0.02),
+                .init(frequency: 190, duration: 0.055, amplitude: 0.06)
+            ])
+        }
     }
 
     private func play(segments: [ToneSegment]) {

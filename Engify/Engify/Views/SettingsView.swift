@@ -692,11 +692,38 @@ struct SettingsView: View {
             title: "App preferences",
             subtitle: "Control the little interface touches that shape how Engify feels day to day."
         ) {
-            EngifySettingToggleRow(
-                title: "App Audio / Sounds",
-                subtitle: "Mute interactive sound effects and click chimes.",
-                isOn: $settings.soundEffectsEnabled
-            )
+            VStack(alignment: .leading, spacing: Spacing.lg) {
+                EngifySettingToggleRow(
+                    title: "App Audio / Sounds",
+                    subtitle: "Mute interactive sound effects and click chimes.",
+                    isOn: $settings.soundEffectsEnabled
+                )
+
+                if settings.soundEffectsEnabled {
+                    VStack(alignment: .leading, spacing: Spacing.sm) {
+                        Text("Sound effect style")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(EngifyColors.textPrimary)
+
+                        HStack(spacing: Spacing.sm) {
+                            ForEach(SoundEffectStyle.allCases) { style in
+                                EngifySettingOptionChip(
+                                    title: style.title,
+                                    isSelected: settings.soundEffectStyle == style.rawValue
+                                ) {
+                                    settings.soundEffectStyle = style.rawValue
+                                    EngifyFeedback.shared.play(.tabSwitch, settings: settings)
+                                }
+                            }
+                        }
+
+                        Text((SoundEffectStyle(rawValue: settings.soundEffectStyle) ?? .classic).subtitle)
+                            .font(EngifyTypography.caption)
+                            .foregroundStyle(EngifyColors.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
         }
     }
 
@@ -815,6 +842,7 @@ struct SettingsView: View {
             settings.microphoneEnabled.description,
             settings.voiceHistoryEnabled.description,
             settings.soundEffectsEnabled.description,
+            settings.soundEffectStyle,
             settings.hapticFeedbackEnabled.description,
             settings.showDefinitionsByDefault.description,
             settings.showGrammarCorrections.description,

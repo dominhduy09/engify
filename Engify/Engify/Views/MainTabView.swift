@@ -45,7 +45,13 @@ struct MainTabView: View {
         }
         .ignoresSafeArea(.keyboard)
         .overlay {
+            LessonCompleteOverlay()
+        }
+        .overlay {
             LevelUpOverlay()
+        }
+        .overlay {
+            BadgeUnlockedOverlay()
         }
         .sheet(item: $authManager.accountRequiredContext) { context in
             if #available(iOS 16.0, *) {

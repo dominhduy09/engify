@@ -477,3 +477,107 @@ enum PointsRewardResult: Equatable {
     case awarded(amount: Int, totalPoints: Int)
     case alreadyAwarded(totalPoints: Int)
 }
+
+enum AchievementBadge: String, Codable, CaseIterable, Hashable, Identifiable {
+    case earlyBird = "early_bird"
+    case nightOwl = "night_owl"
+    case wordSmith = "word_smith"
+    case wordCollector = "word_collector"
+    case consistentLearner = "consistent_learner"
+    case streakKeeper = "streak_keeper"
+    case quizAce = "quiz_ace"
+    case sharpReader = "sharp_reader"
+    case explorer = "explorer"
+    case momentum = "momentum"
+    case levelClimber = "level_climber"
+    case centuryStar = "century_star"
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .earlyBird:
+            return "Early Bird"
+        case .nightOwl:
+            return "Night Owl"
+        case .wordSmith:
+            return "Word Smith"
+        case .wordCollector:
+            return "Word Collector"
+        case .consistentLearner:
+            return "Consistent Learner"
+        case .streakKeeper:
+            return "Streak Keeper"
+        case .quizAce:
+            return "Quiz Ace"
+        case .sharpReader:
+            return "Sharp Reader"
+        case .explorer:
+            return "Explorer"
+        case .momentum:
+            return "Momentum"
+        case .levelClimber:
+            return "Level Climber"
+        case .centuryStar:
+            return "Century Star"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .earlyBird:
+            return "Complete a lesson before 8:00 AM."
+        case .nightOwl:
+            return "Finish a lesson after 10:00 PM."
+        case .wordSmith:
+            return "Save 50 vocabulary words in total."
+        case .wordCollector:
+            return "Save 10 new words to your Word Bank."
+        case .consistentLearner:
+            return "Achieve a 7-day milestone streak."
+        case .streakKeeper:
+            return "Reach a 30-day learning streak."
+        case .quizAce:
+            return "Get a perfect score in Practice."
+        case .sharpReader:
+            return "Finish 5 News quizzes with full marks."
+        case .explorer:
+            return "Use Lookup on 25 different words."
+        case .momentum:
+            return "Earn points from 3 activities in one day."
+        case .levelClimber:
+            return "Reach Level 10."
+        case .centuryStar:
+            return "Collect 100 total points."
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .earlyBird:
+            return "sun.max.fill"
+        case .nightOwl:
+            return "moon.stars.fill"
+        case .wordSmith:
+            return "textformat.abc"
+        case .wordCollector:
+            return "books.vertical.fill"
+        case .consistentLearner:
+            return "flame.fill"
+        case .streakKeeper:
+            return "flame.circle.fill"
+        case .quizAce:
+            return "checkmark.seal.fill"
+        case .sharpReader:
+            return "newspaper.fill"
+        case .explorer:
+            return "magnifyingglass.circle.fill"
+        case .momentum:
+            return "bolt.heart.fill"
+        case .levelClimber:
+            return "flag.fill"
+        case .centuryStar:
+            return "star.circle.fill"
+        }
+    }
+}

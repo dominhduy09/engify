@@ -28,12 +28,6 @@ struct HomeView: View {
             let service = QuoteService()
             dailyQuote = await service.fetchDailyQuote()
         }
-        .overlay {
-            if gamification.showLessonComplete {
-                LessonCompleteOverlay()
-                    .environmentObject(gamification)
-            }
-        }
     }
 
     private var globalHeader: some View {

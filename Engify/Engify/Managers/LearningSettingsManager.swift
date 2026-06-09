@@ -158,6 +158,10 @@ final class LearningSettingsManager: ObservableObject {
     @Published var soundEffectsEnabled: Bool {
         didSet { save("sound_effects_enabled", soundEffectsEnabled) }
     }
+
+    @Published var soundEffectStyle: String {
+        didSet { saveIfValid("sound_effect_style", soundEffectStyle) { Self.validSoundStyles.contains($0) } }
+    }
     
     @Published var hapticFeedbackEnabled: Bool {
         didSet { save("haptic_feedback_enabled", hapticFeedbackEnabled) }
@@ -213,6 +217,7 @@ final class LearningSettingsManager: ObservableObject {
     private static let validStyles = ["gentle", "balanced", "strict"]
     private static let validSpeeds = ["slow", "normal", "fast"]
     private static let validModels = ["us_english", "uk_english", "australian"]
+    private static let validSoundStyles = SoundEffectStyle.allCases.map(\.rawValue)
     
     private enum Keys {
         static let prefix = "engify.settings."
@@ -245,6 +250,7 @@ final class LearningSettingsManager: ObservableObject {
         self.microphoneEnabled = Self.loadBool("microphone_enabled", default: true)
         self.voiceHistoryEnabled = Self.loadBool("voice_history_enabled", default: true)
         self.soundEffectsEnabled = Self.loadBool("sound_effects_enabled", default: true)
+        self.soundEffectStyle = Self.loadValidated("sound_effect_style", default: SoundEffectStyle.classic.rawValue) { Self.validSoundStyles.contains($0) }
         self.hapticFeedbackEnabled = Self.loadBool("haptic_feedback_enabled", default: true)
         
         self.showDefinitionsByDefault = Self.loadBool("show_definitions_default", default: false)
@@ -623,6 +629,7 @@ final class LearningSettingsManager: ObservableObject {
         showGrammarCorrections = values.showGrammarCorrections
         
         soundEffectsEnabled = values.soundEffectsEnabled
+        soundEffectStyle = values.soundEffectStyle
         hapticFeedbackEnabled = values.hapticFeedbackEnabled
         
         activePreset = preset
@@ -712,6 +719,7 @@ enum SettingsPreset: String, CaseIterable, Identifiable {
                 showDefinitionsByDefault: false,
                 showGrammarCorrections: true,
                 soundEffectsEnabled: true,
+                soundEffectStyle: SoundEffectStyle.classic.rawValue,
                 hapticFeedbackEnabled: true
             )
         case .casual:
@@ -731,6 +739,7 @@ enum SettingsPreset: String, CaseIterable, Identifiable {
                 showDefinitionsByDefault: true,
                 showGrammarCorrections: false,
                 soundEffectsEnabled: true,
+                soundEffectStyle: SoundEffectStyle.soft.rawValue,
                 hapticFeedbackEnabled: true
             )
         case .intensive:
@@ -750,6 +759,7 @@ enum SettingsPreset: String, CaseIterable, Identifiable {
                 showDefinitionsByDefault: true,
                 showGrammarCorrections: true,
                 soundEffectsEnabled: true,
+                soundEffectStyle: SoundEffectStyle.bright.rawValue,
                 hapticFeedbackEnabled: true
             )
         case .examPrep:
@@ -769,6 +779,7 @@ enum SettingsPreset: String, CaseIterable, Identifiable {
                 showDefinitionsByDefault: false,
                 showGrammarCorrections: true,
                 soundEffectsEnabled: false,
+                soundEffectStyle: SoundEffectStyle.classic.rawValue,
                 hapticFeedbackEnabled: true
             )
         case .minimal:
@@ -788,6 +799,7 @@ enum SettingsPreset: String, CaseIterable, Identifiable {
                 showDefinitionsByDefault: false,
                 showGrammarCorrections: false,
                 soundEffectsEnabled: false,
+                soundEffectStyle: SoundEffectStyle.soft.rawValue,
                 hapticFeedbackEnabled: false
             )
         }
@@ -811,7 +823,38 @@ struct SettingsPresetValues {
     let showDefinitionsByDefault: Bool
     let showGrammarCorrections: Bool
     let soundEffectsEnabled: Bool
+    let soundEffectStyle: String
     let hapticFeedbackEnabled: Bool
+}
+
+enum SoundEffectStyle: String, CaseIterable, Identifiable {
+    case classic = "classic"
+    case soft = "soft"
+    case bright = "bright"
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .classic:
+            return "Classic"
+        case .soft:
+            return "Soft"
+        case .bright:
+            return "Bright"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .classic:
+            return "Balanced pops and taps."
+        case .soft:
+            return "Gentler and more muted."
+        case .bright:
+            return "Sharper and more playful."
+        }
+    }
 }
 
 // MARK: - Permission Status
