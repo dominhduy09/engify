@@ -1,5 +1,10 @@
 import SwiftUI
 
+enum SettingsFocusSection: Hashable {
+    case dictionaryAPI
+    case newsSources
+}
+
 /// Production-grade settings sheet presented from HomeView.
 ///
 /// WHAT IT SHOWS:
@@ -22,6 +27,59 @@ import SwiftUI
 /// - Important toggles like notifications/microphone include request buttons if denied.
 /// - All values validate on load; corrupted settings reset to defaults.
 struct SettingsView: View {
+    private enum ActiveSheet: Identifiable {
+        case appIconPicker
+        case dictionaryAPI
+        case newsSources
+
+        var id: String {
+            switch self {
+            case .appIconPicker:
+                return "app_icon_picker"
+            case .dictionaryAPI:
+                return "dictionary_api"
+            case .newsSources:
+                return "news_sources"
+            }
+        }
+    }
+
+    private enum ActiveAlert: Identifiable {
+        case storageWarning
+        case applyPreset(SettingsPreset)
+        case deleteAccount
+
+        var id: String {
+            switch self {
+            case .storageWarning:
+                return "storage_warning"
+            case let .applyPreset(preset):
+                return "apply_preset_\(preset.id)"
+            case .deleteAccount:
+                return "delete_account"
+            }
+        }
+    }
+
+    private struct SettingsSheetPresentationModifier: ViewModifier {
+        let sheet: ActiveSheet
+
+        @ViewBuilder
+        func body(content: Content) -> some View {
+            if #available(iOS 16.0, *) {
+                content
+                    .presentationDetents(
+                        sheet == .appIconPicker ? [.medium, .large] : [.large]
+                    )
+                    .presentationDragIndicator(.visible)
+            } else {
+                content
+            }
+        }
+    }
+
+    let initialSection: SettingsFocusSection?
+
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var authManager: AuthenticationManager
     @EnvironmentObject private var theme: ThemeManager
@@ -29,52 +87,114 @@ struct SettingsView: View {
     
     @State private var requestingNotificationPermission = false
     @State private var requestingMicrophonePermission = false
-    @State private var showStorageWarning = false
+    @State private var activeAlert: ActiveAlert?
     @State private var showSaveConfirmation = false
     @State private var saveConfirmationTask: DispatchWorkItem?
     @State private var settingsSnapshot = ""
-    @State private var showPresetConfirmation = false
-    @State private var showDeleteAccountConfirmation = false
-    @State private var showAppIconPicker = false
+    @State private var activeSheet: ActiveSheet?
     @State private var selectedAppIconOption = AppIconOption.current(from: nil)
     @State private var appIconStatusMessage: String?
     @State private var appIconStatusType: StatusBanner.BannerType = .success
     @State private var appIconStatusTask: DispatchWorkItem?
-    @State private var pendingPreset: SettingsPreset?
+    @State private var newsSourceName = ""
+    @State private var newsSourceURL = ""
+    @State private var newsSourceCategory = "World"
+    @State private var newsSourceStatusMessage: String?
+    @State private var newsSourceStatusType: StatusBanner.BannerType = .info
+    @State private var pendingInitialNavigation: SettingsFocusSection?
+    @State private var hasQueuedInitialNavigation = false
     private let betaTag = "Beta"
+
+    init(initialSection: SettingsFocusSection? = nil) {
+        self.initialSection = initialSection
+    }
+
+    private func queueInitialNavigationIfNeeded() {
+        guard let initialSection, !hasQueuedInitialNavigation else { return }
+        hasQueuedInitialNavigation = true
+
+        DispatchQueue.main.async {
+            pendingInitialNavigation = initialSection
+        }
+    }
+
+    private func performInitialNavigation(
+        to section: SettingsFocusSection,
+        using proxy: ScrollViewProxy
+    ) {
+        // Consume the queued request and then perform the scroll/sheet routing
+        // on later main-thread cycles so no state changes happen during layout.
+        DispatchQueue.main.async {
+            pendingInitialNavigation = nil
+
+            DispatchQueue.main.async {
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    proxy.scrollTo(section, anchor: .top)
+                }
+
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                    presentInitialSheet(for: section)
+                }
+            }
+        }
+    }
+
+    private func presentInitialSheet(for section: SettingsFocusSection) {
+        DispatchQueue.main.async {
+            switch section {
+            case .dictionaryAPI:
+                activeSheet = .dictionaryAPI
+            case .newsSources:
+                activeSheet = .newsSources
+            }
+        }
+    }
 
     var body: some View {
         NavigationView {
             ZStack {
                 EngifyAppBackground()
 
-                ScrollView {
-                    VStack(alignment: .leading, spacing: Spacing.xl) {
-                        statusSection
-
-                        if showSaveConfirmation {
-                            saveConfirmationBanner
-                                .transition(.move(edge: .top).combined(with: .opacity))
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: Spacing.xl) {
+                            statusSection
+                            overviewCard
+                            settingsPresetSection
+                            learningGoalSection
+                            aiTutorSection
+                            speakingSection
+                            practiceSection
+                            dictionaryAPISection
+                                .id(SettingsFocusSection.dictionaryAPI)
+                            newsSourcesSection
+                                .id(SettingsFocusSection.newsSources)
+                            notificationSection
+                            appPreferencesSection
+                            advancedLearningSection
+                            accessibilitySection
+                            appearanceSection
+                            privacySection
+                            legalSection
+                            resetSection
                         }
+                        .padding()
+                        .padding(.bottom, 100)
+                    }
+                    .onChange(of: pendingInitialNavigation) { section in
+                        guard let section else { return }
+                        performInitialNavigation(to: section, using: proxy)
+                    }
+                }
 
-                        overviewCard
-                        settingsPresetSection
-                        learningGoalSection
-                        aiTutorSection
-                        speakingSection
-                        practiceSection
-                        dictionaryAPISection
-                        notificationSection
-                        appPreferencesSection
-                        advancedLearningSection
-                        accessibilitySection
-                        appearanceSection
-                        privacySection
-                        legalSection
-                        resetSection
+                if showSaveConfirmation {
+                    VStack {
+                        saveConfirmationBanner
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                        Spacer()
                     }
                     .padding()
-                    .padding(.bottom, 100)
+                    .allowsHitTesting(false)
                 }
             }
             .navigationTitle("Settings")
@@ -83,63 +203,88 @@ struct SettingsView: View {
         .navigationViewStyle(StackNavigationViewStyle())
         .animation(.spring(response: 0.3, dampingFraction: 0.82), value: showSaveConfirmation)
         .onAppear {
-            settingsSnapshot = currentSettingsSnapshot
-            refreshCurrentAppIconSelection()
+            DispatchQueue.main.async {
+                settingsSnapshot = currentSettingsSnapshot
+                refreshCurrentAppIconSelection()
+                queueInitialNavigationIfNeeded()
+            }
         }
         .onChange(of: currentSettingsSnapshot) { newSnapshot in
             guard !settingsSnapshot.isEmpty, newSnapshot != settingsSnapshot else { return }
-            settingsSnapshot = newSnapshot
-            showChangesSaved()
+            handleSettingsSnapshotChange(newSnapshot)
         }
         .onDisappear {
             saveConfirmationTask?.cancel()
             appIconStatusTask?.cancel()
         }
-        .alert("Storage Warning", isPresented: $showStorageWarning) {
-            Button("Delete", role: .destructive) {
-                settings.voiceHistoryEnabled = false
+        .alert(item: $activeAlert) { alert in
+            switch alert {
+            case .storageWarning:
+                return Alert(
+                    title: Text("Storage Warning"),
+                    message: Text("Voice history is using \(formatBytes(settings.voiceHistoryStorageUsage)). Delete to free space?"),
+                    primaryButton: .destructive(Text("Delete")) {
+                        settings.voiceHistoryEnabled = false
+                    },
+                    secondaryButton: .cancel()
+                )
+            case let .applyPreset(preset):
+                return Alert(
+                    title: Text("Apply Preset"),
+                    message: Text("This will replace your current settings with the \"\(preset.title)\" preset. Notification and microphone settings won't change."),
+                    primaryButton: .destructive(Text("Apply")) {
+                        settings.applyPreset(preset)
+                    },
+                    secondaryButton: .cancel()
+                )
+            case .deleteAccount:
+                return Alert(
+                    title: Text("Delete Account?"),
+                    message: Text("This permanently removes your Engify account and associated synced learning data. This action cannot be undone."),
+                    primaryButton: .destructive(Text("Delete")) {
+                        Task {
+                            let didDelete = await authManager.deleteAccount()
+                            if didDelete {
+                                dismiss()
+                            }
+                        }
+                    },
+                    secondaryButton: .cancel()
+                )
             }
-            Button("Cancel", role: .cancel) { }
-        } message: {
-            Text("Voice history is using \(formatBytes(settings.voiceHistoryStorageUsage)). Delete to free space?")
         }
-        .alert("Apply Preset", isPresented: $showPresetConfirmation) {
-            Button("Apply", role: .destructive) {
-                if let preset = pendingPreset {
-                    settings.applyPreset(preset)
-                    pendingPreset = nil
+        .sheet(item: $activeSheet) { sheet in
+            Group {
+                switch sheet {
+                case .appIconPicker:
+                    AppIconPickerSheet(
+                        selectedOption: selectedAppIconOption,
+                        onSelect: { option in
+                            Task { @MainActor in
+                                await applyAppIcon(option)
+                            }
+                        }
+                    )
+
+                case .dictionaryAPI:
+                    DictionaryAPIManagementSheet()
+                        .environmentObject(theme)
+                        .environmentObject(settings)
+
+                case .newsSources:
+                    NewsSourcesManagementSheet(
+                        sourceName: $newsSourceName,
+                        sourceURL: $newsSourceURL,
+                        sourceCategory: $newsSourceCategory,
+                        statusMessage: $newsSourceStatusMessage,
+                        statusType: $newsSourceStatusType,
+                        onAddSource: addCustomNewsSource
+                    )
+                    .environmentObject(theme)
+                    .environmentObject(settings)
                 }
             }
-            Button("Cancel", role: .cancel) {
-                pendingPreset = nil
-            }
-        } message: {
-            if let preset = pendingPreset {
-                Text("This will replace your current settings with the \"\(preset.title)\" preset. Notification and microphone settings won't change.")
-            }
-        }
-        .alert("Delete Account?", isPresented: $showDeleteAccountConfirmation) {
-            Button("Delete", role: .destructive) {
-                Task {
-                    let didDelete = await authManager.deleteAccount()
-                    if didDelete {
-                        dismiss()
-                    }
-                }
-            }
-            Button("Cancel", role: .cancel) { }
-        } message: {
-            Text("This permanently removes your Engify account and associated synced learning data. This action cannot be undone.")
-        }
-        .sheet(isPresented: $showAppIconPicker) {
-            AppIconPickerSheet(
-                selectedOption: selectedAppIconOption,
-                onSelect: { option in
-                    Task {
-                        await applyAppIcon(option)
-                    }
-                }
-            )
+            .modifier(SettingsSheetPresentationModifier(sheet: sheet))
         }
     }
 
@@ -162,7 +307,7 @@ struct SettingsView: View {
         EngifyCard(tint: theme.accentColor) {
             VStack(alignment: .center, spacing: Spacing.md) {
                 Button {
-                    showAppIconPicker = true
+                    activeSheet = .appIconPicker
                 } label: {
                     AppIconPreview(option: selectedAppIconOption, size: 78)
                         .shadow(color: theme.accentColor.opacity(0.16), radius: 10, x: 0, y: 6)
@@ -183,7 +328,7 @@ struct SettingsView: View {
                         .fixedSize(horizontal: false, vertical: true)
 
                     Button {
-                        showAppIconPicker = true
+                        activeSheet = .appIconPicker
                     } label: {
                         Text("Tap to change the app icon")
                             .font(.caption.weight(.semibold))
@@ -207,8 +352,7 @@ struct SettingsView: View {
                         if settings.activePreset == preset {
                             // Already active — no action needed
                         } else {
-                            pendingPreset = preset
-                            showPresetConfirmation = true
+                            activeAlert = .applyPreset(preset)
                         }
                     } label: {
                         HStack(spacing: Spacing.md) {
@@ -626,41 +770,40 @@ struct SettingsView: View {
     private var dictionaryAPISection: some View {
         EngifySettingsSection(
             title: "Dictionary API",
-            subtitle: "Change the lookup API here only. Leave it empty to keep the default public dictionary API."
+            subtitle: "See the current endpoint at a glance, then open a pull-up panel to inspect or change it."
         ) {
-            VStack(alignment: .leading, spacing: Spacing.lg) {
-                VStack(alignment: .leading, spacing: Spacing.sm) {
-                    Text("Lookup API base URL")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(EngifyColors.textPrimary)
-
-                    TextField("https://api.dictionaryapi.dev/api/v2/entries/en", text: $settings.dictionaryAPIBaseURL)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .font(.system(.body, design: .monospaced))
-                        .padding(.horizontal, Spacing.md)
-                        .frame(minHeight: 52)
-                        .background(
-                            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .fill(EngifyColors.canvasRaised)
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .stroke(EngifyColors.border.opacity(0.8), lineWidth: 1)
-                        )
-                }
-
-                Text("Use a full base URL that ends before the searched word. If the field is blank or invalid, Engify keeps using the first default API.")
-                    .font(.caption)
-                    .foregroundStyle(EngifyColors.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                Button("Use Default API") {
-                    settings.dictionaryAPIBaseURL = ""
-                }
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(theme.accentColor)
+            Button {
+                activeSheet = .dictionaryAPI
+            } label: {
+                settingsSummaryRow(
+                    title: "Dictionary lookup endpoint",
+                    value: dictionaryAPIStatusTitle,
+                    detail: dictionaryAPIDetailText,
+                    systemImage: "book.pages.fill",
+                    badgeText: settings.dictionaryAPIBaseURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Default" : "Custom"
+                )
             }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private var newsSourcesSection: some View {
+        EngifySettingsSection(
+            title: "News sources",
+            subtitle: "See your feed setup quickly, then open a pull-up panel to manage sources and URLs."
+        ) {
+            Button {
+                activeSheet = .newsSources
+            } label: {
+                settingsSummaryRow(
+                    title: "News feed manager",
+                    value: "\(NewsFeedSource.builtInSources.count) built-in • \(settings.customNewsSources.count) custom",
+                    detail: newsSourcesDetailText,
+                    systemImage: "newspaper.fill",
+                    badgeText: settings.customNewsSources.isEmpty ? "Built-in only" : "Custom enabled"
+                )
+            }
+            .buttonStyle(.plain)
         }
     }
 
@@ -850,6 +993,7 @@ struct SettingsView: View {
             settings.difficultyLock.description,
             settings.reducedMotionEnabled.description,
             settings.highContrastEnabled.description,
+            settings.customNewsSources.map { "\($0.name)|\($0.urlString)|\($0.category)" }.joined(separator: ","),
             theme.accent.rawValue,
             theme.appearance.rawValue,
             String(format: "%.2f", Double(theme.fontSize))
@@ -896,10 +1040,19 @@ struct SettingsView: View {
     private func showChangesSaved() {
         saveConfirmationTask?.cancel()
 
+        guard !showSaveConfirmation else {
+            scheduleSaveConfirmationHide()
+            return
+        }
+
         withAnimation {
             showSaveConfirmation = true
         }
 
+        scheduleSaveConfirmationHide()
+    }
+
+    private func scheduleSaveConfirmationHide() {
         let hideTask = DispatchWorkItem {
             withAnimation {
                 showSaveConfirmation = false
@@ -908,6 +1061,164 @@ struct SettingsView: View {
 
         saveConfirmationTask = hideTask
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.8, execute: hideTask)
+    }
+
+    private func handleSettingsSnapshotChange(_ newSnapshot: String) {
+        DispatchQueue.main.async {
+            guard !settingsSnapshot.isEmpty, newSnapshot != settingsSnapshot else { return }
+            settingsSnapshot = newSnapshot
+            showChangesSaved()
+        }
+    }
+
+    private var newsCategoryOptions: [String] {
+        ["Learning", "World", "Space", "Science", "Technology", "Sports", "General"]
+    }
+
+    private var dictionaryAPIStatusTitle: String {
+        settings.dictionaryAPIBaseURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Using Engify default API" : "Using custom dictionary API"
+    }
+
+    private var dictionaryAPIDetailText: String {
+        let trimmed = settings.dictionaryAPIBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? "Tap to review the default endpoint or replace it with your own base URL." : trimmed
+    }
+
+    private var newsSourcesDetailText: String {
+        if let firstCustom = settings.customNewsSources.first {
+            return "Custom feeds are active, including \(firstCustom.name). Tap to review full URLs, remove feeds, or add more."
+        }
+
+        return "Engify is currently using built-in feeds only. Tap to review them or add your own RSS/Atom sources."
+    }
+
+    private func addCustomNewsSource() {
+        let result = settings.addCustomNewsSource(
+            name: newsSourceName,
+            urlString: newsSourceURL,
+            category: newsSourceCategory
+        )
+
+        switch result {
+        case let .success(message):
+            newsSourceName = ""
+            newsSourceURL = ""
+            newsSourceCategory = "World"
+            showNewsSourceStatus(message: message, type: .success)
+        case let .failure(message):
+            showNewsSourceStatus(message: message, type: .error)
+        }
+    }
+
+    private func showNewsSourceStatus(message: String, type: StatusBanner.BannerType) {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            newsSourceStatusMessage = message
+            newsSourceStatusType = type
+        }
+    }
+
+    @ViewBuilder
+    private func settingsSummaryRow(
+        title: String,
+        value: String,
+        detail: String,
+        systemImage: String,
+        badgeText: String
+    ) -> some View {
+        HStack(alignment: .top, spacing: Spacing.md) {
+            Image(systemName: systemImage)
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(theme.accentColor)
+                .frame(width: 40, height: 40)
+                .background(theme.accentColor.opacity(0.12))
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                HStack(spacing: Spacing.sm) {
+                    Text(title)
+                        .font(EngifyTypography.bodyStrong)
+                        .foregroundStyle(EngifyColors.textPrimary)
+
+                    Text(badgeText)
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(theme.accentColor)
+                        .padding(.horizontal, Spacing.sm)
+                        .padding(.vertical, 4)
+                        .background(theme.accentColor.opacity(0.10))
+                        .clipShape(Capsule())
+                }
+
+                Text(value)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(EngifyColors.textPrimary)
+
+                Text(detail)
+                    .font(EngifyTypography.caption)
+                    .foregroundStyle(EngifyColors.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .lineLimit(2)
+            }
+
+            Spacer(minLength: 0)
+
+            Image(systemName: "chevron.up.chevron.down")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(EngifyColors.textSecondary.opacity(0.72))
+                .padding(.top, 4)
+        }
+        .padding(.vertical, Spacing.xs)
+        .contentShape(Rectangle())
+    }
+
+    @ViewBuilder
+    private func newsSourceRow(
+        title: String,
+        category: String,
+        urlString: String,
+        isCustom: Bool,
+        onRemove: (() -> Void)?
+    ) -> some View {
+        HStack(alignment: .top, spacing: Spacing.md) {
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                HStack(spacing: Spacing.sm) {
+                    Text(title)
+                        .font(EngifyTypography.bodyStrong)
+                        .foregroundStyle(EngifyColors.textPrimary)
+
+                    Text(category)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(theme.accentColor)
+                        .padding(.horizontal, Spacing.sm)
+                        .padding(.vertical, 4)
+                        .background(theme.accentColor.opacity(0.10))
+                        .clipShape(Capsule())
+
+                    if isCustom {
+                        EngifySettingsBadge(text: "Custom")
+                    }
+                }
+
+                Text(urlString)
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(EngifyColors.textSecondary)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 0)
+
+            if let onRemove {
+                Button(role: .destructive, action: onRemove) {
+                    Image(systemName: "trash")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(EngifyColors.coral)
+                        .frame(width: 36, height: 36)
+                        .background(EngifyColors.coral.opacity(0.12))
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+                .buttonStyle(.plain)
+            }
+        }
     }
 
     private func refreshCurrentAppIconSelection() {
@@ -935,14 +1246,14 @@ struct SettingsView: View {
 
         let currentAlternateIconName = UIApplication.shared.alternateIconName
         guard currentAlternateIconName != option.alternateIconName else {
-            showAppIconPicker = false
+            activeSheet = nil
             return
         }
 
         do {
             try await setAlternateAppIconName(option.alternateIconName)
             refreshCurrentAppIconSelection()
-            showAppIconPicker = false
+            activeSheet = nil
             showAppIconStatus(
                 message: "App icon changed to \(option.title).",
                 type: .success
@@ -1060,7 +1371,7 @@ struct SettingsView: View {
                     Spacer()
 
                     if settings.voiceHistoryStorageUsage > 50_000_000 {  // 50MB
-                        Button(action: { showStorageWarning = true }) {
+                        Button(action: { activeAlert = .storageWarning }) {
                             Text(formatBytes(settings.voiceHistoryStorageUsage))
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(EngifyColors.coral)
@@ -1107,7 +1418,7 @@ struct SettingsView: View {
                         title: authManager.isLoading ? "Deleting..." : "Delete My Account",
                         systemImage: "trash.fill",
                         action: {
-                            showDeleteAccountConfirmation = true
+                            activeAlert = .deleteAccount
                         },
                         isDisabled: authManager.isLoading,
                         tint: EngifyColors.coral
@@ -1352,6 +1663,413 @@ private struct AppIconPickerSheet: View {
             .background(EngifyAppBackground())
             .navigationTitle("Home Screen App Icon")
             .navigationBarTitleDisplayMode(.inline)
+        }
+    }
+}
+
+private struct DictionaryAPIManagementSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var theme: ThemeManager
+    @EnvironmentObject private var settings: LearningSettingsManager
+    @State private var draftURL = ""
+
+    private let builtInSources: [(title: String, role: String, url: String, isOverrideable: Bool)] = [
+        (
+            title: "Supabase Vocabulary",
+            role: "Primary word source when Engify has a matching curated entry.",
+            url: "Supabase table: vocabulary_words",
+            isOverrideable: false
+        ),
+        (
+            title: "DictionaryAPI.dev",
+            role: "Default public lookup API used when a curated entry is not available.",
+            url: "https://api.dictionaryapi.dev/api/v2/entries/en",
+            isOverrideable: true
+        ),
+        (
+            title: "Datamuse Suggestions",
+            role: "Built-in suggestion source for search hints and spelling help.",
+            url: "https://api.datamuse.com/sug",
+            isOverrideable: false
+        )
+    ]
+
+    var body: some View {
+        NavigationView {
+            ZStack {
+                EngifyAppBackground()
+
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: Spacing.lg) {
+                        EngifyCard(tint: theme.accentColor) {
+                            VStack(alignment: .leading, spacing: Spacing.sm) {
+                                Text("Dictionary lookup API")
+                                    .font(EngifyTypography.headline)
+                                    .foregroundStyle(EngifyColors.textPrimary)
+
+                                Text("Use the default public dictionary endpoint or provide your own base URL that stops before the searched word.")
+                                    .font(EngifyTypography.caption)
+                                    .foregroundStyle(EngifyColors.textSecondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+
+                        EngifyCard {
+                            VStack(alignment: .leading, spacing: Spacing.md) {
+                                Text("Built-in sources")
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(EngifyColors.textPrimary)
+
+                                ForEach(Array(builtInSources.enumerated()), id: \.offset) { index, source in
+                                    dictionarySourceRow(
+                                        title: source.title,
+                                        role: source.role,
+                                        url: source.url,
+                                        badgeText: source.isOverrideable ? "Overrideable" : "Built-in"
+                                    )
+
+                                    if index < builtInSources.count - 1 {
+                                        Divider()
+                                    }
+                                }
+                            }
+                        }
+
+                        EngifyCard {
+                            VStack(alignment: .leading, spacing: Spacing.md) {
+                                Text("Custom lookup override")
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(EngifyColors.textPrimary)
+
+                                TextField("https://api.dictionaryapi.dev/api/v2/entries/en", text: $draftURL)
+                                    .textInputAutocapitalization(.never)
+                                    .autocorrectionDisabled()
+                                    .font(.system(.body, design: .monospaced))
+                                    .padding(.horizontal, Spacing.md)
+                                    .frame(minHeight: 52)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                            .fill(EngifyColors.canvasRaised)
+                                    )
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                            .stroke(EngifyColors.border.opacity(0.8), lineWidth: 1)
+                                    )
+
+                                Text(draftURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Currently using the built-in DictionaryAPI.dev lookup URL. This override does not replace Supabase or Datamuse." : "Changes save automatically when you edit this field. The override only affects the public lookup API.")
+                                    .font(EngifyTypography.caption)
+                                    .foregroundStyle(EngifyColors.textSecondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+
+                                HStack(spacing: Spacing.md) {
+                                    SecondaryButton(title: "Use Default", systemImage: "arrow.counterclockwise", action: {
+                                        draftURL = ""
+                                        settings.dictionaryAPIBaseURL = ""
+                                    })
+
+                                    PrimaryButton(title: "Done", systemImage: "checkmark.circle.fill", action: {
+                                        settings.dictionaryAPIBaseURL = draftURL.trimmingCharacters(in: .whitespacesAndNewlines)
+                                        dismiss()
+                                    })
+                                }
+                            }
+                        }
+                    }
+                    .padding()
+                    .padding(.bottom, Spacing.xxl)
+                }
+            }
+            .navigationTitle("Dictionary API")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+        .navigationViewStyle(StackNavigationViewStyle())
+        .onAppear {
+            draftURL = settings.dictionaryAPIBaseURL
+        }
+        .onChange(of: draftURL) { value in
+            settings.dictionaryAPIBaseURL = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+    }
+
+    @ViewBuilder
+    private func dictionarySourceRow(
+        title: String,
+        role: String,
+        url: String,
+        badgeText: String
+    ) -> some View {
+        HStack(alignment: .top, spacing: Spacing.md) {
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                HStack(spacing: Spacing.sm) {
+                    Text(title)
+                        .font(EngifyTypography.bodyStrong)
+                        .foregroundStyle(EngifyColors.textPrimary)
+
+                    Text(badgeText)
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(theme.accentColor)
+                        .padding(.horizontal, Spacing.sm)
+                        .padding(.vertical, 4)
+                        .background(theme.accentColor.opacity(0.10))
+                        .clipShape(Capsule())
+                }
+
+                Text(role)
+                    .font(EngifyTypography.caption)
+                    .foregroundStyle(EngifyColors.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Text(url)
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(EngifyColors.textSecondary)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 0)
+        }
+    }
+}
+
+private struct NewsSourcesManagementSheet: View {
+    @Binding var sourceName: String
+    @Binding var sourceURL: String
+    @Binding var sourceCategory: String
+    @Binding var statusMessage: String?
+    @Binding var statusType: StatusBanner.BannerType
+    let onAddSource: () -> Void
+
+    @EnvironmentObject private var theme: ThemeManager
+    @EnvironmentObject private var settings: LearningSettingsManager
+
+    private var newsCategoryOptions: [String] {
+        ["Learning", "World", "Space", "Science", "Technology", "Sports", "General"]
+    }
+
+    var body: some View {
+        NavigationView {
+            ZStack {
+                EngifyAppBackground()
+
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: Spacing.lg) {
+                        if let statusMessage, !statusMessage.isEmpty {
+                            StatusBanner(message: statusMessage, type: statusType)
+                        }
+
+                        EngifyCard(tint: theme.accentColor) {
+                            VStack(alignment: .leading, spacing: Spacing.sm) {
+                                Text("News source manager")
+                                    .font(EngifyTypography.headline)
+                                    .foregroundStyle(EngifyColors.textPrimary)
+
+                                Text("Built-in feeds stay available automatically. Add your own public RSS or Atom feeds below when you want more sources.")
+                                    .font(EngifyTypography.caption)
+                                    .foregroundStyle(EngifyColors.textSecondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+
+                        EngifyCard {
+                            VStack(alignment: .leading, spacing: Spacing.md) {
+                                Text("Built-in feeds")
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(EngifyColors.textPrimary)
+
+                                ForEach(Array(NewsFeedSource.builtInSources.enumerated()), id: \.offset) { index, source in
+                                    newsSourceRow(
+                                        title: source.publisherName,
+                                        category: source.defaultCategory,
+                                        urlString: source.urlString,
+                                        isCustom: false,
+                                        onRemove: nil
+                                    )
+
+                                    if index < NewsFeedSource.builtInSources.count - 1 {
+                                        Divider()
+                                    }
+                                }
+                            }
+                        }
+
+                        EngifyCard {
+                            VStack(alignment: .leading, spacing: Spacing.md) {
+                                HStack {
+                                    Text("Your custom feeds")
+                                        .font(.subheadline.weight(.semibold))
+                                        .foregroundStyle(EngifyColors.textPrimary)
+
+                                    Spacer(minLength: 0)
+
+                                    Text("\(settings.customNewsSources.count)")
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundStyle(theme.accentColor)
+                                }
+
+                                if settings.customNewsSources.isEmpty {
+                                    Text("No custom sources yet. Add one below and it will be used on the next news refresh.")
+                                        .font(EngifyTypography.caption)
+                                        .foregroundStyle(EngifyColors.textSecondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                } else {
+                                    ForEach(Array(settings.customNewsSources.enumerated()), id: \.element.id) { index, source in
+                                        newsSourceRow(
+                                            title: source.name,
+                                            category: source.category,
+                                            urlString: source.urlString,
+                                            isCustom: true,
+                                            onRemove: {
+                                                settings.removeCustomNewsSource(id: source.id)
+                                                withAnimation(.easeInOut(duration: 0.2)) {
+                                                    statusMessage = "Removed \(source.name) from your custom sources."
+                                                    statusType = .info
+                                                }
+                                            }
+                                        )
+
+                                        if index < settings.customNewsSources.count - 1 {
+                                            Divider()
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        EngifyCard {
+                            VStack(alignment: .leading, spacing: Spacing.md) {
+                                Text("Add a feed")
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(EngifyColors.textPrimary)
+
+                                TextField("Source name", text: $sourceName)
+                                    .textInputAutocapitalization(.words)
+                                    .autocorrectionDisabled()
+                                    .padding(.horizontal, Spacing.md)
+                                    .frame(minHeight: 52)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                            .fill(EngifyColors.canvasRaised)
+                                    )
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                            .stroke(EngifyColors.border.opacity(0.8), lineWidth: 1)
+                                    )
+
+                                TextField("https://example.com/feed.xml", text: $sourceURL)
+                                    .textInputAutocapitalization(.never)
+                                    .autocorrectionDisabled()
+                                    .font(.system(.body, design: .monospaced))
+                                    .padding(.horizontal, Spacing.md)
+                                    .frame(minHeight: 52)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                            .fill(EngifyColors.canvasRaised)
+                                    )
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                            .stroke(EngifyColors.border.opacity(0.8), lineWidth: 1)
+                                    )
+
+                                VStack(alignment: .leading, spacing: Spacing.sm) {
+                                    Text("Category")
+                                        .font(.subheadline.weight(.semibold))
+                                        .foregroundStyle(EngifyColors.textPrimary)
+
+                                    TextField("Type any category name", text: $sourceCategory)
+                                        .textInputAutocapitalization(.words)
+                                        .autocorrectionDisabled()
+                                        .padding(.horizontal, Spacing.md)
+                                        .frame(minHeight: 52)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                                .fill(EngifyColors.canvasRaised)
+                                        )
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                                .stroke(EngifyColors.border.opacity(0.8), lineWidth: 1)
+                                        )
+
+                                    WrapChipsView(items: newsCategoryOptions) { item in
+                                        EngifySettingOptionChip(
+                                            title: item,
+                                            isSelected: sourceCategory.trimmingCharacters(in: .whitespacesAndNewlines).caseInsensitiveCompare(item) == .orderedSame
+                                        ) {
+                                            sourceCategory = item
+                                        }
+                                    }
+                                }
+
+                                PrimaryButton(
+                                    title: "Add Custom Source",
+                                    systemImage: "plus.circle.fill",
+                                    action: onAddSource
+                                )
+
+                                Text("Use a public RSS or Atom feed URL. Engify will try to parse it the same way it parses the built-in feeds.")
+                                    .font(EngifyTypography.caption)
+                                    .foregroundStyle(EngifyColors.textSecondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                    }
+                    .padding()
+                    .padding(.bottom, Spacing.xxl)
+                }
+            }
+            .navigationTitle("News Sources")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+        .navigationViewStyle(StackNavigationViewStyle())
+    }
+
+    @ViewBuilder
+    private func newsSourceRow(
+        title: String,
+        category: String,
+        urlString: String,
+        isCustom: Bool,
+        onRemove: (() -> Void)?
+    ) -> some View {
+        HStack(alignment: .top, spacing: Spacing.md) {
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                HStack(spacing: Spacing.sm) {
+                    Text(title)
+                        .font(EngifyTypography.bodyStrong)
+                        .foregroundStyle(EngifyColors.textPrimary)
+
+                    Text(category)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(theme.accentColor)
+                        .padding(.horizontal, Spacing.sm)
+                        .padding(.vertical, 4)
+                        .background(theme.accentColor.opacity(0.10))
+                        .clipShape(Capsule())
+
+                    if isCustom {
+                        EngifySettingsBadge(text: "Custom")
+                    }
+                }
+
+                Text(urlString)
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(EngifyColors.textSecondary)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 0)
+
+            if let onRemove {
+                Button(role: .destructive, action: onRemove) {
+                    Image(systemName: "trash")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(EngifyColors.coral)
+                        .frame(width: 36, height: 36)
+                        .background(EngifyColors.coral.opacity(0.12))
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+                .buttonStyle(.plain)
+            }
         }
     }
 }

@@ -478,6 +478,102 @@ enum PointsRewardResult: Equatable {
     case alreadyAwarded(totalPoints: Int)
 }
 
+struct AchievementProgressState: Codable, Equatable {
+    var totalSavedWords: Int
+    var savedWordIDs: Set<String>
+    var perfectPracticeCount: Int
+    var perfectNewsQuizCount: Int
+    var hasCompletedEarlyBirdLesson: Bool
+    var hasCompletedNightOwlLesson: Bool
+    var lookedUpWordIDs: Set<String>
+    var dailyPointActivity: [String: Int]
+
+    private enum CodingKeys: String, CodingKey {
+        case totalSavedWords
+        case savedWordIDs
+        case perfectPracticeCount
+        case perfectNewsQuizCount
+        case hasCompletedEarlyBirdLesson
+        case hasCompletedNightOwlLesson
+        case lookedUpWordIDs
+        case dailyPointActivity
+        case lookupSaveCount
+    }
+
+    static let initial = AchievementProgressState(
+        totalSavedWords: 0,
+        savedWordIDs: [],
+        perfectPracticeCount: 0,
+        perfectNewsQuizCount: 0,
+        hasCompletedEarlyBirdLesson: false,
+        hasCompletedNightOwlLesson: false,
+        lookedUpWordIDs: [],
+        dailyPointActivity: [:]
+    )
+
+    init(
+        totalSavedWords: Int,
+        savedWordIDs: Set<String>,
+        perfectPracticeCount: Int,
+        perfectNewsQuizCount: Int,
+        hasCompletedEarlyBirdLesson: Bool,
+        hasCompletedNightOwlLesson: Bool,
+        lookedUpWordIDs: Set<String>,
+        dailyPointActivity: [String: Int]
+    ) {
+        self.totalSavedWords = totalSavedWords
+        self.savedWordIDs = savedWordIDs
+        self.perfectPracticeCount = perfectPracticeCount
+        self.perfectNewsQuizCount = perfectNewsQuizCount
+        self.hasCompletedEarlyBirdLesson = hasCompletedEarlyBirdLesson
+        self.hasCompletedNightOwlLesson = hasCompletedNightOwlLesson
+        self.lookedUpWordIDs = lookedUpWordIDs
+        self.dailyPointActivity = dailyPointActivity
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let savedWordIDs = try container.decodeIfPresent(Set<String>.self, forKey: .savedWordIDs) ?? []
+        let legacySavedWordCount = try container.decodeIfPresent(Int.self, forKey: .totalSavedWords) ?? 0
+
+        self.savedWordIDs = savedWordIDs
+        self.totalSavedWords = max(legacySavedWordCount, savedWordIDs.count)
+        self.perfectPracticeCount = try container.decodeIfPresent(Int.self, forKey: .perfectPracticeCount) ?? 0
+        self.perfectNewsQuizCount = try container.decodeIfPresent(Int.self, forKey: .perfectNewsQuizCount) ?? 0
+        self.hasCompletedEarlyBirdLesson = try container.decodeIfPresent(Bool.self, forKey: .hasCompletedEarlyBirdLesson) ?? false
+        self.hasCompletedNightOwlLesson = try container.decodeIfPresent(Bool.self, forKey: .hasCompletedNightOwlLesson) ?? false
+        self.lookedUpWordIDs = try container.decodeIfPresent(Set<String>.self, forKey: .lookedUpWordIDs) ?? []
+        self.dailyPointActivity = try container.decodeIfPresent([String: Int].self, forKey: .dailyPointActivity) ?? [:]
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(totalSavedWords, forKey: .totalSavedWords)
+        try container.encode(savedWordIDs, forKey: .savedWordIDs)
+        try container.encode(perfectPracticeCount, forKey: .perfectPracticeCount)
+        try container.encode(perfectNewsQuizCount, forKey: .perfectNewsQuizCount)
+        try container.encode(hasCompletedEarlyBirdLesson, forKey: .hasCompletedEarlyBirdLesson)
+        try container.encode(hasCompletedNightOwlLesson, forKey: .hasCompletedNightOwlLesson)
+        try container.encode(lookedUpWordIDs, forKey: .lookedUpWordIDs)
+        try container.encode(dailyPointActivity, forKey: .dailyPointActivity)
+    }
+
+    func merged(with other: AchievementProgressState) -> AchievementProgressState {
+        let mergedSavedWordIDs = savedWordIDs.union(other.savedWordIDs)
+
+        return AchievementProgressState(
+            totalSavedWords: max(max(totalSavedWords, other.totalSavedWords), mergedSavedWordIDs.count),
+            savedWordIDs: mergedSavedWordIDs,
+            perfectPracticeCount: max(perfectPracticeCount, other.perfectPracticeCount),
+            perfectNewsQuizCount: max(perfectNewsQuizCount, other.perfectNewsQuizCount),
+            hasCompletedEarlyBirdLesson: hasCompletedEarlyBirdLesson || other.hasCompletedEarlyBirdLesson,
+            hasCompletedNightOwlLesson: hasCompletedNightOwlLesson || other.hasCompletedNightOwlLesson,
+            lookedUpWordIDs: lookedUpWordIDs.union(other.lookedUpWordIDs),
+            dailyPointActivity: dailyPointActivity.merging(other.dailyPointActivity, uniquingKeysWith: max)
+        )
+    }
+}
+
 enum AchievementBadge: String, Codable, CaseIterable, Hashable, Identifiable {
     case earlyBird = "early_bird"
     case nightOwl = "night_owl"

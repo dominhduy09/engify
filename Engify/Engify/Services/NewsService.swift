@@ -48,7 +48,7 @@ struct NewsService {
     }
 
     private func fetchRSSItems() async -> [RSSFeedItem] {
-        let feeds = NewsFeedSource.allCases
+        let feeds = NewsFeedSource.availableSources
 
         return await withTaskGroup(of: [RSSFeedItem].self) { group in
             for feed in feeds {
@@ -406,74 +406,86 @@ struct NewsService {
     }
 }
 
-enum NewsFeedSource: CaseIterable {
-    case bbcLearningEnglish
-    case bbcWorld
-    case nasaBreakingNews
-    case guardianTopStories
-    case guardianWorld
-    case guardianScience
-    case guardianTechnology
-    case guardianSport
-    case alJazeeraWorld
-    case reutersWorld
+struct NewsFeedSource: Hashable {
+    let publisherName: String
+    let urlString: String
+    let defaultCategory: String
 
-    var urlString: String {
-        switch self {
-        case .bbcLearningEnglish:
-            return "https://feeds.bbci.co.uk/learningenglish/english/features/6-minute-english/rss"
-        case .bbcWorld:
-            return "https://feeds.bbci.co.uk/news/world/rss.xml"
-        case .nasaBreakingNews:
-            return "https://www.nasa.gov/rss/dyn/breaking_news.rss"
-        case .guardianTopStories:
-            return "https://www.theguardian.com/rss"
-        case .guardianWorld:
-            return "https://www.theguardian.com/world/rss"
-        case .guardianScience:
-            return "https://www.theguardian.com/science/rss"
-        case .guardianTechnology:
-            return "https://www.theguardian.com/technology/rss"
-        case .guardianSport:
-            return "https://www.theguardian.com/sport/rss"
-        case .alJazeeraWorld:
-            return "https://www.aljazeera.com/xml/rss/all.xml"
-        case .reutersWorld:
-            return "https://feeds.reuters.com/Reuters/worldNews"
-        }
-    }
+    static let builtInSources: [NewsFeedSource] = [
+        NewsFeedSource(
+            publisherName: "BBC Learning English",
+            urlString: "https://feeds.bbci.co.uk/learningenglish/english/features/6-minute-english/rss",
+            defaultCategory: "Learning"
+        ),
+        NewsFeedSource(
+            publisherName: "BBC News",
+            urlString: "https://feeds.bbci.co.uk/news/world/rss.xml",
+            defaultCategory: "World"
+        ),
+        NewsFeedSource(
+            publisherName: "NASA",
+            urlString: "https://www.nasa.gov/rss/dyn/breaking_news.rss",
+            defaultCategory: "Space"
+        ),
+        NewsFeedSource(
+            publisherName: "The Guardian",
+            urlString: "https://www.theguardian.com/rss",
+            defaultCategory: "World"
+        ),
+        NewsFeedSource(
+            publisherName: "The Guardian",
+            urlString: "https://www.theguardian.com/world/rss",
+            defaultCategory: "World"
+        ),
+        NewsFeedSource(
+            publisherName: "The Guardian",
+            urlString: "https://www.theguardian.com/science/rss",
+            defaultCategory: "Science"
+        ),
+        NewsFeedSource(
+            publisherName: "The Guardian",
+            urlString: "https://www.theguardian.com/technology/rss",
+            defaultCategory: "Technology"
+        ),
+        NewsFeedSource(
+            publisherName: "The Guardian",
+            urlString: "https://www.theguardian.com/sport/rss",
+            defaultCategory: "Sports"
+        ),
+        NewsFeedSource(
+            publisherName: "Al Jazeera",
+            urlString: "https://www.aljazeera.com/xml/rss/all.xml",
+            defaultCategory: "World"
+        ),
+        NewsFeedSource(
+            publisherName: "Reuters",
+            urlString: "https://feeds.reuters.com/Reuters/worldNews",
+            defaultCategory: "World"
+        ),
+        NewsFeedSource(
+            publisherName: "CNN",
+            urlString: "https://rss.cnn.com/rss/edition_world.rss",
+            defaultCategory: "World"
+        ),
+        NewsFeedSource(
+            publisherName: "The New York Times",
+            urlString: "https://rss.nytimes.com/services/xml/rss/nyt/World.xml",
+            defaultCategory: "World"
+        ),
+        NewsFeedSource(
+            publisherName: "NPR",
+            urlString: "https://feeds.npr.org/1001/rss.xml",
+            defaultCategory: "General"
+        )
+    ]
 
-    var publisherName: String {
-        switch self {
-        case .bbcLearningEnglish:
-            return "BBC Learning English"
-        case .bbcWorld:
-            return "BBC News"
-        case .nasaBreakingNews:
-            return "NASA"
-        case .guardianTopStories, .guardianWorld, .guardianScience, .guardianTechnology, .guardianSport:
-            return "The Guardian"
-        case .alJazeeraWorld:
-            return "Al Jazeera"
-        case .reutersWorld:
-            return "Reuters"
-        }
-    }
-
-    var defaultCategory: String {
-        switch self {
-        case .bbcLearningEnglish:
-            return "Learning"
-        case .bbcWorld, .guardianTopStories, .guardianWorld, .reutersWorld, .alJazeeraWorld:
-            return "World"
-        case .nasaBreakingNews:
-            return "Space"
-        case .guardianScience:
-            return "Science"
-        case .guardianTechnology:
-            return "Technology"
-        case .guardianSport:
-            return "Sports"
+    static var availableSources: [NewsFeedSource] {
+        builtInSources + LearningSettingsManager.loadPersistedCustomNewsSources().map {
+            NewsFeedSource(
+                publisherName: $0.name,
+                urlString: $0.urlString,
+                defaultCategory: $0.category
+            )
         }
     }
 }

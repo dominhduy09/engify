@@ -29,8 +29,8 @@ final class SavedWordsManager: ObservableObject {
     private var currentUserID: String?
     private var isApplyingRemoteState = false
 
-    init(supabaseManager: SupabaseManager = .shared) {
-        self.supabaseManager = supabaseManager
+    init(supabaseManager: SupabaseManager? = nil) {
+        self.supabaseManager = supabaseManager ?? .shared
         loadSavedData()
     }
 

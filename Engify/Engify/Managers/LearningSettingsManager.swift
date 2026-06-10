@@ -79,6 +79,10 @@ final class LearningSettingsManager: ObservableObject {
             save("dictionary_api_base_url", trimmed)
         }
     }
+
+    @Published var customNewsSources: [NewsCustomSource] {
+        didSet { saveCustomNewsSources() }
+    }
     
     // MARK: - Notifications
     
@@ -240,6 +244,7 @@ final class LearningSettingsManager: ObservableObject {
         self.newWordsPerDay = Self.loadValidated("new_words_per_day", default: 8) { $0 >= 3 && $0 <= 20 }
         self.reviewLimitPerDay = Self.loadValidated("review_limit_per_day", default: 15) { $0 >= 5 && $0 <= 40 }
         self.dictionaryAPIBaseURL = Self.loadString("dictionary_api_base_url", default: "")
+        self.customNewsSources = Self.loadPersistedCustomNewsSources()
         
         self.notificationsEnabled = Self.loadBool("notifications_enabled", default: true)
         self.dailyReminderEnabled = Self.loadBool("daily_reminder", default: true)
@@ -521,8 +526,68 @@ final class LearningSettingsManager: ObservableObject {
     private func analyzeGoalChange() {
         logAnalytics("learning_goal_changed", ["goal": learningGoal])
     }
-    
+
+    @discardableResult
+    func addCustomNewsSource(name: String, urlString: String, category: String) -> NewsSourceMutationResult {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedURL = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedCategory = category.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !trimmedName.isEmpty else {
+            return .failure("Enter a source name so Engify can label articles from this feed.")
+        }
+
+        guard let url = URL(string: trimmedURL),
+              let scheme = url.scheme?.lowercased(),
+              ["http", "https"].contains(scheme),
+              url.host != nil else {
+            return .failure("Enter a valid feed URL that starts with http:// or https://.")
+        }
+
+        guard !trimmedCategory.isEmpty else {
+            return .failure("Choose a category for this source.")
+        }
+
+        let normalizedURL = Self.normalizedFeedURL(trimmedURL)
+        let duplicateExists = customNewsSources.contains {
+            Self.normalizedFeedURL($0.urlString) == normalizedURL
+        }
+
+        guard !duplicateExists else {
+            return .failure("This feed URL is already in your custom sources.")
+        }
+
+        customNewsSources.append(
+            NewsCustomSource(
+                name: trimmedName,
+                urlString: trimmedURL,
+                category: trimmedCategory
+            )
+        )
+        customNewsSources.sort {
+            $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+        }
+
+        logAnalytics("custom_news_source_added", ["name": trimmedName, "category": trimmedCategory])
+        return .success("Added \(trimmedName) to your News sources.")
+    }
+
+    func removeCustomNewsSource(id: UUID) {
+        guard let removed = customNewsSources.first(where: { $0.id == id }) else { return }
+        customNewsSources.removeAll { $0.id == id }
+        logAnalytics("custom_news_source_removed", ["name": removed.name, "category": removed.category])
+    }
+
     // MARK: - Persistence Helpers
+
+    private func saveCustomNewsSources() {
+        do {
+            let data = try JSONEncoder().encode(customNewsSources)
+            save("custom_news_sources", data)
+        } catch {
+            logError("Failed to encode custom news sources", error)
+        }
+    }
     
     private func saveIfValid<T>(_ key: String, _ value: T, _ validate: (T) -> Bool) {
         guard validate(value) else {
@@ -573,6 +638,25 @@ final class LearningSettingsManager: ObservableObject {
     private static func loadString(_ key: String, default: String) -> String {
         let fullKey = Keys.prefix + key
         return UserDefaults.standard.string(forKey: fullKey) ?? `default`
+    }
+
+    static func loadPersistedCustomNewsSources() -> [NewsCustomSource] {
+        let fullKey = Keys.prefix + "custom_news_sources"
+        guard let data = UserDefaults.standard.data(forKey: fullKey),
+              let decoded = try? JSONDecoder().decode([NewsCustomSource].self, from: data) else {
+            return []
+        }
+
+        return decoded.sorted {
+            $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+        }
+    }
+
+    private static func normalizedFeedURL(_ value: String) -> String {
+        value
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
     }
 
     private static func defaultReminderTime() -> Date {
@@ -640,7 +724,27 @@ final class LearningSettingsManager: ObservableObject {
     func resetToDefaults() {
         applyPreset(.default)
         dictionaryAPIBaseURL = ""
+        customNewsSources = []
     }
+}
+
+struct NewsCustomSource: Codable, Identifiable, Hashable {
+    let id: UUID
+    let name: String
+    let urlString: String
+    let category: String
+
+    init(id: UUID = UUID(), name: String, urlString: String, category: String) {
+        self.id = id
+        self.name = name
+        self.urlString = urlString
+        self.category = category
+    }
+}
+
+enum NewsSourceMutationResult {
+    case success(String)
+    case failure(String)
 }
 
 // MARK: - Settings Preset

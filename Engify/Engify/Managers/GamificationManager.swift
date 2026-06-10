@@ -55,14 +55,14 @@ final class GamificationManager: ObservableObject {
     private var currentUserID: String?
     private var isApplyingRemoteState = false
     private var awardedPointRewardKeys: Set<String>
-    private var badgeStats: BadgeProgressStats
+    private var badgeStats: AchievementProgressState
     private var badgeUnlockQueue: [AchievementBadge] = []
     private var badgeDismissWorkItem: DispatchWorkItem?
 
     // MARK: - Init
 
-    init(supabaseManager: SupabaseManager = .shared) {
-        self.supabaseManager = supabaseManager
+    init(supabaseManager: SupabaseManager? = nil) {
+        self.supabaseManager = supabaseManager ?? .shared
         self.awardedPointRewardKeys = Self.loadAwardedPointRewardKeys()
         self.unlockedBadges = Self.loadUnlockedBadges()
         self.badgeStats = Self.loadBadgeStats()
@@ -183,18 +183,38 @@ final class GamificationManager: ObservableObject {
         currentUserID = userID
 
         do {
-            if let remoteProgress = try await supabaseManager.fetchUserProgress(userId: userID) {
-                isApplyingRemoteState = true
+            let remoteProgress = try await supabaseManager.fetchUserProgress(userId: userID)
+            let remoteBadges = try await supabaseManager.fetchUnlockedBadges(userId: userID)
+            let remoteAchievementState = try await supabaseManager.fetchAchievementProgress(userId: userID)
+
+            isApplyingRemoteState = true
+
+            if let remoteProgress {
                 var normalized = remoteProgress
                 normalized.normalizeLevel()
                 progress = normalized
-                isApplyingRemoteState = false
-                reconcileDailyStreak()
-            } else {
-                reconcileDailyStreak()
+            }
+
+            unlockedBadges.formUnion(remoteBadges)
+            if let remoteAchievementState {
+                badgeStats = badgeStats.merged(with: remoteAchievementState)
+            }
+
+            evaluateBadgeUnlocks(triggeredAt: Date(), presentUI: false)
+            persistUnlockedBadges()
+            persistBadgeStats()
+            isApplyingRemoteState = false
+
+            reconcileDailyStreak()
+
+            if remoteProgress == nil {
                 await supabaseManager.syncUserData(progress: progress)
             }
+
+            await syncAchievementStateToRemote()
+            await syncUnlockedBadgesToRemote()
         } catch {
+            isApplyingRemoteState = false
             print("Failed to load remote progress: \(error.localizedDescription)")
         }
     }
@@ -317,9 +337,9 @@ final class GamificationManager: ObservableObject {
         UserDefaults.standard.set(unlockedBadges.map(\.rawValue).sorted(), forKey: Keys.unlockedBadges)
     }
 
-    private static func loadBadgeStats() -> BadgeProgressStats {
+    private static func loadBadgeStats() -> AchievementProgressState {
         guard let data = UserDefaults.standard.data(forKey: Keys.badgeStats),
-              let decoded = try? JSONDecoder().decode(BadgeProgressStats.self, from: data) else {
+              let decoded = try? JSONDecoder().decode(AchievementProgressState.self, from: data) else {
             return .initial
         }
         return decoded
@@ -328,6 +348,17 @@ final class GamificationManager: ObservableObject {
     private func persistBadgeStats() {
         if let encoded = try? JSONEncoder().encode(badgeStats) {
             UserDefaults.standard.set(encoded, forKey: Keys.badgeStats)
+        }
+
+        guard currentUserID != nil, !isApplyingRemoteState else { return }
+
+        let snapshot = badgeStats
+        Task {
+            do {
+                try await supabaseManager.saveAchievementProgress(snapshot)
+            } catch {
+                print("Failed to save achievement progress: \(error.localizedDescription)")
+            }
         }
     }
 
@@ -418,25 +449,33 @@ final class GamificationManager: ObservableObject {
         badgeStats.dailyPointActivity = badgeStats.dailyPointActivity.filter { validKeys.contains($0.key) }
     }
 
-    private func evaluateBadgeUnlocks(triggeredAt date: Date) {
-        unlockIfNeeded(.earlyBird, when: badgeStats.hasCompletedEarlyBirdLesson)
-        unlockIfNeeded(.nightOwl, when: badgeStats.hasCompletedNightOwlLesson)
-        unlockIfNeeded(.wordCollector, when: badgeStats.totalSavedWords >= 10)
-        unlockIfNeeded(.wordSmith, when: badgeStats.totalSavedWords >= 50)
-        unlockIfNeeded(.consistentLearner, when: progress.streakDays >= 7)
-        unlockIfNeeded(.streakKeeper, when: progress.streakDays >= 30)
-        unlockIfNeeded(.quizAce, when: badgeStats.perfectPracticeCount >= 1)
-        unlockIfNeeded(.sharpReader, when: badgeStats.perfectNewsQuizCount >= 5)
-        unlockIfNeeded(.explorer, when: badgeStats.lookedUpWordIDs.count >= 25)
-        unlockIfNeeded(.momentum, when: badgeStats.dailyPointActivity[Self.dayKey(for: date), default: 0] >= 3)
-        unlockIfNeeded(.levelClimber, when: progress.resolvedLevel >= 10)
-        unlockIfNeeded(.centuryStar, when: progress.points >= 100)
+    private func evaluateBadgeUnlocks(triggeredAt date: Date, presentUI: Bool = true) {
+        unlockIfNeeded(.earlyBird, when: badgeStats.hasCompletedEarlyBirdLesson, earnedAt: date, presentUI: presentUI)
+        unlockIfNeeded(.nightOwl, when: badgeStats.hasCompletedNightOwlLesson, earnedAt: date, presentUI: presentUI)
+        unlockIfNeeded(.wordCollector, when: badgeStats.totalSavedWords >= 10, earnedAt: date, presentUI: presentUI)
+        unlockIfNeeded(.wordSmith, when: badgeStats.totalSavedWords >= 50, earnedAt: date, presentUI: presentUI)
+        unlockIfNeeded(.consistentLearner, when: progress.streakDays >= 7, earnedAt: date, presentUI: presentUI)
+        unlockIfNeeded(.streakKeeper, when: progress.streakDays >= 30, earnedAt: date, presentUI: presentUI)
+        unlockIfNeeded(.quizAce, when: badgeStats.perfectPracticeCount >= 1, earnedAt: date, presentUI: presentUI)
+        unlockIfNeeded(.sharpReader, when: badgeStats.perfectNewsQuizCount >= 5, earnedAt: date, presentUI: presentUI)
+        unlockIfNeeded(.explorer, when: badgeStats.lookedUpWordIDs.count >= 25, earnedAt: date, presentUI: presentUI)
+        unlockIfNeeded(.momentum, when: badgeStats.dailyPointActivity[Self.dayKey(for: date), default: 0] >= 3, earnedAt: date, presentUI: presentUI)
+        unlockIfNeeded(.levelClimber, when: progress.resolvedLevel >= 10, earnedAt: date, presentUI: presentUI)
+        unlockIfNeeded(.centuryStar, when: progress.points >= 100, earnedAt: date, presentUI: presentUI)
     }
 
-    private func unlockIfNeeded(_ badge: AchievementBadge, when condition: Bool) {
+    private func unlockIfNeeded(
+        _ badge: AchievementBadge,
+        when condition: Bool,
+        earnedAt: Date,
+        presentUI: Bool
+    ) {
         guard condition, !unlockedBadges.contains(badge) else { return }
         unlockedBadges.insert(badge)
         persistUnlockedBadges()
+        syncBadgeToRemote(badge, earnedAt: earnedAt)
+
+        guard presentUI else { return }
         badgeUnlockQueue.append(badge)
         presentNextBadgeIfNeeded()
     }
@@ -487,87 +526,38 @@ final class GamificationManager: ObservableObject {
             return word.word.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         }
     }
-}
 
-private struct BadgeProgressStats: Codable {
-    var totalSavedWords: Int
-    var savedWordIDs: Set<String>
-    var perfectPracticeCount: Int
-    var perfectNewsQuizCount: Int
-    var hasCompletedEarlyBirdLesson: Bool
-    var hasCompletedNightOwlLesson: Bool
-    var lookedUpWordIDs: Set<String>
-    var dailyPointActivity: [String: Int]
+    private func syncBadgeToRemote(_ badge: AchievementBadge, earnedAt: Date) {
+        guard currentUserID != nil, !isApplyingRemoteState else { return }
 
-    private enum CodingKeys: String, CodingKey {
-        case totalSavedWords
-        case savedWordIDs
-        case perfectPracticeCount
-        case perfectNewsQuizCount
-        case hasCompletedEarlyBirdLesson
-        case hasCompletedNightOwlLesson
-        case lookedUpWordIDs
-        case dailyPointActivity
-        case lookupSaveCount
+        Task {
+            do {
+                try await supabaseManager.saveUnlockedBadge(badge, earnedAt: earnedAt)
+            } catch {
+                print("Failed to save unlocked badge: \(error.localizedDescription)")
+            }
+        }
     }
 
-    init(
-        totalSavedWords: Int,
-        savedWordIDs: Set<String>,
-        perfectPracticeCount: Int,
-        perfectNewsQuizCount: Int,
-        hasCompletedEarlyBirdLesson: Bool,
-        hasCompletedNightOwlLesson: Bool,
-        lookedUpWordIDs: Set<String>,
-        dailyPointActivity: [String: Int]
-    ) {
-        self.totalSavedWords = totalSavedWords
-        self.savedWordIDs = savedWordIDs
-        self.perfectPracticeCount = perfectPracticeCount
-        self.perfectNewsQuizCount = perfectNewsQuizCount
-        self.hasCompletedEarlyBirdLesson = hasCompletedEarlyBirdLesson
-        self.hasCompletedNightOwlLesson = hasCompletedNightOwlLesson
-        self.lookedUpWordIDs = lookedUpWordIDs
-        self.dailyPointActivity = dailyPointActivity
+    private func syncAchievementStateToRemote() async {
+        guard currentUserID != nil else { return }
+
+        do {
+            try await supabaseManager.saveAchievementProgress(badgeStats)
+        } catch {
+            print("Failed to sync achievement progress: \(error.localizedDescription)")
+        }
     }
 
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        let savedWordIDs = try container.decodeIfPresent(Set<String>.self, forKey: .savedWordIDs) ?? []
-        let legacySavedWordCount = try container.decodeIfPresent(Int.self, forKey: .totalSavedWords) ?? 0
+    private func syncUnlockedBadgesToRemote() async {
+        guard currentUserID != nil else { return }
 
-        self.savedWordIDs = savedWordIDs
-        self.totalSavedWords = max(legacySavedWordCount, savedWordIDs.count)
-        self.perfectPracticeCount = try container.decodeIfPresent(Int.self, forKey: .perfectPracticeCount) ?? 0
-        self.perfectNewsQuizCount = try container.decodeIfPresent(Int.self, forKey: .perfectNewsQuizCount) ?? 0
-        self.hasCompletedEarlyBirdLesson = try container.decodeIfPresent(Bool.self, forKey: .hasCompletedEarlyBirdLesson) ?? false
-        self.hasCompletedNightOwlLesson = try container.decodeIfPresent(Bool.self, forKey: .hasCompletedNightOwlLesson) ?? false
-        self.lookedUpWordIDs = try container.decodeIfPresent(Set<String>.self, forKey: .lookedUpWordIDs) ?? []
-        self.dailyPointActivity = try container.decodeIfPresent([String: Int].self, forKey: .dailyPointActivity) ?? [:]
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(totalSavedWords, forKey: .totalSavedWords)
-        try container.encode(savedWordIDs, forKey: .savedWordIDs)
-        try container.encode(perfectPracticeCount, forKey: .perfectPracticeCount)
-        try container.encode(perfectNewsQuizCount, forKey: .perfectNewsQuizCount)
-        try container.encode(hasCompletedEarlyBirdLesson, forKey: .hasCompletedEarlyBirdLesson)
-        try container.encode(hasCompletedNightOwlLesson, forKey: .hasCompletedNightOwlLesson)
-        try container.encode(lookedUpWordIDs, forKey: .lookedUpWordIDs)
-        try container.encode(dailyPointActivity, forKey: .dailyPointActivity)
-    }
-
-    static var initial: BadgeProgressStats {
-        BadgeProgressStats(
-            totalSavedWords: 0,
-            savedWordIDs: [],
-            perfectPracticeCount: 0,
-            perfectNewsQuizCount: 0,
-            hasCompletedEarlyBirdLesson: false,
-            hasCompletedNightOwlLesson: false,
-            lookedUpWordIDs: [],
-            dailyPointActivity: [:]
-        )
+        for badge in unlockedBadges {
+            do {
+                try await supabaseManager.saveUnlockedBadge(badge)
+            } catch {
+                print("Failed to sync badge \(badge.rawValue): \(error.localizedDescription)")
+            }
+        }
     }
 }

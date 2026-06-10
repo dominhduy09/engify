@@ -1323,7 +1323,7 @@ struct EngifyTopMetricsBar: View {
         .sheet(isPresented: $showGamificationInfoSheet) {
             if #available(iOS 16.0, *) {
                 GamificationInfoSheet()
-                    .presentationDetents([.medium, .large])
+                    .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
             } else {
                 GamificationInfoSheet()
@@ -1541,14 +1541,30 @@ struct EngifyProfileMenuButton: View {
         }
         .accessibilityLabel("Profile options")
         .sheet(isPresented: $showProfileSheet) {
-            if !authManager.isGuestMode {
-                EngifyProfileSheet(showSettings: $showSettings)
-                    .environmentObject(authManager)
+            if #available(iOS 16.0, *) {
+                if !authManager.isGuestMode {
+                    EngifyProfileSheet(showSettings: $showSettings)
+                        .environmentObject(authManager)
+                        .presentationDetents([.large])
+                        .presentationDragIndicator(.visible)
+                }
+            } else {
+                if !authManager.isGuestMode {
+                    EngifyProfileSheet(showSettings: $showSettings)
+                        .environmentObject(authManager)
+                }
             }
         }
         .sheet(isPresented: $showSavedWordBank) {
-            SavedWordBankSheet()
-                .environmentObject(savedWordsManager)
+            if #available(iOS 16.0, *) {
+                SavedWordBankSheet()
+                    .environmentObject(savedWordsManager)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+            } else {
+                SavedWordBankSheet()
+                    .environmentObject(savedWordsManager)
+            }
         }
     }
 }
@@ -1566,6 +1582,12 @@ private struct EngifyProfileMenu: View {
     @AppStorage("engify_appearance") private var preferredAppearance = ThemeManager.AppearanceMode.system.rawValue
     @State private var menuScale: CGFloat = 0.8
     @State private var menuOpacity = 0.0
+
+    private func presentSettingsAfterDismissal() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            showSettings = true
+        }
+    }
 
     var body: some View {
         let _ = preferredAppearance
@@ -1592,7 +1614,7 @@ private struct EngifyProfileMenu: View {
 
             compactMenuAction(title: "Settings", systemImage: "gearshape.fill") {
                 isPresented = false
-                showSettings = true
+                presentSettingsAfterDismissal()
             }
 
             if authManager.isAuthenticated {
@@ -1885,6 +1907,12 @@ struct EngifyProfileSheet: View {
         GridItem(.flexible(), spacing: Spacing.sm)
     ]
 
+    private func presentSettingsAfterDismissal() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            showSettings = true
+        }
+    }
+
     var body: some View {
         NavigationView {
             ZStack {
@@ -2049,7 +2077,7 @@ struct EngifyProfileSheet: View {
                     systemImage: "gearshape.fill",
                     action: {
                         dismiss()
-                        showSettings = true
+                        presentSettingsAfterDismissal()
                     }
                 )
 
@@ -2156,14 +2184,26 @@ struct EngifyProfileSheet: View {
 
 private struct EngifySettingsSheetModifier: ViewModifier {
     @Binding var isPresented: Bool
+    let initialSection: SettingsFocusSection?
+    @EnvironmentObject private var authManager: AuthenticationManager
     @EnvironmentObject private var theme: ThemeManager
     @EnvironmentObject private var learningSettings: LearningSettingsManager
 
     func body(content: Content) -> some View {
         content.sheet(isPresented: $isPresented) {
-            SettingsView()
-                .environmentObject(theme)
-                .environmentObject(learningSettings)
+            if #available(iOS 16.0, *) {
+                SettingsView(initialSection: initialSection)
+                    .environmentObject(authManager)
+                    .environmentObject(theme)
+                    .environmentObject(learningSettings)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+            } else {
+                SettingsView(initialSection: initialSection)
+                    .environmentObject(authManager)
+                    .environmentObject(theme)
+                    .environmentObject(learningSettings)
+            }
         }
     }
 }
@@ -2272,8 +2312,11 @@ struct SavedWordBankSheet: View {
 }
 
 extension View {
-    func engifySettingsSheet(isPresented: Binding<Bool>) -> some View {
-        modifier(EngifySettingsSheetModifier(isPresented: isPresented))
+    func engifySettingsSheet(
+        isPresented: Binding<Bool>,
+        initialSection: SettingsFocusSection? = nil
+    ) -> some View {
+        modifier(EngifySettingsSheetModifier(isPresented: isPresented, initialSection: initialSection))
     }
 }
 

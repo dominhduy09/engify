@@ -8,6 +8,7 @@ struct NewsReadingView: View {
     @EnvironmentObject private var theme: ThemeManager
     @EnvironmentObject private var learningSettings: LearningSettingsManager
     @State private var showSettingsSheet = false
+    @State private var showNewsSourcesSettingsSheet = false
     @State private var selectedArticle: Article?
     @State private var savedToastWordTitle: String?
     @State private var showSavedWordBank = false
@@ -55,16 +56,27 @@ struct NewsReadingView: View {
             }
         }
         .engifySettingsSheet(isPresented: $showSettingsSheet)
+        .engifySettingsSheet(isPresented: $showNewsSourcesSettingsSheet, initialSection: .newsSources)
         .sheet(isPresented: $showSavedWordBank) {
             SavedWordBankSheet()
                 .environmentObject(savedWordsManager)
         }
         .sheet(item: $selectedArticle) { article in
-            NavigationView {
-                NewsArticleDetailView(article: article, onSaveWord: handleSaveWord)
-                    .environmentObject(gamification)
+            if #available(iOS 16.0, *) {
+                NavigationView {
+                    NewsArticleDetailView(article: article, onSaveWord: handleSaveWord)
+                        .environmentObject(gamification)
+                }
+                .navigationViewStyle(StackNavigationViewStyle())
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+            } else {
+                NavigationView {
+                    NewsArticleDetailView(article: article, onSaveWord: handleSaveWord)
+                        .environmentObject(gamification)
+                }
+                .navigationViewStyle(StackNavigationViewStyle())
             }
-            .navigationViewStyle(StackNavigationViewStyle())
         }
         .task {
             if viewModel.articles.isEmpty {
@@ -162,6 +174,26 @@ struct NewsReadingView: View {
                         }
                     }
                 )
+
+                Button {
+                    showNewsSourcesSettingsSheet = true
+                } label: {
+                    HStack(spacing: Spacing.sm) {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.subheadline.weight(.semibold))
+                        Text("Add More Sources")
+                            .font(EngifyTypography.bodyStrong)
+                        Spacer(minLength: 0)
+                        Image(systemName: "arrow.right")
+                            .font(.caption.weight(.semibold))
+                    }
+                    .foregroundStyle(theme.accentColor)
+                    .padding(.horizontal, Spacing.md)
+                    .frame(minHeight: 50)
+                    .background(theme.accentColor.opacity(0.10))
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                }
+                .buttonStyle(.plain)
             }
         }
     }
@@ -358,8 +390,8 @@ struct NewsArticleDetailView: View {
             articleHeader
             summarySection
             contentSection
-            vocabularySection
             linkSection
+            vocabularySection
             quizSection
         }
         .navigationTitle("Article")

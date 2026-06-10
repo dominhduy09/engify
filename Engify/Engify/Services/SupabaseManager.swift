@@ -11,7 +11,8 @@ final class SupabaseManager: ObservableObject {
     @Published private(set) var isInitialized = false
     @Published private(set) var authError: String?
 
-    private init(provider: SupabaseClientProvider = .shared) {
+    private init(provider: SupabaseClientProvider? = nil) {
+        let provider = provider ?? .shared
         self.client = provider.client
         self.isInitialized = provider.client != nil
         self.authError = provider.configurationError?.localizedDescription
@@ -192,6 +193,68 @@ final class SupabaseManager: ObservableObject {
             .execute()
     }
 
+    func saveUnlockedBadge(_ badge: AchievementBadge, earnedAt: Date = Date()) async throws {
+        guard let userID = currentUser?.id.uuidString else { return }
+
+        let data = UserBadgeData(
+            userId: userID,
+            badgeId: badge.rawValue,
+            badgeName: badge.title,
+            earnedAt: earnedAt
+        )
+
+        try await configuredClient()
+            .from("user_badges")
+            .upsert(data, onConflict: "user_id,badge_id")
+            .execute()
+    }
+
+    func fetchUnlockedBadges(userId: String) async throws -> Set<AchievementBadge> {
+        let response: PostgrestResponse<[UserBadgeData]> = try await configuredClient()
+            .from("user_badges")
+            .select()
+            .eq("user_id", value: userId)
+            .execute()
+
+        return Set(response.value.compactMap { AchievementBadge(rawValue: $0.badgeId) })
+    }
+
+    func saveAchievementProgress(_ state: AchievementProgressState) async throws {
+        guard let userID = currentUser?.id.uuidString else { return }
+
+        let data = UserAchievementProgressData(
+            userId: userID,
+            totalSavedWords: max(state.totalSavedWords, state.savedWordIDs.count),
+            savedWordIDs: Array(state.savedWordIDs).sorted(),
+            perfectPracticeCount: state.perfectPracticeCount,
+            perfectNewsQuizCount: state.perfectNewsQuizCount,
+            hasCompletedEarlyBirdLesson: state.hasCompletedEarlyBirdLesson,
+            hasCompletedNightOwlLesson: state.hasCompletedNightOwlLesson,
+            lookedUpWordIDs: Array(state.lookedUpWordIDs).sorted(),
+            dailyPointActivity: state.dailyPointActivity
+        )
+
+        try await configuredClient()
+            .from("user_achievement_progress")
+            .upsert(data)
+            .execute()
+    }
+
+    func fetchAchievementProgress(userId: String) async throws -> AchievementProgressState? {
+        do {
+            let response: PostgrestResponse<UserAchievementProgressData> = try await configuredClient()
+                .from("user_achievement_progress")
+                .select()
+                .eq("user_id", value: userId)
+                .single()
+                .execute()
+
+            return response.value.state
+        } catch {
+            return nil
+        }
+    }
+
     func syncUserData(progress: UserProgress) async {
         do {
             try await saveUserProgress(progress)
@@ -311,6 +374,57 @@ struct LessonResultData: Codable {
         case xpEarned = "xp_earned"
         case lingotsEarned = "lingots_earned"
         case completedAt = "completed_at"
+    }
+}
+
+struct UserBadgeData: Codable {
+    let userId: String
+    let badgeId: String
+    let badgeName: String
+    let earnedAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case userId = "user_id"
+        case badgeId = "badge_id"
+        case badgeName = "badge_name"
+        case earnedAt = "earned_at"
+    }
+}
+
+struct UserAchievementProgressData: Codable {
+    let userId: String
+    let totalSavedWords: Int
+    let savedWordIDs: [String]
+    let perfectPracticeCount: Int
+    let perfectNewsQuizCount: Int
+    let hasCompletedEarlyBirdLesson: Bool
+    let hasCompletedNightOwlLesson: Bool
+    let lookedUpWordIDs: [String]
+    let dailyPointActivity: [String: Int]
+
+    enum CodingKeys: String, CodingKey {
+        case userId = "user_id"
+        case totalSavedWords = "total_saved_words"
+        case savedWordIDs = "saved_word_ids"
+        case perfectPracticeCount = "perfect_practice_count"
+        case perfectNewsQuizCount = "perfect_news_quiz_count"
+        case hasCompletedEarlyBirdLesson = "has_completed_early_bird_lesson"
+        case hasCompletedNightOwlLesson = "has_completed_night_owl_lesson"
+        case lookedUpWordIDs = "looked_up_word_ids"
+        case dailyPointActivity = "daily_point_activity"
+    }
+
+    var state: AchievementProgressState {
+        AchievementProgressState(
+            totalSavedWords: max(totalSavedWords, savedWordIDs.count),
+            savedWordIDs: Set(savedWordIDs),
+            perfectPracticeCount: perfectPracticeCount,
+            perfectNewsQuizCount: perfectNewsQuizCount,
+            hasCompletedEarlyBirdLesson: hasCompletedEarlyBirdLesson,
+            hasCompletedNightOwlLesson: hasCompletedNightOwlLesson,
+            lookedUpWordIDs: Set(lookedUpWordIDs),
+            dailyPointActivity: dailyPointActivity
+        )
     }
 }
 

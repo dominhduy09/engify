@@ -13,8 +13,8 @@ final class OnboardingSurveyManager: ObservableObject {
 
     private let supabaseManager: SupabaseManager
 
-    init(supabaseManager: SupabaseManager = .shared) {
-        self.supabaseManager = supabaseManager
+    init(supabaseManager: SupabaseManager? = nil) {
+        self.supabaseManager = supabaseManager ?? .shared
         self.hasCompletedSurvey = UserDefaults.standard.bool(forKey: Keys.hasCompletedSurvey)
 
         if let data = UserDefaults.standard.data(forKey: Keys.cachedResponse),

@@ -153,6 +153,33 @@ CREATE POLICY "Users can manage own badges"
     USING (auth.uid() = user_id);
 
 -- =====================================================
+-- ACHIEVEMENT PROGRESS TABLE
+-- Stores badge/achievement counters needed to restore
+-- gamification state across devices.
+-- =====================================================
+CREATE TABLE IF NOT EXISTS public.user_achievement_progress (
+    user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    total_saved_words INTEGER NOT NULL DEFAULT 0,
+    saved_word_ids TEXT[] NOT NULL DEFAULT '{}',
+    perfect_practice_count INTEGER NOT NULL DEFAULT 0,
+    perfect_news_quiz_count INTEGER NOT NULL DEFAULT 0,
+    has_completed_early_bird_lesson BOOLEAN NOT NULL DEFAULT FALSE,
+    has_completed_night_owl_lesson BOOLEAN NOT NULL DEFAULT FALSE,
+    looked_up_word_ids TEXT[] NOT NULL DEFAULT '{}',
+    daily_point_activity JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Enable Row Level Security
+ALTER TABLE public.user_achievement_progress ENABLE ROW LEVEL SECURITY;
+
+-- Users can only see/manage their own achievement state
+CREATE POLICY "Users can manage own achievement progress"
+    ON public.user_achievement_progress FOR ALL
+    USING (auth.uid() = user_id);
+
+-- =====================================================
 -- FUNCTION: Create user profile automatically
 -- Triggered when a new user signs up
 -- =====================================================
@@ -166,6 +193,7 @@ BEGIN
         COALESCE(NEW.raw_user_meta_data->>'display_name', NEW.email)
     );
     INSERT INTO public.user_progress (user_id) VALUES (NEW.id);
+    INSERT INTO public.user_achievement_progress (user_id) VALUES (NEW.id);
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -197,6 +225,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- Enable realtime for progress updates
 ALTER PUBLICATION supabase_realtime ADD TABLE public.user_progress;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.saved_words;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.user_achievement_progress;
 
 -- =====================================================
 -- FUNCTION: Delete the currently authenticated account

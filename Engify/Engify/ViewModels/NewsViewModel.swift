@@ -34,6 +34,9 @@ final class NewsViewModel: ObservableObject {
         case guardian = "The Guardian"
         case alJazeera = "Al Jazeera"
         case reuters = "Reuters"
+        case cnn = "CNN"
+        case newYorkTimes = "The New York Times"
+        case npr = "NPR"
         case bbcLearningEnglish = "BBC Learning English"
 
         var id: String { rawValue }
@@ -46,6 +49,7 @@ final class NewsViewModel: ObservableObject {
         case science = "Science"
         case technology = "Technology"
         case sports = "Sports"
+        case general = "General"
 
         var id: String { rawValue }
     }
@@ -139,7 +143,7 @@ final class NewsViewModel: ObservableObject {
         let query = filters.searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
 
         filteredArticles = articles.filter { article in
-            let sourceMatches = filters.selectedSources.isEmpty || filters.selectedSources.contains(sourceFilter(for: article.source))
+            let sourceMatches = sourceMatchesSelectedFilters(for: article.source)
             let categoryMatches = filters.selectedCategories.isEmpty || filters.selectedCategories.contains(categoryFilter(for: article.category))
             let textMatches = query.isEmpty || [article.title, article.summary, article.content, article.source, article.category]
                 .joined(separator: " ")
@@ -150,14 +154,24 @@ final class NewsViewModel: ObservableObject {
         }
     }
 
-    private func sourceFilter(for source: String) -> NewsSourceFilter {
+    private func sourceMatchesSelectedFilters(for source: String) -> Bool {
+        guard !filters.selectedSources.isEmpty else { return true }
+        guard let mappedFilter = sourceFilter(for: source) else { return false }
+        return filters.selectedSources.contains(mappedFilter)
+    }
+
+    private func sourceFilter(for source: String) -> NewsSourceFilter? {
         let lowered = source.lowercased()
         if lowered.contains("bbc learning english") { return .bbcLearningEnglish }
         if lowered.contains("bbc") { return .bbc }
         if lowered.contains("nasa") { return .nasa }
         if lowered.contains("guardian") { return .guardian }
         if lowered.contains("al jazeera") { return .alJazeera }
-        return .reuters
+        if lowered.contains("cnn") { return .cnn }
+        if lowered.contains("new york times") { return .newYorkTimes }
+        if lowered.contains("npr") { return .npr }
+        if lowered.contains("reuters") { return .reuters }
+        return nil
     }
 
     private func categoryFilter(for category: String) -> NewsCategoryFilter {
@@ -167,6 +181,7 @@ final class NewsViewModel: ObservableObject {
         case "science": return .science
         case "technology": return .technology
         case "sports": return .sports
+        case "general": return .general
         default: return .world
         }
     }

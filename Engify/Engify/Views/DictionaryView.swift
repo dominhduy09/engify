@@ -10,6 +10,7 @@ struct DictionaryView: View {
     @FocusState private var isSearchFieldFocused: Bool
     @State private var audioPlayer: AVPlayer?
     @State private var showSettingsSheet = false
+    @State private var showDictionaryAPISettingsSheet = false
     @State private var savedToastWordTitle: String?
     @State private var showSavedWordBank = false
 
@@ -29,6 +30,7 @@ struct DictionaryView: View {
             }
         }
         .engifySettingsSheet(isPresented: $showSettingsSheet)
+        .engifySettingsSheet(isPresented: $showDictionaryAPISettingsSheet, initialSection: .dictionaryAPI)
         .sheet(isPresented: $showSavedWordBank) {
             SavedWordBankSheet()
                 .environmentObject(savedWordsManager)
@@ -181,6 +183,26 @@ struct DictionaryView: View {
                 .font(EngifyTypography.body)
                 .foregroundStyle(EngifyColors.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
+
+            Button {
+                showDictionaryAPISettingsSheet = true
+            } label: {
+                HStack(spacing: Spacing.sm) {
+                    Image(systemName: "link.badge.plus")
+                        .font(.subheadline.weight(.semibold))
+                    Text("Manage Dictionary API")
+                        .font(EngifyTypography.bodyStrong)
+                    Spacer(minLength: 0)
+                    Image(systemName: "arrow.right")
+                        .font(.caption.weight(.semibold))
+                }
+                .foregroundStyle(theme.accentColor)
+                .padding(.horizontal, Spacing.md)
+                .frame(minHeight: 50)
+                .background(theme.accentColor.opacity(0.10))
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            }
+            .buttonStyle(.plain)
         }
         .padding(.vertical, Spacing.sm)
     }
