@@ -15,5 +15,7 @@
 	</array>
 	<key>GIDClientID</key>
 	<string>936042370977-rp9tn7aa39gdfnlptblb2log8itf2ucl.apps.googleusercontent.com</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Engify uses your microphone for speaking practice, pronunciation review, and interactive English exercises.</string>
 </dict>
 </plist>

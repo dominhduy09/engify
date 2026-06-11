@@ -13,6 +13,7 @@ struct DictionaryView: View {
     @State private var showDictionaryAPISettingsSheet = false
     @State private var savedToastWordTitle: String?
     @State private var showSavedWordBank = false
+    @AppStorage("engify.lookup.content.expanded") private var isLookupContentExpanded = true
 
     var body: some View {
         EngifyScreenScroll {
@@ -55,18 +56,70 @@ struct DictionaryView: View {
                         .transition(.move(edge: .top).combined(with: .opacity))
                 }
 
-                if viewModel.isLoading {
-                    EngifyLoadingCard(
-                        title: "Searching...",
-                        message: "Looking up the word with the public dictionary API."
-                    )
-                } else if let displayedEntry = viewModel.currentEntry {
-                    resultContent(for: displayedEntry)
-                } else {
-                    emptyLookupState
+                lookupContentToggle
+
+                if isLookupContentExpanded {
+                    Group {
+                        if viewModel.isLoading {
+                            EngifyLoadingCard(
+                                title: "Searching...",
+                                message: "Looking up the word with the public dictionary API."
+                            )
+                        } else if let displayedEntry = viewModel.currentEntry {
+                            resultContent(for: displayedEntry)
+                        } else {
+                            emptyLookupState
+                        }
+                    }
+                    .transition(.move(edge: .top).combined(with: .opacity))
                 }
             }
         }
+    }
+
+    private var lookupContentToggle: some View {
+        Button {
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+                isLookupContentExpanded.toggle()
+            }
+        } label: {
+            HStack(spacing: Spacing.md) {
+                EngifyIconBadge(
+                    systemImage: isLookupContentExpanded ? "rectangle.compress.vertical" : "rectangle.expand.vertical",
+                    tint: theme.accentColor,
+                    size: 40
+                )
+
+                VStack(alignment: .leading, spacing: Spacing.xxs) {
+                    Text(isLookupContentExpanded ? "Hide Lookup Details" : "Show Lookup Details")
+                        .font(EngifyTypography.bodyStrong)
+                        .foregroundStyle(EngifyColors.textPrimary)
+
+                    Text(lookupContentSummaryText)
+                        .font(EngifyTypography.caption)
+                        .foregroundStyle(EngifyColors.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 0)
+
+                Image(systemName: isLookupContentExpanded ? "chevron.up" : "chevron.down")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(EngifyColors.textSecondary)
+            }
+            .padding(.horizontal, Spacing.md)
+            .padding(.vertical, Spacing.md)
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(theme.accentColor.opacity(0.08))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(theme.accentColor.opacity(0.16), lineWidth: 1)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     @ViewBuilder
@@ -502,6 +555,18 @@ struct DictionaryView: View {
 
     private func displayValue(_ value: String) -> String {
         value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "N/A" : value
+    }
+
+    private var lookupContentSummaryText: String {
+        if viewModel.isLoading {
+            return "The word search is currently running."
+        }
+
+        if let displayedEntry = viewModel.currentEntry {
+            return "Showing details for \"\(displayValue(displayedEntry.word))\"."
+        }
+
+        return "Expand to see the empty state, quick guidance, and lookup results."
     }
 
     private func savedWordToast(wordTitle: String) -> some View {

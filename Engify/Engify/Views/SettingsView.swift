@@ -2,6 +2,7 @@ import SwiftUI
 
 enum SettingsFocusSection: Hashable {
     case dictionaryAPI
+    case imageProviders
     case newsSources
 }
 
@@ -30,6 +31,7 @@ struct SettingsView: View {
     private enum ActiveSheet: Identifiable {
         case appIconPicker
         case dictionaryAPI
+        case imageProviders
         case newsSources
 
         var id: String {
@@ -38,6 +40,8 @@ struct SettingsView: View {
                 return "app_icon_picker"
             case .dictionaryAPI:
                 return "dictionary_api"
+            case .imageProviders:
+                return "image_providers"
             case .newsSources:
                 return "news_sources"
             }
@@ -58,6 +62,25 @@ struct SettingsView: View {
             case .deleteAccount:
                 return "delete_account"
             }
+        }
+    }
+
+    private struct SaveConfirmationOverlayModifier: ViewModifier {
+        let isVisible: Bool
+        let banner: AnyView
+
+        func body(content: Content) -> some View {
+            content
+                .overlay(alignment: .top) {
+                    if isVisible {
+                        banner
+                            .padding(.horizontal, Spacing.md)
+                            .padding(.top, Spacing.sm)
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                            .zIndex(1000)
+                            .allowsHitTesting(false)
+                    }
+                }
         }
     }
 
@@ -96,6 +119,12 @@ struct SettingsView: View {
     @State private var appIconStatusMessage: String?
     @State private var appIconStatusType: StatusBanner.BannerType = .success
     @State private var appIconStatusTask: DispatchWorkItem?
+    @State private var imageProviderName = ""
+    @State private var imageProviderBaseURL = ""
+    @State private var imageProviderAPIKey = ""
+    @State private var imageProviderAttributionHost = ""
+    @State private var imageProviderStatusMessage: String?
+    @State private var imageProviderStatusType: StatusBanner.BannerType = .info
     @State private var newsSourceName = ""
     @State private var newsSourceURL = ""
     @State private var newsSourceCategory = "World"
@@ -144,10 +173,21 @@ struct SettingsView: View {
             switch section {
             case .dictionaryAPI:
                 activeSheet = .dictionaryAPI
+            case .imageProviders:
+                activeSheet = .imageProviders
             case .newsSources:
                 activeSheet = .newsSources
             }
         }
+    }
+
+    private func openSystemSettings() {
+        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+        UIApplication.shared.open(url)
+    }
+
+    private var saveConfirmationOverlayBanner: AnyView {
+        AnyView(saveConfirmationBanner)
     }
 
     var body: some View {
@@ -160,20 +200,22 @@ struct SettingsView: View {
                         VStack(alignment: .leading, spacing: Spacing.xl) {
                             statusSection
                             overviewCard
-                            settingsPresetSection
-                            learningGoalSection
-                            aiTutorSection
+                            notificationSection
                             speakingSection
                             practiceSection
-                            dictionaryAPISection
-                                .id(SettingsFocusSection.dictionaryAPI)
-                            newsSourcesSection
-                                .id(SettingsFocusSection.newsSources)
-                            notificationSection
+                            appearanceSection
                             appPreferencesSection
+                            learningGoalSection
+                            aiTutorSection
+                            settingsPresetSection
                             advancedLearningSection
                             accessibilitySection
-                            appearanceSection
+                            dictionaryAPISection
+                                .id(SettingsFocusSection.dictionaryAPI)
+                            imageProvidersSection
+                                .id(SettingsFocusSection.imageProviders)
+                            newsSourcesSection
+                                .id(SettingsFocusSection.newsSources)
                             privacySection
                             legalSection
                             resetSection
@@ -186,20 +228,16 @@ struct SettingsView: View {
                         performInitialNavigation(to: section, using: proxy)
                     }
                 }
-
-                if showSaveConfirmation {
-                    VStack {
-                        saveConfirmationBanner
-                            .transition(.move(edge: .top).combined(with: .opacity))
-                        Spacer()
-                    }
-                    .padding()
-                    .allowsHitTesting(false)
-                }
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
         }
+        .modifier(
+            SaveConfirmationOverlayModifier(
+                isVisible: showSaveConfirmation && activeSheet == nil,
+                banner: saveConfirmationOverlayBanner
+            )
+        )
         .navigationViewStyle(StackNavigationViewStyle())
         .animation(.spring(response: 0.3, dampingFraction: 0.82), value: showSaveConfirmation)
         .onAppear {
@@ -270,6 +308,31 @@ struct SettingsView: View {
                     DictionaryAPIManagementSheet()
                         .environmentObject(theme)
                         .environmentObject(settings)
+                        .modifier(
+                            SaveConfirmationOverlayModifier(
+                                isVisible: showSaveConfirmation,
+                                banner: saveConfirmationOverlayBanner
+                            )
+                        )
+
+                case .imageProviders:
+                    ImageProviderManagementSheet(
+                        providerName: $imageProviderName,
+                        providerBaseURL: $imageProviderBaseURL,
+                        providerAPIKey: $imageProviderAPIKey,
+                        providerAttributionHost: $imageProviderAttributionHost,
+                        statusMessage: $imageProviderStatusMessage,
+                        statusType: $imageProviderStatusType,
+                        onAddProvider: addCustomImageProvider
+                    )
+                    .environmentObject(theme)
+                    .environmentObject(settings)
+                    .modifier(
+                        SaveConfirmationOverlayModifier(
+                            isVisible: showSaveConfirmation,
+                            banner: saveConfirmationOverlayBanner
+                        )
+                    )
 
                 case .newsSources:
                     NewsSourcesManagementSheet(
@@ -282,6 +345,12 @@ struct SettingsView: View {
                     )
                     .environmentObject(theme)
                     .environmentObject(settings)
+                    .modifier(
+                        SaveConfirmationOverlayModifier(
+                            isVisible: showSaveConfirmation,
+                            banner: saveConfirmationOverlayBanner
+                        )
+                    )
                 }
             }
             .modifier(SettingsSheetPresentationModifier(sheet: sheet))
@@ -577,6 +646,31 @@ struct SettingsView: View {
                     }
                 }
 
+                Text("Turn the toggle off to stop microphone-based features in Engify. To revoke device microphone permission entirely, open iPhone Settings.")
+                    .font(.caption)
+                    .foregroundStyle(EngifyColors.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Button {
+                    openSystemSettings()
+                } label: {
+                    HStack(spacing: Spacing.sm) {
+                        Image(systemName: "gearshape.fill")
+                            .font(.subheadline.weight(.semibold))
+                        Text("Open iPhone Settings")
+                            .font(EngifyTypography.bodyStrong)
+                        Spacer(minLength: 0)
+                        Image(systemName: "arrow.up.right")
+                            .font(.caption.weight(.semibold))
+                    }
+                    .foregroundStyle(theme.accentColor)
+                    .padding(.horizontal, Spacing.md)
+                    .frame(minHeight: 50)
+                    .background(theme.accentColor.opacity(0.10))
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                }
+                .buttonStyle(.plain)
+
                 VStack(alignment: .leading, spacing: Spacing.sm) {
                     Text("Speaking speed")
                         .font(.subheadline.weight(.semibold))
@@ -717,6 +811,31 @@ struct SettingsView: View {
                     }
                 }
 
+                Text("Turn the toggle off to stop reminders in Engify. To fully disable iPhone notification permission for Engify, open iPhone Settings.")
+                    .font(.caption)
+                    .foregroundStyle(EngifyColors.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Button {
+                    openSystemSettings()
+                } label: {
+                    HStack(spacing: Spacing.sm) {
+                        Image(systemName: "gearshape.fill")
+                            .font(.subheadline.weight(.semibold))
+                        Text("Open iPhone Settings")
+                            .font(EngifyTypography.bodyStrong)
+                        Spacer(minLength: 0)
+                        Image(systemName: "arrow.up.right")
+                            .font(.caption.weight(.semibold))
+                    }
+                    .foregroundStyle(theme.accentColor)
+                    .padding(.horizontal, Spacing.md)
+                    .frame(minHeight: 50)
+                    .background(theme.accentColor.opacity(0.10))
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                }
+                .buttonStyle(.plain)
+
                 if settings.notificationPermissionStatus == .granted && settings.notificationsEnabled {
                     VStack(alignment: .leading, spacing: Spacing.md) {
                         EngifySettingToggleRow(
@@ -801,6 +920,26 @@ struct SettingsView: View {
                     detail: newsSourcesDetailText,
                     systemImage: "newspaper.fill",
                     badgeText: settings.customNewsSources.isEmpty ? "Built-in only" : "Custom enabled"
+                )
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private var imageProvidersSection: some View {
+        EngifySettingsSection(
+            title: "Image providers",
+            subtitle: "Manage API keys for image search services like Pexels, Unsplash, Pixabay, and any custom provider."
+        ) {
+            Button {
+                activeSheet = .imageProviders
+            } label: {
+                settingsSummaryRow(
+                    title: "Image API manager",
+                    value: imageProvidersStatusTitle,
+                    detail: imageProvidersDetailText,
+                    systemImage: "photo.stack.fill",
+                    badgeText: activeImageProviderBadgeText
                 )
             }
             .buttonStyle(.plain)
@@ -977,6 +1116,7 @@ struct SettingsView: View {
             String(settings.newWordsPerDay),
             String(settings.reviewLimitPerDay),
             settings.dictionaryAPIBaseURL,
+            settings.imageAPIProviders.map { "\($0.id)|\($0.baseURL)|\($0.apiKey)|\($0.isEnabled)" }.joined(separator: ","),
             settings.notificationsEnabled.description,
             settings.dailyReminderEnabled.description,
             String(settings.dailyReminderTime.timeIntervalSince1970),
@@ -1007,33 +1147,9 @@ struct SettingsView: View {
     }
 
     private var saveConfirmationBanner: some View {
-        HStack(spacing: Spacing.sm) {
-            Image(systemName: "checkmark.circle.fill")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(EngifyColors.sage)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Changes saved")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(EngifyColors.textPrimary)
-
-                Text("Your settings were updated successfully.")
-                    .font(.caption)
-                    .foregroundStyle(EngifyColors.textSecondary)
-            }
-
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, Spacing.md)
-        .padding(.vertical, Spacing.md)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(EngifyColors.sage.opacity(0.12))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(EngifyColors.sage.opacity(0.22), lineWidth: 1)
+        StatusBanner(
+            message: "Changes saved. Your settings were updated successfully.",
+            type: .success
         )
     }
 
@@ -1060,7 +1176,7 @@ struct SettingsView: View {
         }
 
         saveConfirmationTask = hideTask
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.8, execute: hideTask)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.8, execute: hideTask)
     }
 
     private func handleSettingsSnapshotChange(_ newSnapshot: String) {
@@ -1092,6 +1208,25 @@ struct SettingsView: View {
         return "Engify is currently using built-in feeds only. Tap to review them or add your own RSS/Atom sources."
     }
 
+    private var imageProvidersStatusTitle: String {
+        let enabledProviders = settings.imageAPIProviders.filter(\.isEnabled)
+        let configuredProviders = settings.imageAPIProviders.filter { !$0.apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        return "\(enabledProviders.count) enabled • \(configuredProviders.count) keyed"
+    }
+
+    private var imageProvidersDetailText: String {
+        if let firstConfigured = settings.imageAPIProviders.first(where: { !$0.apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) {
+            return "\(firstConfigured.name) is configured. Tap to update keys, switch providers, or add more image services."
+        }
+
+        return "No image API keys saved yet. Tap to add keys for Pexels, Unsplash, Pixabay, or your own provider."
+    }
+
+    private var activeImageProviderBadgeText: String {
+        let activeCount = settings.imageAPIProviders.filter(\.isEnabled).count
+        return activeCount == 0 ? "Disabled" : "\(activeCount) active"
+    }
+
     private func addCustomNewsSource() {
         let result = settings.addCustomNewsSource(
             name: newsSourceName,
@@ -1110,10 +1245,37 @@ struct SettingsView: View {
         }
     }
 
+    private func addCustomImageProvider() {
+        let result = settings.addCustomImageAPIProvider(
+            name: imageProviderName,
+            baseURL: imageProviderBaseURL,
+            apiKey: imageProviderAPIKey,
+            attributionHost: imageProviderAttributionHost
+        )
+
+        switch result {
+        case let .success(message):
+            imageProviderName = ""
+            imageProviderBaseURL = ""
+            imageProviderAPIKey = ""
+            imageProviderAttributionHost = ""
+            showImageProviderStatus(message: message, type: .success)
+        case let .failure(message):
+            showImageProviderStatus(message: message, type: .error)
+        }
+    }
+
     private func showNewsSourceStatus(message: String, type: StatusBanner.BannerType) {
         withAnimation(.easeInOut(duration: 0.2)) {
             newsSourceStatusMessage = message
             newsSourceStatusType = type
+        }
+    }
+
+    private func showImageProviderStatus(message: String, type: StatusBanner.BannerType) {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            imageProviderStatusMessage = message
+            imageProviderStatusType = type
         }
     }
 
@@ -2067,6 +2229,275 @@ private struct NewsSourcesManagementSheet: View {
                         .frame(width: 36, height: 36)
                         .background(EngifyColors.coral.opacity(0.12))
                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+}
+
+private struct ImageProviderManagementSheet: View {
+    @Binding var providerName: String
+    @Binding var providerBaseURL: String
+    @Binding var providerAPIKey: String
+    @Binding var providerAttributionHost: String
+    @Binding var statusMessage: String?
+    @Binding var statusType: StatusBanner.BannerType
+    let onAddProvider: () -> Void
+
+    @EnvironmentObject private var theme: ThemeManager
+    @EnvironmentObject private var settings: LearningSettingsManager
+
+    private var builtInProviders: [ImageAPIProviderConfig] {
+        settings.imageAPIProviders.filter(\.isBuiltIn)
+    }
+
+    private var customProviders: [ImageAPIProviderConfig] {
+        settings.imageAPIProviders.filter { !$0.isBuiltIn }
+    }
+
+    var body: some View {
+        NavigationView {
+            ZStack {
+                EngifyAppBackground()
+
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: Spacing.lg) {
+                        if let statusMessage, !statusMessage.isEmpty {
+                            StatusBanner(message: statusMessage, type: statusType)
+                        }
+
+                        EngifyCard(tint: theme.accentColor) {
+                            VStack(alignment: .leading, spacing: Spacing.sm) {
+                                Text("Image provider manager")
+                                    .font(EngifyTypography.headline)
+                                    .foregroundStyle(EngifyColors.textPrimary)
+
+                                Text("Manage API keys for Pexels, Unsplash, Pixabay, and any custom image search provider you want Engify to support.")
+                                    .font(EngifyTypography.caption)
+                                    .foregroundStyle(EngifyColors.textSecondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+
+                        EngifyCard {
+                            VStack(alignment: .leading, spacing: Spacing.md) {
+                                Text("Built-in providers")
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(EngifyColors.textPrimary)
+
+                                ForEach(Array(builtInProviders.enumerated()), id: \.element.id) { index, provider in
+                                    imageProviderRow(provider)
+
+                                    if index < builtInProviders.count - 1 {
+                                        Divider()
+                                    }
+                                }
+                            }
+                        }
+
+                        EngifyCard {
+                            VStack(alignment: .leading, spacing: Spacing.md) {
+                                HStack {
+                                    Text("Custom providers")
+                                        .font(.subheadline.weight(.semibold))
+                                        .foregroundStyle(EngifyColors.textPrimary)
+
+                                    Spacer(minLength: 0)
+
+                                    Text("\(customProviders.count)")
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundStyle(theme.accentColor)
+                                }
+
+                                if customProviders.isEmpty {
+                                    Text("No custom image providers yet. Add one below if you want another service besides the built-in options.")
+                                        .font(EngifyTypography.caption)
+                                        .foregroundStyle(EngifyColors.textSecondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                } else {
+                                    ForEach(Array(customProviders.enumerated()), id: \.element.id) { index, provider in
+                                        imageProviderRow(provider)
+
+                                        if index < customProviders.count - 1 {
+                                            Divider()
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        EngifyCard {
+                            VStack(alignment: .leading, spacing: Spacing.md) {
+                                Text("Add a custom image provider")
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(EngifyColors.textPrimary)
+
+                                TextField("Provider name", text: $providerName)
+                                    .textInputAutocapitalization(.words)
+                                    .autocorrectionDisabled()
+                                    .padding(.horizontal, Spacing.md)
+                                    .frame(minHeight: 52)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                            .fill(EngifyColors.canvasRaised)
+                                    )
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                            .stroke(EngifyColors.border.opacity(0.8), lineWidth: 1)
+                                    )
+
+                                TextField("https://example.com/search", text: $providerBaseURL)
+                                    .textInputAutocapitalization(.never)
+                                    .autocorrectionDisabled()
+                                    .font(.system(.body, design: .monospaced))
+                                    .padding(.horizontal, Spacing.md)
+                                    .frame(minHeight: 52)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                            .fill(EngifyColors.canvasRaised)
+                                    )
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                            .stroke(EngifyColors.border.opacity(0.8), lineWidth: 1)
+                                    )
+
+                                SecureField("API key", text: $providerAPIKey)
+                                    .textInputAutocapitalization(.never)
+                                    .autocorrectionDisabled()
+                                    .font(.system(.body, design: .monospaced))
+                                    .padding(.horizontal, Spacing.md)
+                                    .frame(minHeight: 52)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                            .fill(EngifyColors.canvasRaised)
+                                    )
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                            .stroke(EngifyColors.border.opacity(0.8), lineWidth: 1)
+                                    )
+
+                                TextField("Attribution host (optional)", text: $providerAttributionHost)
+                                    .textInputAutocapitalization(.never)
+                                    .autocorrectionDisabled()
+                                    .padding(.horizontal, Spacing.md)
+                                    .frame(minHeight: 52)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                            .fill(EngifyColors.canvasRaised)
+                                    )
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                            .stroke(EngifyColors.border.opacity(0.8), lineWidth: 1)
+                                    )
+
+                                PrimaryButton(
+                                    title: "Add Image Provider",
+                                    systemImage: "plus.circle.fill",
+                                    action: onAddProvider
+                                )
+
+                                Text("Engify stores your image provider configuration locally so you can switch services without editing code.")
+                                    .font(EngifyTypography.caption)
+                                    .foregroundStyle(EngifyColors.textSecondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                    }
+                    .padding()
+                    .padding(.bottom, Spacing.xxl)
+                }
+            }
+            .navigationTitle("Image Providers")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+        .navigationViewStyle(StackNavigationViewStyle())
+    }
+
+    @ViewBuilder
+    private func imageProviderRow(_ provider: ImageAPIProviderConfig) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.md) {
+            HStack(alignment: .top, spacing: Spacing.md) {
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    HStack(spacing: Spacing.sm) {
+                        Text(provider.name)
+                            .font(EngifyTypography.bodyStrong)
+                            .foregroundStyle(EngifyColors.textPrimary)
+
+                        EngifySettingsBadge(text: provider.isBuiltIn ? "Built-in" : "Custom")
+
+                        if provider.isEnabled {
+                            Text("Enabled")
+                                .font(.caption2.weight(.bold))
+                                .foregroundStyle(theme.accentColor)
+                                .padding(.horizontal, Spacing.sm)
+                                .padding(.vertical, 4)
+                                .background(theme.accentColor.opacity(0.10))
+                                .clipShape(Capsule())
+                        }
+                    }
+
+                    Text(provider.baseURL)
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundStyle(EngifyColors.textSecondary)
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    if !provider.attributionHost.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Text("Attribution: \(provider.attributionHost)")
+                            .font(EngifyTypography.caption)
+                            .foregroundStyle(EngifyColors.textSecondary)
+                    }
+                }
+
+                Spacer(minLength: 0)
+
+                Toggle(
+                    "",
+                    isOn: Binding(
+                        get: { provider.isEnabled },
+                        set: { settings.updateImageAPIProvider(id: provider.id, isEnabled: $0) }
+                    )
+                )
+                .labelsHidden()
+                .tint(theme.accentColor)
+            }
+
+            SecureField(
+                provider.apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Paste your API key" : "API key saved",
+                text: Binding(
+                    get: { provider.apiKey },
+                    set: { settings.updateImageAPIProvider(id: provider.id, apiKey: $0) }
+                )
+            )
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
+            .font(.system(.body, design: .monospaced))
+            .padding(.horizontal, Spacing.md)
+            .frame(minHeight: 52)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(EngifyColors.canvasRaised)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(EngifyColors.border.opacity(0.8), lineWidth: 1)
+            )
+
+            if !provider.isBuiltIn {
+                Button(role: .destructive) {
+                    settings.removeCustomImageAPIProvider(id: provider.id)
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        statusMessage = "Removed \(provider.name) from your image providers."
+                        statusType = .info
+                    }
+                } label: {
+                    HStack(spacing: Spacing.sm) {
+                        Image(systemName: "trash")
+                        Text("Remove Provider")
+                    }
+                    .font(EngifyTypography.caption.weight(.semibold))
+                    .foregroundStyle(EngifyColors.coral)
                 }
                 .buttonStyle(.plain)
             }

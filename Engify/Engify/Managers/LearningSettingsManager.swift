@@ -83,6 +83,10 @@ final class LearningSettingsManager: ObservableObject {
     @Published var customNewsSources: [NewsCustomSource] {
         didSet { saveCustomNewsSources() }
     }
+
+    @Published var imageAPIProviders: [ImageAPIProviderConfig] {
+        didSet { saveImageAPIProviders() }
+    }
     
     // MARK: - Notifications
     
@@ -245,6 +249,7 @@ final class LearningSettingsManager: ObservableObject {
         self.reviewLimitPerDay = Self.loadValidated("review_limit_per_day", default: 15) { $0 >= 5 && $0 <= 40 }
         self.dictionaryAPIBaseURL = Self.loadString("dictionary_api_base_url", default: "")
         self.customNewsSources = Self.loadPersistedCustomNewsSources()
+        self.imageAPIProviders = Self.loadPersistedImageAPIProviders()
         
         self.notificationsEnabled = Self.loadBool("notifications_enabled", default: true)
         self.dailyReminderEnabled = Self.loadBool("daily_reminder", default: true)
@@ -578,6 +583,96 @@ final class LearningSettingsManager: ObservableObject {
         logAnalytics("custom_news_source_removed", ["name": removed.name, "category": removed.category])
     }
 
+    @discardableResult
+    func addCustomImageAPIProvider(
+        name: String,
+        baseURL: String,
+        apiKey: String,
+        attributionHost: String
+    ) -> ImageAPIProviderMutationResult {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedBaseURL = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedAPIKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedAttributionHost = attributionHost.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !trimmedName.isEmpty else {
+            return .failure("Enter a provider name so Engify can label this image service.")
+        }
+
+        guard let url = URL(string: trimmedBaseURL),
+              let scheme = url.scheme?.lowercased(),
+              ["http", "https"].contains(scheme),
+              url.host != nil else {
+            return .failure("Enter a valid base URL that starts with http:// or https://.")
+        }
+
+        guard !trimmedAPIKey.isEmpty else {
+            return .failure("Enter an API key before saving this image provider.")
+        }
+
+        let normalizedURL = Self.normalizedServiceURL(trimmedBaseURL)
+        let duplicateExists = imageAPIProviders.contains {
+            Self.normalizedServiceURL($0.baseURL) == normalizedURL
+        }
+
+        guard !duplicateExists else {
+            return .failure("This image provider URL is already in your list.")
+        }
+
+        imageAPIProviders.append(
+            ImageAPIProviderConfig(
+                id: "custom.\(UUID().uuidString.lowercased())",
+                name: trimmedName,
+                baseURL: trimmedBaseURL,
+                apiKey: trimmedAPIKey,
+                attributionHost: trimmedAttributionHost,
+                isEnabled: true,
+                isBuiltIn: false
+            )
+        )
+        imageAPIProviders.sort {
+            if $0.isBuiltIn != $1.isBuiltIn {
+                return $0.isBuiltIn && !$1.isBuiltIn
+            }
+            return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+        }
+
+        logAnalytics("image_api_provider_added", ["name": trimmedName])
+        return .success("Added \(trimmedName) to your image providers.")
+    }
+
+    func updateImageAPIProvider(
+        id: String,
+        isEnabled: Bool? = nil,
+        baseURL: String? = nil,
+        apiKey: String? = nil,
+        attributionHost: String? = nil
+    ) {
+        guard let index = imageAPIProviders.firstIndex(where: { $0.id == id }) else { return }
+
+        if let isEnabled {
+            imageAPIProviders[index].isEnabled = isEnabled
+        }
+
+        if let baseURL {
+            imageAPIProviders[index].baseURL = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        if let apiKey {
+            imageAPIProviders[index].apiKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        if let attributionHost {
+            imageAPIProviders[index].attributionHost = attributionHost.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+    }
+
+    func removeCustomImageAPIProvider(id: String) {
+        guard let removed = imageAPIProviders.first(where: { $0.id == id && !$0.isBuiltIn }) else { return }
+        imageAPIProviders.removeAll { $0.id == id && !$0.isBuiltIn }
+        logAnalytics("image_api_provider_removed", ["name": removed.name])
+    }
+
     // MARK: - Persistence Helpers
 
     private func saveCustomNewsSources() {
@@ -586,6 +681,15 @@ final class LearningSettingsManager: ObservableObject {
             save("custom_news_sources", data)
         } catch {
             logError("Failed to encode custom news sources", error)
+        }
+    }
+
+    private func saveImageAPIProviders() {
+        do {
+            let data = try JSONEncoder().encode(imageAPIProviders)
+            save("image_api_providers", data)
+        } catch {
+            logError("Failed to encode image API providers", error)
         }
     }
     
@@ -652,11 +756,71 @@ final class LearningSettingsManager: ObservableObject {
         }
     }
 
+    static func loadPersistedImageAPIProviders() -> [ImageAPIProviderConfig] {
+        let fullKey = Keys.prefix + "image_api_providers"
+        guard let data = UserDefaults.standard.data(forKey: fullKey),
+              let decoded = try? JSONDecoder().decode([ImageAPIProviderConfig].self, from: data) else {
+            return defaultImageAPIProviders()
+        }
+
+        let defaultProviders = defaultImageAPIProviders()
+        let mergedBuiltIns = defaultProviders.map { provider in
+            decoded.first(where: { $0.id == provider.id }) ?? provider
+        }
+        let customProviders = decoded.filter { !$0.isBuiltIn }
+
+        return (mergedBuiltIns + customProviders).sorted {
+            if $0.isBuiltIn != $1.isBuiltIn {
+                return $0.isBuiltIn && !$1.isBuiltIn
+            }
+            return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+        }
+    }
+
     private static func normalizedFeedURL(_ value: String) -> String {
         value
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased()
             .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+    }
+
+    private static func normalizedServiceURL(_ value: String) -> String {
+        value
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+    }
+
+    private static func defaultImageAPIProviders() -> [ImageAPIProviderConfig] {
+        [
+            ImageAPIProviderConfig(
+                id: "pexels",
+                name: "Pexels",
+                baseURL: "https://api.pexels.com/v1/search",
+                apiKey: "",
+                attributionHost: "pexels.com",
+                isEnabled: true,
+                isBuiltIn: true
+            ),
+            ImageAPIProviderConfig(
+                id: "unsplash",
+                name: "Unsplash",
+                baseURL: "https://api.unsplash.com/search/photos",
+                apiKey: "",
+                attributionHost: "unsplash.com",
+                isEnabled: false,
+                isBuiltIn: true
+            ),
+            ImageAPIProviderConfig(
+                id: "pixabay",
+                name: "Pixabay",
+                baseURL: "https://pixabay.com/api/",
+                apiKey: "",
+                attributionHost: "pixabay.com",
+                isEnabled: false,
+                isBuiltIn: true
+            )
+        ]
     }
 
     private static func defaultReminderTime() -> Date {
@@ -725,7 +889,18 @@ final class LearningSettingsManager: ObservableObject {
         applyPreset(.default)
         dictionaryAPIBaseURL = ""
         customNewsSources = []
+        imageAPIProviders = Self.defaultImageAPIProviders()
     }
+}
+
+struct ImageAPIProviderConfig: Codable, Identifiable, Hashable {
+    let id: String
+    var name: String
+    var baseURL: String
+    var apiKey: String
+    var attributionHost: String
+    var isEnabled: Bool
+    let isBuiltIn: Bool
 }
 
 struct NewsCustomSource: Codable, Identifiable, Hashable {
@@ -743,6 +918,11 @@ struct NewsCustomSource: Codable, Identifiable, Hashable {
 }
 
 enum NewsSourceMutationResult {
+    case success(String)
+    case failure(String)
+}
+
+enum ImageAPIProviderMutationResult {
     case success(String)
     case failure(String)
 }

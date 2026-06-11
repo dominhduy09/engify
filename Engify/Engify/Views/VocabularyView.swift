@@ -12,6 +12,7 @@ struct VocabularyView: View {
     private enum StorageKeys {
         static let completedVocabularyWords = "engify.vocabulary.completed-words"
         static let reviewVocabularyWords = "engify.vocabulary.review-words"
+        static let reviewVisibilityMode = "engify.vocabulary.review-visibility-mode"
     }
 
     @StateObject private var dictionaryViewModel = DictionaryViewModel()
@@ -23,7 +24,7 @@ struct VocabularyView: View {
     @State private var reviewWords: [Word] = []
     @State private var completedWordIDs: Set<String> = []
     @State private var completedCurrentWordIDs: Set<String> = []
-    @State private var reviewMode: ReviewMode = .hidden
+    @AppStorage(StorageKeys.reviewVisibilityMode) private var reviewModeRawValue = ReviewMode.hidden.rawValue
     @EnvironmentObject private var savedWordsManager: SavedWordsManager
     @EnvironmentObject private var theme: ThemeManager
     @EnvironmentObject private var gamification: GamificationManager
@@ -42,6 +43,11 @@ struct VocabularyView: View {
 
     private var currentEntry: DictionaryEntry {
         dictionaryViewModel.currentEntry ?? DictionaryEntry.placeholder(for: lessonWord)
+    }
+
+    private var reviewMode: ReviewMode {
+        get { ReviewMode(rawValue: reviewModeRawValue) ?? .hidden }
+        nonmutating set { reviewModeRawValue = newValue.rawValue }
     }
 
     private var currentWord: Word {
@@ -349,13 +355,20 @@ struct VocabularyView: View {
                     Spacer(minLength: 0)
 
                     if !reviewWords.isEmpty {
-                        Button(reviewMode == .showing ? "Hide" : "Open") {
+                        Button {
                             withAnimation(EngifySpring.jellyRelease) {
                                 reviewMode = reviewMode == .showing ? .hidden : .showing
                             }
+                        } label: {
+                            Image(systemName: reviewMode == .showing ? "eye.slash" : "eye")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(theme.accentColor)
+                                .frame(width: 36, height: 36)
+                                .background(theme.accentColor.opacity(0.10))
+                                .clipShape(Circle())
                         }
-                        .font(EngifyTypography.caption.weight(.semibold))
-                        .foregroundStyle(theme.accentColor)
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(reviewMode == .showing ? "Hide review section" : "Show review section")
                     }
                 }
 
@@ -779,7 +792,7 @@ struct VocabularyView: View {
 
     private func initializeVocabularyExperience() async {
         loadVocabularyProgress()
-        if !reviewWords.isEmpty {
+        if !reviewWords.isEmpty, reviewModeRawValue.isEmpty {
             reviewMode = .showing
         }
         await refillLessonWordsIfNeeded(force: true)

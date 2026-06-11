@@ -12,6 +12,7 @@ struct NewsReadingView: View {
     @State private var selectedArticle: Article?
     @State private var savedToastWordTitle: String?
     @State private var showSavedWordBank = false
+    @AppStorage("engify.news.filter_content.expanded") private var isNewsFilterContentExpanded = true
     var body: some View {
         EngifyScreenScroll {
             globalHeader
@@ -130,72 +131,135 @@ struct NewsReadingView: View {
                     onSubmit: {}
                 )
 
-                if viewModel.filters.isActive {
-                    HStack(spacing: Spacing.sm) {
-                        Label("\(viewModel.filteredArticles.count) articles match", systemImage: "line.3.horizontal.decrease.circle")
-                            .font(EngifyTypography.caption)
-                            .foregroundStyle(EngifyColors.textSecondary)
+                newsFilterContentToggle
 
-                        Spacer(minLength: 0)
+                if isNewsFilterContentExpanded {
+                    Group {
+                        if viewModel.filters.isActive {
+                            HStack(spacing: Spacing.sm) {
+                                Label("\(viewModel.filteredArticles.count) articles match", systemImage: "line.3.horizontal.decrease.circle")
+                                    .font(EngifyTypography.caption)
+                                    .foregroundStyle(EngifyColors.textSecondary)
 
-                        Button("Clear All") {
-                            withAnimation(.easeInOut(duration: 0.18)) {
-                                viewModel.clearFilters()
+                                Spacer(minLength: 0)
+
+                                Button("Clear All") {
+                                    withAnimation(.easeInOut(duration: 0.18)) {
+                                        viewModel.clearFilters()
+                                    }
+                                }
+                                .buttonStyle(.plain)
+                                .font(EngifyTypography.caption.weight(.semibold))
+                                .foregroundStyle(theme.accentColor)
                             }
                         }
+
+                        filterSection(
+                            title: "Sources",
+                            systemImage: "antenna.radiowaves.left.and.right",
+                            titles: NewsViewModel.NewsSourceFilter.allCases.map(\.rawValue),
+                            selected: viewModel.filters.selectedSources.map(\.rawValue),
+                            onToggle: { title in
+                                guard let filter = NewsViewModel.NewsSourceFilter.allCases.first(where: { $0.rawValue == title }) else { return }
+                                withAnimation(.easeInOut(duration: 0.18)) {
+                                    viewModel.toggleSourceFilter(filter)
+                                }
+                            }
+                        )
+
+                        filterSection(
+                            title: "Categories",
+                            systemImage: "square.grid.2x2",
+                            titles: NewsViewModel.NewsCategoryFilter.allCases.map(\.rawValue),
+                            selected: viewModel.filters.selectedCategories.map(\.rawValue),
+                            onToggle: { title in
+                                guard let filter = NewsViewModel.NewsCategoryFilter.allCases.first(where: { $0.rawValue == title }) else { return }
+                                withAnimation(.easeInOut(duration: 0.18)) {
+                                    viewModel.toggleCategoryFilter(filter)
+                                }
+                            }
+                        )
+
+                        Button {
+                            showNewsSourcesSettingsSheet = true
+                        } label: {
+                            HStack(spacing: Spacing.sm) {
+                                Image(systemName: "plus.circle.fill")
+                                    .font(.subheadline.weight(.semibold))
+                                Text("Add More Sources")
+                                    .font(EngifyTypography.bodyStrong)
+                                Spacer(minLength: 0)
+                                Image(systemName: "arrow.right")
+                                    .font(.caption.weight(.semibold))
+                            }
+                            .foregroundStyle(theme.accentColor)
+                            .padding(.horizontal, Spacing.md)
+                            .frame(minHeight: 50)
+                            .background(theme.accentColor.opacity(0.10))
+                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        }
                         .buttonStyle(.plain)
-                        .font(EngifyTypography.caption.weight(.semibold))
-                        .foregroundStyle(theme.accentColor)
                     }
+                    .transition(.move(edge: .top).combined(with: .opacity))
                 }
-
-                filterSection(
-                    title: "Sources",
-                    systemImage: "antenna.radiowaves.left.and.right",
-                    titles: NewsViewModel.NewsSourceFilter.allCases.map(\.rawValue),
-                    selected: viewModel.filters.selectedSources.map(\.rawValue),
-                    onToggle: { title in
-                        guard let filter = NewsViewModel.NewsSourceFilter.allCases.first(where: { $0.rawValue == title }) else { return }
-                        withAnimation(.easeInOut(duration: 0.18)) {
-                            viewModel.toggleSourceFilter(filter)
-                        }
-                    }
-                )
-
-                filterSection(
-                    title: "Categories",
-                    systemImage: "square.grid.2x2",
-                    titles: NewsViewModel.NewsCategoryFilter.allCases.map(\.rawValue),
-                    selected: viewModel.filters.selectedCategories.map(\.rawValue),
-                    onToggle: { title in
-                        guard let filter = NewsViewModel.NewsCategoryFilter.allCases.first(where: { $0.rawValue == title }) else { return }
-                        withAnimation(.easeInOut(duration: 0.18)) {
-                            viewModel.toggleCategoryFilter(filter)
-                        }
-                    }
-                )
-
-                Button {
-                    showNewsSourcesSettingsSheet = true
-                } label: {
-                    HStack(spacing: Spacing.sm) {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.subheadline.weight(.semibold))
-                        Text("Add More Sources")
-                            .font(EngifyTypography.bodyStrong)
-                        Spacer(minLength: 0)
-                        Image(systemName: "arrow.right")
-                            .font(.caption.weight(.semibold))
-                    }
-                    .foregroundStyle(theme.accentColor)
-                    .padding(.horizontal, Spacing.md)
-                    .frame(minHeight: 50)
-                    .background(theme.accentColor.opacity(0.10))
-                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                }
-                .buttonStyle(.plain)
             }
         }
+    }
+
+    private var newsFilterContentToggle: some View {
+        Button {
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+                isNewsFilterContentExpanded.toggle()
+            }
+        } label: {
+            HStack(spacing: Spacing.md) {
+                EngifyIconBadge(
+                    systemImage: isNewsFilterContentExpanded ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle",
+                    tint: theme.accentColor,
+                    size: 40
+                )
+
+                VStack(alignment: .leading, spacing: Spacing.xxs) {
+                    Text(isNewsFilterContentExpanded ? "Hide Filter Options" : "Show Filter Options")
+                        .font(EngifyTypography.bodyStrong)
+                        .foregroundStyle(EngifyColors.textPrimary)
+
+                    Text(newsFilterSummaryText)
+                        .font(EngifyTypography.caption)
+                        .foregroundStyle(EngifyColors.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 0)
+
+                Image(systemName: isNewsFilterContentExpanded ? "chevron.up" : "chevron.down")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(EngifyColors.textSecondary)
+            }
+            .padding(.horizontal, Spacing.md)
+            .padding(.vertical, Spacing.md)
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(theme.accentColor.opacity(0.08))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(theme.accentColor.opacity(0.16), lineWidth: 1)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var newsFilterSummaryText: String {
+        let activeSourceCount = viewModel.filters.selectedSources.count
+        let activeCategoryCount = viewModel.filters.selectedCategories.count
+
+        if viewModel.filters.isActive {
+            return "\(viewModel.filteredArticles.count) matches • \(activeSourceCount) source filter\(activeSourceCount == 1 ? "" : "s") • \(activeCategoryCount) category filter\(activeCategoryCount == 1 ? "" : "s")"
+        }
+
+        return "Expand to refine sources, categories, and feed management."
     }
 
     private func filterSection(

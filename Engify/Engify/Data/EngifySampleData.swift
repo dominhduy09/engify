@@ -1,5 +1,30 @@
 import Foundation
 
+struct PracticeImageLesson: Identifiable, Hashable {
+    let id = UUID()
+    let title: String
+    let locationLabel: String
+    let systemImage: String
+    let visualStyle: String
+    let searchTopics: [String]
+    let sceneDescription: String
+    let focusVocabulary: [String]
+    let guidedPrompts: [String]
+    let challengePrompt: String
+}
+
+struct PracticeDialogueScenario: Identifiable, Hashable {
+    let id = UUID()
+    let title: String
+    let setting: String
+    let goal: String
+    let systemImage: String
+    let partnerOpeningLine: String
+    let responseIdeas: [String]
+    let usefulPhrases: [String]
+    let confidenceTip: String
+}
+
 /// Hardcoded sample content used as offline fallback and default vocabulary source.
 ///
 /// WHAT IT CONTAINS:
@@ -9,6 +34,8 @@ import Foundation
 /// - speakingSentence: the sentence displayed in PracticeView's speaking section.
 /// - grammarTopics: 2 grammar lessons (Present Simple, There is/There are).
 /// - practiceQuizQuestions: 3 multiple-choice quiz questions for the Practice tab.
+/// - practiceImageLessons: scene-based visual prompts for descriptive speaking.
+/// - practiceDialogueScenarios: roleplay prompts for real-life conversations.
 ///
 /// WHEN IT SHOWS:
 /// - VocabularyView uses vocabularyWords as its primary word list.
@@ -341,5 +368,188 @@ enum EngifySampleData {
         QuizQuestion(prompt: "What is the opposite of 'lose'?", options: ["Found", "Find", "Win", "Left"], answerIndex: 2, explanation: "Win is the opposite of lose in competitions or games."),
         QuizQuestion(prompt: "Complete: 'They ___ not arrived yet.'", options: ["have", "has", "is", "are"], answerIndex: 0, explanation: "Use 'have' with plural subjects for present perfect."),
         QuizQuestion(prompt: "Which word is an adjective?", options: ["Run", "Happy", "Speak", "Walking"], answerIndex: 1, explanation: "Happy describes how something is (adjective)."),
+    ]
+
+    static let practiceImageLessons: [PracticeImageLesson] = [
+        PracticeImageLesson(
+            title: "Morning Cafe Scene",
+            locationLabel: "Everyday Life",
+            systemImage: "cup.and.saucer.fill",
+            visualStyle: "Warm window light and cozy coffee-shop details",
+            searchTopics: ["cafe", "coffee", "morning", "street", "people"],
+            sceneDescription: "A bright cafe opens onto a quiet street. One person is ordering coffee, another is typing on a laptop, and warm sunlight is hitting the window table.",
+            focusVocabulary: ["barista", "counter", "laptop", "sunlight", "order", "quiet street"],
+            guidedPrompts: [
+                "Describe what each person is doing in the cafe.",
+                "Say three things you can probably hear in this scene.",
+                "Explain why this place feels calm or busy."
+            ],
+            challengePrompt: "Speak for 30 seconds about what you would do first if you walked into this cafe."
+        ),
+        PracticeImageLesson(
+            title: "City Park Weekend",
+            locationLabel: "Outdoor English",
+            systemImage: "tree.fill",
+            visualStyle: "Open-air lifestyle photo with movement and soft greens",
+            searchTopics: ["park", "nature", "weekend", "children", "dog"],
+            sceneDescription: "A city park is full of motion. Two children are flying a kite, a couple is walking a dog, and a food cart is parked beside a path lined with trees.",
+            focusVocabulary: ["kite", "path", "food cart", "picnic", "jogger", "fresh air"],
+            guidedPrompts: [
+                "Name the activities happening in the park.",
+                "Compare the mood of the children and the jogger.",
+                "Describe the weather using at least two adjectives."
+            ],
+            challengePrompt: "Imagine you are sending a voice message from this park. Describe the scene naturally."
+        ),
+        PracticeImageLesson(
+            title: "Travel Check-In Desk",
+            locationLabel: "Travel Practice",
+            systemImage: "airplane.departure",
+            visualStyle: "Busy airport documentary shot with travel details",
+            searchTopics: ["travel", "airport", "family", "flight", "luggage"],
+            sceneDescription: "Inside an airport, travelers are lining up at a check-in desk. A family is checking passports, a digital screen shows departure times, and a suitcase is open beside the line.",
+            focusVocabulary: ["passport", "boarding pass", "queue", "departure", "luggage", "check-in"],
+            guidedPrompts: [
+                "Describe what the family might be preparing for.",
+                "Explain what objects you expect to see near the desk.",
+                "Use sequence words to describe what happens before boarding."
+            ],
+            challengePrompt: "Pretend you are a travel vlogger and explain this airport scene in clear English."
+        ),
+        PracticeImageLesson(
+            title: "Flower Market Morning",
+            locationLabel: "Pexels-Style Topic",
+            systemImage: "camera.macro",
+            visualStyle: "Color-rich close-up scene with natural textures",
+            searchTopics: ["flowers", "beautiful flowers", "nature", "wedding", "meadow", "flora", "bloom", "plant"],
+            sceneDescription: "Rows of bright flowers fill a street market stall. Some bouquets are wrapped in paper, a seller is arranging fresh stems, and customers are stopping to smell the roses and take photos.",
+            focusVocabulary: ["bouquet", "petals", "blossom", "stem", "floral stall", "fragrance"],
+            guidedPrompts: [
+                "Describe the colors, shapes, and textures you notice in the flowers.",
+                "Explain what the seller and customers might be doing.",
+                "Talk about which flowers you would buy and why."
+            ],
+            challengePrompt: "Search a topic like 'flowers' and speak for 30 seconds as if you are describing the photo to a friend."
+        ),
+        PracticeImageLesson(
+            title: "Street Food Corner",
+            locationLabel: "Food English",
+            systemImage: "fork.knife",
+            visualStyle: "Fast, colorful street scene with food and people",
+            searchTopics: ["food", "street food", "market", "snack", "city"],
+            sceneDescription: "A food stall is serving noodles and grilled snacks while customers wait beside a glowing menu board. Steam rises into the evening air, and the cook moves quickly between pans.",
+            focusVocabulary: ["stall", "grill", "steam", "menu board", "queue", "vendor"],
+            guidedPrompts: [
+                "Describe what food you think is being prepared.",
+                "Explain how the atmosphere feels during this busy moment.",
+                "Compare this place with a quiet restaurant."
+            ],
+            challengePrompt: "Pretend you are recommending this food corner to a traveler in simple, vivid English."
+        ),
+        PracticeImageLesson(
+            title: "Beach Afternoon Escape",
+            locationLabel: "Relaxed Travel",
+            systemImage: "beach.umbrella.fill",
+            visualStyle: "Sunny travel photo with open sky and water",
+            searchTopics: ["beach", "ocean", "summer", "travel", "nature"],
+            sceneDescription: "Waves are rolling onto a wide beach while a few people walk near the shore. A striped umbrella is open in the sand, and the sunlight reflects across the water.",
+            focusVocabulary: ["shore", "waves", "umbrella", "sand", "breeze", "coast"],
+            guidedPrompts: [
+                "Describe the weather and colors in the scene.",
+                "Explain what people might be doing at the beach.",
+                "Say why this place feels peaceful or exciting."
+            ],
+            challengePrompt: "Give a short voice-style description of this beach for someone who cannot see the photo."
+        ),
+        PracticeImageLesson(
+            title: "Office Team Meeting",
+            locationLabel: "Workplace English",
+            systemImage: "person.3.fill",
+            visualStyle: "Professional workspace scene with teamwork energy",
+            searchTopics: ["office", "meeting", "work", "team", "business"],
+            sceneDescription: "A small team is gathered around a table with laptops, notebooks, and coffee cups. One person is presenting an idea while the others look at charts on a screen.",
+            focusVocabulary: ["presentation", "colleagues", "screen", "notebook", "discussion", "project"],
+            guidedPrompts: [
+                "Describe the roles of the people in the meeting.",
+                "Explain what kind of project they might be discussing.",
+                "Compare a formal meeting with a casual team chat."
+            ],
+            challengePrompt: "Pretend you are introducing this team scene in a business English class."
+        )
+    ]
+
+    static let practiceImageTopics: [String] = [
+        "flowers",
+        "beautiful flowers",
+        "nature",
+        "cafe",
+        "park",
+        "travel",
+        "food",
+        "city",
+        "market",
+        "beach",
+        "office",
+        "business",
+        "summer",
+        "meadow",
+        "plant"
+    ]
+
+    static let practiceDialogueScenarios: [PracticeDialogueScenario] = [
+        PracticeDialogueScenario(
+            title: "Ordering at a Cafe",
+            setting: "Daily Conversation",
+            goal: "Ask for a drink, customize it, and pay confidently.",
+            systemImage: "cup.and.saucer.fill",
+            partnerOpeningLine: "Hi there. What can I get for you today?",
+            responseIdeas: [
+                "Order one drink and one small snack.",
+                "Ask for the drink size or sugar level you want.",
+                "Finish with a polite closing line."
+            ],
+            usefulPhrases: [
+                "Could I get a medium latte, please?",
+                "Can you make it less sweet?",
+                "That's all for now, thank you."
+            ],
+            confidenceTip: "Keep your sentence short first, then add one detail like size, flavor, or price."
+        ),
+        PracticeDialogueScenario(
+            title: "Asking for Directions",
+            setting: "Travel Survival",
+            goal: "Find a destination and confirm the route clearly.",
+            systemImage: "map.fill",
+            partnerOpeningLine: "Sure, where are you trying to go?",
+            responseIdeas: [
+                "Name the place you need to find.",
+                "Ask how long it takes to get there.",
+                "Repeat the last direction to confirm it."
+            ],
+            usefulPhrases: [
+                "I'm looking for the train station.",
+                "Is it within walking distance?",
+                "So I go straight and turn left at the bank, right?"
+            ],
+            confidenceTip: "Repeat the key location words slowly so the other person can correct you if needed."
+        ),
+        PracticeDialogueScenario(
+            title: "Interview Self-Introduction",
+            setting: "Career English",
+            goal: "Introduce yourself with confidence and clear structure.",
+            systemImage: "briefcase.fill",
+            partnerOpeningLine: "Thanks for joining us today. Could you tell me a little about yourself?",
+            responseIdeas: [
+                "State your name and current role or study focus.",
+                "Mention one strength or achievement.",
+                "End with why you are interested in the opportunity."
+            ],
+            usefulPhrases: [
+                "My name is Duy, and I am currently focusing on language learning and design.",
+                "One of my strengths is staying consistent with new challenges.",
+                "I'm excited about this opportunity because it lets me grow."
+            ],
+            confidenceTip: "Use a three-part structure: present, strength, future."
+        )
     ]
 }
