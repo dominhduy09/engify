@@ -1029,20 +1029,50 @@ private struct DedicatedImagePracticeView: View {
     @Binding var searchText: String
     let learningSettings: LearningSettingsManager
     let onComplete: () -> Void
+    @State private var submittedSearchText = ""
+    @State private var webLessons: [PracticeImageLesson] = []
+    @State private var isSearchingWeb = false
+    @State private var imageSearchStatusMessage: String?
+    @State private var imageSearchAttempted = false
+    @State private var activeSearchRequestID = UUID()
 
     private var normalizedSearchText: String {
         searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
 
+    private var normalizedSubmittedSearchText: String {
+        submittedSearchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
+    private var hasSubmittedSearch: Bool {
+        !normalizedSubmittedSearchText.isEmpty
+    }
+
+    private var activeSearchText: String {
+        normalizedSubmittedSearchText
+    }
+
     private var searchKeywords: [String] {
-        normalizedSearchText
+        activeSearchText
             .split(whereSeparator: { !$0.isLetter && !$0.isNumber })
             .map(String.init)
             .filter { $0.count > 1 }
     }
 
+    private var activeLessons: [PracticeImageLesson] {
+        if hasSubmittedSearch {
+            if !webLessons.isEmpty {
+                return webLessons
+            }
+
+            return filteredLessons
+        }
+
+        return lessons
+    }
+
     private var filteredLessons: [PracticeImageLesson] {
-        guard !normalizedSearchText.isEmpty else { return lessons }
+        guard hasSubmittedSearch else { return lessons }
 
         return lessons
             .map { lesson in
@@ -1058,16 +1088,12 @@ private struct DedicatedImagePracticeView: View {
             .map(\.0)
     }
 
-    private var displayedLesson: PracticeImageLesson {
-        if filteredLessons.indices.contains(selectedLessonIndex) {
-            return filteredLessons[selectedLessonIndex]
+    private var displayedLesson: PracticeImageLesson? {
+        if activeLessons.indices.contains(selectedLessonIndex) {
+            return activeLessons[selectedLessonIndex]
         }
 
-        if let firstMatch = filteredLessons.first {
-            return firstMatch
-        }
-
-        return lessons[min(selectedLessonIndex, max(0, lessons.count - 1))]
+        return activeLessons.first
     }
 
     private var pexelsSearchURL: URL? {
@@ -1082,7 +1108,7 @@ private struct DedicatedImagePracticeView: View {
 
     private var tutorBotKeywords: [String] {
         let topicTokens = searchKeywords
-        let matchedTopics = filteredLessons
+        let matchedTopics = activeLessons
             .flatMap(\.searchTopics)
             .filter { topic in
                 topicTokens.isEmpty || topicTokens.contains(where: { topic.localizedCaseInsensitiveContains($0) })
@@ -1093,14 +1119,14 @@ private struct DedicatedImagePracticeView: View {
     }
 
     private var tutorBotVocabulary: [String] {
-        let prioritizedWords = filteredLessons
+        let prioritizedWords = activeLessons
             .prefix(3)
             .flatMap(\.focusVocabulary)
             .filter { word in
                 tutorBotKeywords.isEmpty || tutorBotKeywords.contains(where: { word.localizedCaseInsensitiveContains($0) })
             }
 
-        let fallbackWords = filteredLessons
+        let fallbackWords = activeLessons
             .prefix(3)
             .flatMap(\.focusVocabulary)
 
@@ -1111,7 +1137,19 @@ private struct DedicatedImagePracticeView: View {
 
     private var tutorBotSummary: String {
         if normalizedSearchText.isEmpty {
-            return "Type any topic and Engify will build a Pexels-style search, surface matching image cards, and filter useful study words for that topic."
+            return "Type any topic and press Search on the keyboard to load a carousel of matching image lessons."
+        }
+
+        if !hasSubmittedSearch {
+            return "Press Search on the keyboard to show image results for '\(searchText)'."
+        }
+
+        if isSearchingWeb {
+            return "Searching the web for image lessons about '\(submittedSearchText)'."
+        }
+
+        if !webLessons.isEmpty {
+            return "Engify loaded \(webLessons.count) web image \(webLessons.count == 1 ? "result" : "results") for '\(submittedSearchText)'."
         }
 
         if filteredLessons.isEmpty {
@@ -1119,7 +1157,29 @@ private struct DedicatedImagePracticeView: View {
         }
 
         let keywordPreview = tutorBotKeywords.prefix(5).joined(separator: ", ")
-        return "Engify tutor filtered \(filteredLessons.count) image \(filteredLessons.count == 1 ? "result" : "results") for '\(searchText)' and found topic words like \(keywordPreview.isEmpty ? "scene vocabulary" : keywordPreview)."
+        return "Web results are unavailable right now, so Engify tutor filtered \(filteredLessons.count) backup image \(filteredLessons.count == 1 ? "result" : "results") for '\(submittedSearchText)' and found topic words like \(keywordPreview.isEmpty ? "scene vocabulary" : keywordPreview)."
+    }
+
+    private var searchStatusColor: Color {
+        if isSearchingWeb {
+            return accentColor
+        }
+
+        if !webLessons.isEmpty {
+            return EngifyColors.sage
+        }
+
+        if imageSearchAttempted, imageSearchStatusMessage != nil {
+            return EngifyColors.coral
+        }
+
+        return EngifyColors.textSecondary
+    }
+
+    private var preferredConfiguredProviderName: String? {
+        learningSettings.imageAPIProviders.first {
+            $0.isEnabled && !$0.apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }?.name
     }
 
     var body: some View {
@@ -1191,6 +1251,13 @@ private struct DedicatedImagePracticeView: View {
                             .foregroundStyle(filteredLessons.isEmpty && !normalizedSearchText.isEmpty ? EngifyColors.coral : EngifyColors.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
 
+                        if let imageSearchStatusMessage, !imageSearchStatusMessage.isEmpty {
+                            Text(imageSearchStatusMessage)
+                                .font(EngifyTypography.caption)
+                                .foregroundStyle(searchStatusColor)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+
                         if let pexelsSearchURL {
                             Link(destination: pexelsSearchURL) {
                                 HStack(spacing: Spacing.sm) {
@@ -1216,7 +1283,7 @@ private struct DedicatedImagePracticeView: View {
                                 .foregroundStyle(accentColor)
                                 .textCase(.uppercase)
 
-                            Text("\(filteredLessons.count) \(filteredLessons.count == 1 ? "scene" : "scenes") ready")
+                            Text(resultCountLabel)
                                 .font(EngifyTypography.body)
                                 .foregroundStyle(EngifyColors.textSecondary)
                         }
@@ -1224,14 +1291,14 @@ private struct DedicatedImagePracticeView: View {
                         Spacer(minLength: 0)
 
                         Menu {
-                            ForEach(filteredLessons.indices, id: \.self) { index in
-                                Button(filteredLessons[index].title) {
+                            ForEach(activeLessons.indices, id: \.self) { index in
+                                Button(activeLessons[index].title) {
                                     updateSelection(to: index)
                                 }
                             }
                         } label: {
                             HStack(spacing: Spacing.sm) {
-                                Text(displayedLesson.title)
+                                Text(displayedLesson?.title ?? "No matches")
                                     .font(EngifyTypography.bodyStrong)
                                     .foregroundStyle(EngifyColors.textPrimary)
                                     .lineLimit(1)
@@ -1245,25 +1312,38 @@ private struct DedicatedImagePracticeView: View {
                             .background(accentColor.opacity(0.10))
                             .clipShape(Capsule())
                         }
+                        .disabled(activeLessons.isEmpty)
                     }
 
-                    if !filteredLessons.isEmpty {
+                    if !activeLessons.isEmpty {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: Spacing.md) {
-                                ForEach(Array(filteredLessons.enumerated()), id: \.element.id) { index, lesson in
+                                ForEach(Array(activeLessons.enumerated()), id: \.element.id) { index, lesson in
                                     Button {
                                         updateSelection(to: index)
                                     } label: {
                                         ImagePracticeResultCard(
                                             lesson: lesson,
                                             accentColor: accentColor,
-                                            isSelected: displayedLesson.id == lesson.id
+                                            isSelected: displayedLesson?.id == lesson.id
                                         )
                                     }
                                     .buttonStyle(.plain)
                                 }
                             }
                             .padding(.vertical, 2)
+                        }
+                    } else {
+                        EngifyCard(tint: accentColor.opacity(0.35)) {
+                            VStack(alignment: .leading, spacing: Spacing.sm) {
+                                Text("No image lessons found")
+                                    .font(EngifyTypography.bodyStrong)
+                                    .foregroundStyle(EngifyColors.textPrimary)
+
+                                Text("Try another topic and press Search to refresh the carousel.")
+                                    .font(EngifyTypography.body)
+                                    .foregroundStyle(EngifyColors.textSecondary)
+                            }
                         }
                     }
 
@@ -1272,6 +1352,7 @@ private struct DedicatedImagePracticeView: View {
                             title: "Previous",
                             systemImage: "arrow.left",
                             action: selectPreviousLesson,
+                            isDisabled: activeLessons.isEmpty,
                             size: .large
                         )
 
@@ -1279,6 +1360,7 @@ private struct DedicatedImagePracticeView: View {
                             title: "Next",
                             systemImage: "arrow.right",
                             action: selectNextLesson,
+                            isDisabled: activeLessons.isEmpty,
                             size: .large
                         )
                     }
@@ -1286,174 +1368,199 @@ private struct DedicatedImagePracticeView: View {
             }
 
             EngifyCard {
-                VStack(alignment: .leading, spacing: Spacing.xl) {
-                    ZStack(alignment: .topLeading) {
-                        RoundedRectangle(cornerRadius: 28, style: .continuous)
-                            .fill(
+                if let displayedLesson {
+                    VStack(alignment: .leading, spacing: Spacing.xl) {
+                        ZStack(alignment: .topLeading) {
+                            PracticeLessonImageView(
+                                lesson: displayedLesson,
+                                accentColor: accentColor,
+                                cornerRadius: 28
+                            )
+                            .frame(minHeight: 250)
+                            .overlay(
                                 LinearGradient(
                                     colors: [
-                                        accentColor.opacity(0.24),
-                                        EngifyColors.surface,
-                                        accentColor.opacity(0.10)
+                                        Color.black.opacity(0.04),
+                                        Color.black.opacity(0.50)
                                     ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
+                                    startPoint: .top,
+                                    endPoint: .bottom
                                 )
+                                .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
                             )
                             .overlay(
                                 RoundedRectangle(cornerRadius: 28, style: .continuous)
                                     .stroke(accentColor.opacity(0.20), lineWidth: 1)
                             )
 
-                        Circle()
-                            .fill(accentColor.opacity(0.16))
-                            .frame(width: 170, height: 170)
-                            .blur(radius: 4)
-                            .offset(x: 170, y: -10)
+                            VStack(alignment: .leading, spacing: Spacing.md) {
+                                HStack(alignment: .center, spacing: Spacing.md) {
+                                    ZStack {
+                                        RoundedRectangle(cornerRadius: 22, style: .continuous)
+                                            .fill(.ultraThinMaterial)
+                                            .frame(width: 74, height: 74)
+
+                                        Image(systemName: displayedLesson.systemImage)
+                                            .font(.system(size: 30, weight: .bold))
+                                            .foregroundStyle(.white)
+                                    }
+
+                                    VStack(alignment: .leading, spacing: Spacing.xs) {
+                                        Text(displayedLesson.locationLabel)
+                                            .font(EngifyTypography.caption.weight(.semibold))
+                                            .foregroundStyle(.white.opacity(0.90))
+                                            .textCase(.uppercase)
+
+                                        Text(displayedLesson.title)
+                                            .font(EngifyTypography.screenTitle)
+                                            .foregroundStyle(.white)
+                                    }
+                                }
+
+                                Text(displayedLesson.sceneDescription)
+                                    .font(EngifyTypography.body)
+                                    .foregroundStyle(.white.opacity(0.90))
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .padding(Spacing.xl)
+                        }
 
                         VStack(alignment: .leading, spacing: Spacing.md) {
-                            HStack(alignment: .center, spacing: Spacing.md) {
-                                ZStack {
-                                    RoundedRectangle(cornerRadius: 22, style: .continuous)
-                                        .fill(accentColor.opacity(0.18))
-                                        .frame(width: 74, height: 74)
+                            Text("Engify tutor bot")
+                                .font(EngifyTypography.headline)
+                                .foregroundStyle(EngifyColors.textPrimary)
 
-                                    Image(systemName: displayedLesson.systemImage)
-                                        .font(.system(size: 30, weight: .bold))
-                                        .foregroundStyle(accentColor)
-                                }
+                            EngifyCard(tint: accentColor) {
+                                VStack(alignment: .leading, spacing: Spacing.md) {
+                                    HStack(alignment: .center, spacing: Spacing.sm) {
+                                        Image(systemName: "brain.head.profile")
+                                            .foregroundStyle(accentColor)
 
-                                VStack(alignment: .leading, spacing: Spacing.xs) {
-                                    Text(displayedLesson.locationLabel)
+                                        Text("Filtered topic words")
+                                            .font(EngifyTypography.bodyStrong)
+                                            .foregroundStyle(EngifyColors.textPrimary)
+                                    }
+
+                                    FlexibleBadgeRow(
+                                        items: tutorBotKeywords.isEmpty ? displayedLesson.searchTopics.map { $0.capitalized } : tutorBotKeywords.map { $0.capitalized },
+                                        tint: accentColor
+                                    )
+
+                                    Text("Recommended vocabulary")
                                         .font(EngifyTypography.caption.weight(.semibold))
-                                        .foregroundStyle(accentColor)
-                                        .textCase(.uppercase)
+                                        .foregroundStyle(EngifyColors.textSecondary)
 
-                                    Text(displayedLesson.title)
-                                        .font(EngifyTypography.screenTitle)
+                                    FlexibleBadgeRow(
+                                        items: tutorBotVocabulary.isEmpty ? displayedLesson.focusVocabulary : tutorBotVocabulary,
+                                        tint: accentColor
+                                    )
+
+                                    Text("Style cue: \(displayedLesson.visualStyle)")
+                                        .font(EngifyTypography.caption)
+                                        .foregroundStyle(EngifyColors.textSecondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+
+                                    if displayedLesson.providerName != nil {
+                                        ImageLessonAttributionView(lesson: displayedLesson, accentColor: accentColor)
+                                    }
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                        }
+
+                        VStack(alignment: .leading, spacing: Spacing.md) {
+                            Text("Focus vocabulary")
+                                .font(EngifyTypography.headline)
+                                .foregroundStyle(EngifyColors.textPrimary)
+
+                            FlexibleBadgeRow(items: displayedLesson.focusVocabulary, tint: accentColor)
+                        }
+
+                        VStack(alignment: .leading, spacing: Spacing.md) {
+                            Text("Guided prompts")
+                                .font(EngifyTypography.headline)
+                                .foregroundStyle(EngifyColors.textPrimary)
+
+                            ForEach(Array(displayedLesson.guidedPrompts.enumerated()), id: \.offset) { index, prompt in
+                                HStack(alignment: .top, spacing: Spacing.md) {
+                                    Text("\(index + 1)")
+                                        .font(EngifyTypography.caption.weight(.bold))
+                                        .foregroundStyle(accentColor)
+                                        .frame(width: 18, alignment: .leading)
+
+                                    Text(prompt)
+                                        .font(EngifyTypography.body)
                                         .foregroundStyle(EngifyColors.textPrimary)
+                                        .fixedSize(horizontal: false, vertical: true)
                                 }
                             }
+                        }
 
-                            Text(displayedLesson.sceneDescription)
-                                .font(EngifyTypography.body)
+                        VStack(alignment: .leading, spacing: Spacing.md) {
+                            Text("Your response notes")
+                                .font(EngifyTypography.headline)
+                                .foregroundStyle(EngifyColors.textPrimary)
+
+                            if #available(iOS 16.0, *) {
+                                TextEditor(text: $learnerNotes)
+                                    .scrollContentBackground(.hidden)
+                                    .font(EngifyTypography.body)
+                                    .frame(minHeight: 140)
+                                    .padding(Spacing.sm)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                            .fill(accentColor.opacity(0.08))
+                                    )
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                            .stroke(accentColor.opacity(0.16), lineWidth: 1)
+                                    )
+                            } else {
+                                // Fallback on earlier versions
+                            }
+
+                            Text(displayedLesson.challengePrompt)
+                                .font(EngifyTypography.caption)
                                 .foregroundStyle(EngifyColors.textSecondary)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
-                        .padding(Spacing.xl)
-                    }
-                    .frame(minHeight: 250)
 
-                    VStack(alignment: .leading, spacing: Spacing.md) {
-                        Text("Engify tutor bot")
-                            .font(EngifyTypography.headline)
+                        PrimaryButton(
+                            title: "Mark Image Lesson Complete",
+                            systemImage: "sparkles",
+                            action: onComplete,
+                            feedbackEvent: .successPop
+                        )
+                    }
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                } else {
+                    VStack(alignment: .leading, spacing: Spacing.lg) {
+                        Text("No lesson selected")
+                            .font(EngifyTypography.sectionTitle)
                             .foregroundStyle(EngifyColors.textPrimary)
 
-                        EngifyCard(tint: accentColor) {
-                            VStack(alignment: .leading, spacing: Spacing.md) {
-                                HStack(alignment: .center, spacing: Spacing.sm) {
-                                    Image(systemName: "brain.head.profile")
-                                        .foregroundStyle(accentColor)
-
-                                    Text("Filtered topic words")
-                                        .font(EngifyTypography.bodyStrong)
-                                        .foregroundStyle(EngifyColors.textPrimary)
-                                }
-
-                                FlexibleBadgeRow(
-                                    items: tutorBotKeywords.isEmpty ? displayedLesson.searchTopics.map { $0.capitalized } : tutorBotKeywords.map { $0.capitalized },
-                                    tint: accentColor
-                                )
-
-                                Text("Recommended vocabulary")
-                                    .font(EngifyTypography.caption.weight(.semibold))
-                                    .foregroundStyle(EngifyColors.textSecondary)
-
-                                FlexibleBadgeRow(
-                                    items: tutorBotVocabulary.isEmpty ? displayedLesson.focusVocabulary : tutorBotVocabulary,
-                                    tint: accentColor
-                                )
-
-                                Text("Style cue: \(displayedLesson.visualStyle)")
-                                    .font(EngifyTypography.caption)
-                                    .foregroundStyle(EngifyColors.textSecondary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                    }
-
-                    VStack(alignment: .leading, spacing: Spacing.md) {
-                        Text("Focus vocabulary")
-                            .font(EngifyTypography.headline)
-                            .foregroundStyle(EngifyColors.textPrimary)
-
-                        FlexibleBadgeRow(items: displayedLesson.focusVocabulary, tint: accentColor)
-                    }
-
-                    VStack(alignment: .leading, spacing: Spacing.md) {
-                        Text("Guided prompts")
-                            .font(EngifyTypography.headline)
-                            .foregroundStyle(EngifyColors.textPrimary)
-
-                        ForEach(Array(displayedLesson.guidedPrompts.enumerated()), id: \.offset) { index, prompt in
-                            HStack(alignment: .top, spacing: Spacing.md) {
-                                Text("\(index + 1)")
-                                    .font(EngifyTypography.caption.weight(.bold))
-                                    .foregroundStyle(accentColor)
-                                    .frame(width: 18, alignment: .leading)
-
-                                Text(prompt)
-                                    .font(EngifyTypography.body)
-                                    .foregroundStyle(EngifyColors.textPrimary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                        }
-                    }
-
-                    VStack(alignment: .leading, spacing: Spacing.md) {
-                        Text("Your response notes")
-                            .font(EngifyTypography.headline)
-                            .foregroundStyle(EngifyColors.textPrimary)
-
-                        if #available(iOS 16.0, *) {
-                            TextEditor(text: $learnerNotes)
-                                .scrollContentBackground(.hidden)
-                                .font(EngifyTypography.body)
-                                .frame(minHeight: 140)
-                                .padding(Spacing.sm)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                        .fill(accentColor.opacity(0.08))
-                                )
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                        .stroke(accentColor.opacity(0.16), lineWidth: 1)
-                                )
-                        } else {
-                            // Fallback on earlier versions
-                        }
-
-                        Text(displayedLesson.challengePrompt)
-                            .font(EngifyTypography.caption)
+                        Text("Submit another topic to load a fresh set of image lesson cards.")
+                            .font(EngifyTypography.body)
                             .foregroundStyle(EngifyColors.textSecondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
 
-                    PrimaryButton(
-                        title: "Mark Image Lesson Complete",
-                        systemImage: "sparkles",
-                        action: onComplete,
-                        feedbackEvent: .successPop
-                    )
+                        SecondaryButton(
+                            title: "Clear Search",
+                            systemImage: "arrow.counterclockwise",
+                            action: clearSearch,
+                            fillsWidth: false,
+                            tint: accentColor
+                        )
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .frame(maxWidth: .infinity, alignment: .topLeading)
             }
+        }
+        .onAppear {
+            hydrateSubmittedSearchIfNeeded()
         }
     }
 
     private func updateSelection(to index: Int) {
-        let activeLessons = filteredLessons.isEmpty ? lessons : filteredLessons
         guard activeLessons.indices.contains(index) else { return }
 
         withAnimation(EngifySpring.tabSlide) {
@@ -1464,33 +1571,89 @@ private struct DedicatedImagePracticeView: View {
     }
 
     private func applySearchSelection() {
+        let trimmedSearch = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+
         withAnimation(EngifySpring.tabSlide) {
+            submittedSearchText = trimmedSearch
             selectedLessonIndex = 0
             learnerNotes = ""
+            imageSearchAttempted = !trimmedSearch.isEmpty
+
+            if trimmedSearch.isEmpty {
+                webLessons = []
+                imageSearchStatusMessage = nil
+                isSearchingWeb = false
+            }
+        }
+        EngifyFeedback.shared.play(.tabSwitch, settings: learningSettings)
+
+        guard !trimmedSearch.isEmpty else { return }
+
+        let requestID = UUID()
+        activeSearchRequestID = requestID
+        isSearchingWeb = true
+        webLessons = []
+        imageSearchStatusMessage = searchStartMessage(for: trimmedSearch)
+
+        Task {
+            let service = ImageLessonService()
+
+            do {
+                let fetchedLessons = try await service.searchLessons(
+                    query: trimmedSearch,
+                    providers: learningSettings.imageAPIProviders
+                )
+
+                await MainActor.run {
+                    guard activeSearchRequestID == requestID, submittedSearchText == trimmedSearch else { return }
+                    webLessons = fetchedLessons
+                    isSearchingWeb = false
+
+                    if fetchedLessons.isEmpty {
+                        imageSearchStatusMessage = "No web images were returned for '\(trimmedSearch)'. Engify is showing backup lesson cards instead."
+                    } else {
+                        let providerLabel = fetchedLessons.first?.providerName ?? preferredConfiguredProviderName ?? "the web provider"
+                        imageSearchStatusMessage = "Showing \(fetchedLessons.count) live image \(fetchedLessons.count == 1 ? "lesson" : "lessons") from \(providerLabel)."
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    guard activeSearchRequestID == requestID, submittedSearchText == trimmedSearch else { return }
+                    webLessons = []
+                    isSearchingWeb = false
+                    imageSearchStatusMessage = "\(error.localizedDescription) Engify is showing backup lessons in the meantime."
+                }
+            }
         }
     }
 
     private func clearSearch() {
         withAnimation(EngifySpring.tabSlide) {
             searchText = ""
+            submittedSearchText = ""
             selectedLessonIndex = 0
+            learnerNotes = ""
+            webLessons = []
+            imageSearchStatusMessage = nil
+            imageSearchAttempted = false
+            isSearchingWeb = false
         }
     }
 
     private func selectPreviousLesson() {
-        let activeLessons = filteredLessons.isEmpty ? lessons : filteredLessons
+        guard !activeLessons.isEmpty else { return }
         let previousIndex = selectedLessonIndex == 0 ? activeLessons.count - 1 : selectedLessonIndex - 1
         updateSelection(to: previousIndex)
     }
 
     private func selectNextLesson() {
-        let activeLessons = filteredLessons.isEmpty ? lessons : filteredLessons
+        guard !activeLessons.isEmpty else { return }
         let nextIndex = selectedLessonIndex == activeLessons.count - 1 ? 0 : selectedLessonIndex + 1
         updateSelection(to: nextIndex)
     }
 
     private func score(for lesson: PracticeImageLesson) -> Int {
-        guard !normalizedSearchText.isEmpty else { return 1 }
+        guard hasSubmittedSearch else { return 1 }
 
         let combinedText = [
             lesson.title,
@@ -1517,6 +1680,32 @@ private struct DedicatedImagePracticeView: View {
             }
         }
     }
+
+    private func hydrateSubmittedSearchIfNeeded() {
+        guard submittedSearchText.isEmpty else { return }
+
+        let initialSearch = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !initialSearch.isEmpty else { return }
+
+        submittedSearchText = initialSearch
+    }
+
+    private var resultCountLabel: String {
+        if isSearchingWeb {
+            return "Searching for live image lessons..."
+        }
+
+        let sourceLabel = webLessons.isEmpty ? "backup" : "live"
+        return "\(activeLessons.count) \(activeLessons.count == 1 ? "scene" : "scenes") ready • \(sourceLabel) results"
+    }
+
+    private func searchStartMessage(for query: String) -> String {
+        if let preferredConfiguredProviderName {
+            return "Searching \(preferredConfiguredProviderName) for '\(query)'."
+        }
+
+        return "Searching the web for '\(query)'."
+    }
 }
 
 private struct ImagePracticeResultCard: View {
@@ -1527,34 +1716,25 @@ private struct ImagePracticeResultCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.md) {
             ZStack(alignment: .topTrailing) {
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                accentColor.opacity(isSelected ? 0.28 : 0.16),
-                                EngifyColors.surface,
-                                accentColor.opacity(0.08)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
+                PracticeLessonImageView(
+                    lesson: lesson,
+                    accentColor: accentColor,
+                    cornerRadius: 22
+                )
                     .frame(width: 210, height: 132)
                     .overlay(
                         RoundedRectangle(cornerRadius: 22, style: .continuous)
                             .stroke(accentColor.opacity(isSelected ? 0.32 : 0.14), lineWidth: 1)
                     )
 
-                Circle()
-                    .fill(accentColor.opacity(0.14))
-                    .frame(width: 88, height: 88)
-                    .offset(x: 10, y: -12)
-
-                Image(systemName: lesson.systemImage)
-                    .font(.system(size: 34, weight: .bold))
-                    .foregroundStyle(accentColor)
-                    .padding(Spacing.md)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                Text(lesson.locationLabel)
+                    .font(EngifyTypography.caption.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, Spacing.sm)
+                    .padding(.vertical, 6)
+                    .background(.ultraThinMaterial)
+                    .clipShape(Capsule())
+                    .padding(Spacing.sm)
             }
 
             VStack(alignment: .leading, spacing: Spacing.xs) {
@@ -1579,6 +1759,133 @@ private struct ImagePracticeResultCard: View {
             RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .stroke(accentColor.opacity(isSelected ? 0.24 : 0.10), lineWidth: 1)
         )
+    }
+}
+
+private struct PracticeLessonImageView: View {
+    let lesson: PracticeImageLesson
+    let accentColor: Color
+    let cornerRadius: CGFloat
+
+    var body: some View {
+        AsyncImage(url: lesson.imageURL) { phase in
+            switch phase {
+            case .success(let image):
+                image
+                    .resizable()
+                    .scaledToFill()
+
+            case .failure:
+                fallbackImage
+
+            case .empty:
+                loadingPlaceholder
+
+            @unknown default:
+                fallbackImage
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+    }
+
+    private var loadingPlaceholder: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            accentColor.opacity(0.24),
+                            EngifyColors.surface,
+                            accentColor.opacity(0.12)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+
+            ProgressView()
+                .tint(accentColor)
+        }
+    }
+
+    private var fallbackImage: some View {
+        ZStack(alignment: .bottomLeading) {
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            accentColor.opacity(0.24),
+                            EngifyColors.surface,
+                            accentColor.opacity(0.10)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+
+            Circle()
+                .fill(accentColor.opacity(0.14))
+                .frame(width: 110, height: 110)
+                .offset(x: 18, y: 12)
+
+            Image(systemName: lesson.systemImage)
+                .font(.system(size: 34, weight: .bold))
+                .foregroundStyle(accentColor)
+                .padding(Spacing.lg)
+        }
+    }
+}
+
+private struct ImageLessonAttributionView: View {
+    let lesson: PracticeImageLesson
+    let accentColor: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            Text("Image source")
+                .font(EngifyTypography.caption.weight(.semibold))
+                .foregroundStyle(EngifyColors.textSecondary)
+
+            if let providerName = lesson.providerName {
+                HStack(spacing: Spacing.sm) {
+                    Text("Powered by \(providerName)")
+                        .font(EngifyTypography.caption)
+                        .foregroundStyle(EngifyColors.textSecondary)
+
+                    if let providerURL = lesson.providerAttributionURL {
+                        Link(destination: providerURL) {
+                            Text("Visit provider")
+                                .font(EngifyTypography.caption.weight(.semibold))
+                                .foregroundStyle(accentColor)
+                        }
+                    }
+                }
+            }
+
+            if let creatorName = lesson.creatorName, !creatorName.isEmpty {
+                if let creatorProfileURL = lesson.creatorProfileURL {
+                    Link(destination: creatorProfileURL) {
+                        Text("Photo by \(creatorName)")
+                            .font(EngifyTypography.caption.weight(.semibold))
+                            .foregroundStyle(accentColor)
+                    }
+                } else {
+                    Text("Photo by \(creatorName)")
+                        .font(EngifyTypography.caption)
+                        .foregroundStyle(EngifyColors.textSecondary)
+                }
+            }
+
+            if let sourcePageURL = lesson.sourcePageURL {
+                Link(destination: sourcePageURL) {
+                    Text("Open original photo")
+                        .font(EngifyTypography.caption.weight(.semibold))
+                        .foregroundStyle(accentColor)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

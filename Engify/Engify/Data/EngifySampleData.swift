@@ -5,12 +5,52 @@ struct PracticeImageLesson: Identifiable, Hashable {
     let title: String
     let locationLabel: String
     let systemImage: String
+    let imageURL: URL?
+    let providerName: String?
+    let providerAttributionURL: URL?
+    let sourcePageURL: URL?
+    let creatorName: String?
+    let creatorProfileURL: URL?
     let visualStyle: String
     let searchTopics: [String]
     let sceneDescription: String
     let focusVocabulary: [String]
     let guidedPrompts: [String]
     let challengePrompt: String
+
+    init(
+        title: String,
+        locationLabel: String,
+        systemImage: String,
+        imageURL: URL? = nil,
+        providerName: String? = nil,
+        providerAttributionURL: URL? = nil,
+        sourcePageURL: URL? = nil,
+        creatorName: String? = nil,
+        creatorProfileURL: URL? = nil,
+        visualStyle: String,
+        searchTopics: [String],
+        sceneDescription: String,
+        focusVocabulary: [String],
+        guidedPrompts: [String],
+        challengePrompt: String
+    ) {
+        self.title = title
+        self.locationLabel = locationLabel
+        self.systemImage = systemImage
+        self.imageURL = imageURL
+        self.providerName = providerName
+        self.providerAttributionURL = providerAttributionURL
+        self.sourcePageURL = sourcePageURL
+        self.creatorName = creatorName
+        self.creatorProfileURL = creatorProfileURL
+        self.visualStyle = visualStyle
+        self.searchTopics = searchTopics
+        self.sceneDescription = sceneDescription
+        self.focusVocabulary = focusVocabulary
+        self.guidedPrompts = guidedPrompts
+        self.challengePrompt = challengePrompt
+    }
 }
 
 struct PracticeDialogueScenario: Identifiable, Hashable {
@@ -375,6 +415,7 @@ enum EngifySampleData {
             title: "Morning Cafe Scene",
             locationLabel: "Everyday Life",
             systemImage: "cup.and.saucer.fill",
+            imageURL: URL(string: "https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&w=1200&q=80"),
             visualStyle: "Warm window light and cozy coffee-shop details",
             searchTopics: ["cafe", "coffee", "morning", "street", "people"],
             sceneDescription: "A bright cafe opens onto a quiet street. One person is ordering coffee, another is typing on a laptop, and warm sunlight is hitting the window table.",
@@ -390,6 +431,7 @@ enum EngifySampleData {
             title: "City Park Weekend",
             locationLabel: "Outdoor English",
             systemImage: "tree.fill",
+            imageURL: URL(string: "https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1200&q=80"),
             visualStyle: "Open-air lifestyle photo with movement and soft greens",
             searchTopics: ["park", "nature", "weekend", "children", "dog"],
             sceneDescription: "A city park is full of motion. Two children are flying a kite, a couple is walking a dog, and a food cart is parked beside a path lined with trees.",
@@ -405,6 +447,7 @@ enum EngifySampleData {
             title: "Travel Check-In Desk",
             locationLabel: "Travel Practice",
             systemImage: "airplane.departure",
+            imageURL: URL(string: "https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=1200&q=80"),
             visualStyle: "Busy airport documentary shot with travel details",
             searchTopics: ["travel", "airport", "family", "flight", "luggage"],
             sceneDescription: "Inside an airport, travelers are lining up at a check-in desk. A family is checking passports, a digital screen shows departure times, and a suitcase is open beside the line.",
@@ -420,6 +463,7 @@ enum EngifySampleData {
             title: "Flower Market Morning",
             locationLabel: "Pexels-Style Topic",
             systemImage: "camera.macro",
+            imageURL: URL(string: "https://images.unsplash.com/photo-1468327768560-75b778cbb551?auto=format&fit=crop&w=1200&q=80"),
             visualStyle: "Color-rich close-up scene with natural textures",
             searchTopics: ["flowers", "beautiful flowers", "nature", "wedding", "meadow", "flora", "bloom", "plant"],
             sceneDescription: "Rows of bright flowers fill a street market stall. Some bouquets are wrapped in paper, a seller is arranging fresh stems, and customers are stopping to smell the roses and take photos.",
@@ -435,6 +479,7 @@ enum EngifySampleData {
             title: "Street Food Corner",
             locationLabel: "Food English",
             systemImage: "fork.knife",
+            imageURL: URL(string: "https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=1200&q=80"),
             visualStyle: "Fast, colorful street scene with food and people",
             searchTopics: ["food", "street food", "market", "snack", "city"],
             sceneDescription: "A food stall is serving noodles and grilled snacks while customers wait beside a glowing menu board. Steam rises into the evening air, and the cook moves quickly between pans.",
@@ -450,6 +495,7 @@ enum EngifySampleData {
             title: "Beach Afternoon Escape",
             locationLabel: "Relaxed Travel",
             systemImage: "beach.umbrella.fill",
+            imageURL: URL(string: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=80"),
             visualStyle: "Sunny travel photo with open sky and water",
             searchTopics: ["beach", "ocean", "summer", "travel", "nature"],
             sceneDescription: "Waves are rolling onto a wide beach while a few people walk near the shore. A striped umbrella is open in the sand, and the sunlight reflects across the water.",
@@ -465,6 +511,7 @@ enum EngifySampleData {
             title: "Office Team Meeting",
             locationLabel: "Workplace English",
             systemImage: "person.3.fill",
+            imageURL: URL(string: "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&w=1200&q=80"),
             visualStyle: "Professional workspace scene with teamwork energy",
             searchTopics: ["office", "meeting", "work", "team", "business"],
             sceneDescription: "A small team is gathered around a table with laptops, notebooks, and coffee cups. One person is presenting an idea while the others look at charts on a screen.",
