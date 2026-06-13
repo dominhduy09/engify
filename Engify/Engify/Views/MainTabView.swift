@@ -234,6 +234,9 @@ struct FloatingTabBar: View {
                 .shadow(color: .black.opacity(colorScheme == .dark ? 0.26 : 0.10), radius: 18, x: 0, y: 10)
         }
         .frame(height: 76)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Main navigation")
+        .accessibilityHint("Switch between the five main areas of Engify.")
     }
 
     private var compactRow: some View {
@@ -311,7 +314,7 @@ struct TabBarButton: View {
                 }
                 .foregroundStyle(isSelected ? EngifyColors.textInverse : EngifyColors.textSecondary)
                 .frame(maxWidth: .infinity)
-                .frame(minHeight: 52)
+                .frame(minHeight: 56)
                 .padding(.horizontal, Spacing.xs)
             }
             .clipShape(Capsule())
@@ -319,8 +322,12 @@ struct TabBarButton: View {
             .drawingGroup()
         }
         .buttonStyle(.plain)
-        .frame(minWidth: 58)
+        .frame(minWidth: 62, minHeight: 56)
         .engifyJellyPress()
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+        .accessibilityHint(isSelected ? "Current tab." : "Opens the \(title) tab.")
     }
 }
 

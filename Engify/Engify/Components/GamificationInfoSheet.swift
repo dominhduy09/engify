@@ -94,7 +94,9 @@ struct GamificationInfoSheet: View {
 
                     rewardRow(value: "+5 XP", detail: "Save a new vocabulary word to your deck.")
                     rewardRow(value: "+15 XP", detail: "Complete a full News Article reading brief.")
-                    rewardRow(value: "+20 XP", detail: "Execute a Quick Practice Sprint perfectly.")
+                    rewardRow(value: "+12 XP", detail: "Complete an Image Lesson in Scene Studio.")
+                    rewardRow(value: "+15 XP", detail: "Complete a Dialogue Lab roleplay lesson.")
+                    rewardRow(value: "+25 XP", detail: "Finish a perfect Quick Practice Sprint with all 5 quiz answers correct.")
                 }
             }
         }
@@ -111,7 +113,12 @@ struct GamificationInfoSheet: View {
 
                 infoRow(
                     title: "What it is",
-                    body: "Points are your reward currency. You earn them by completing learning activities and building steady study habits."
+                    body: "Points are your reward currency. You earn them by completing learning activities and building steady study habits, and higher point totals can help unlock achievements and badges."
+                )
+
+                infoRow(
+                    title: "Why it matters",
+                    body: "Earning points regularly contributes to badge progress like Momentum, and reaching 100 total points unlocks the Century Star badge."
                 )
 
                 VStack(alignment: .leading, spacing: Spacing.sm) {
@@ -120,8 +127,8 @@ struct GamificationInfoSheet: View {
                         .foregroundStyle(EngifyColors.textSecondary)
 
                     rewardRow(value: "+5 Points", detail: "Save a new vocabulary word to your deck.")
-                    rewardRow(value: "+15 Points", detail: "Complete a full News Article reading brief.")
-                    rewardRow(value: "+20 Points", detail: "Execute a Quick Practice Sprint perfectly.")
+                    rewardRow(value: "+15 Points", detail: "Complete a News quiz successfully.")
+                    rewardRow(value: "+20 Points", detail: "Finish a perfect Quick Practice Sprint.")
                 }
             }
         }
@@ -159,7 +166,7 @@ struct GamificationInfoSheet: View {
                     tint: accentColor
                 )
 
-                Text("Special milestone rewards unlock as your habits become more consistent.")
+                Text("Special milestone rewards unlock as your habits become more consistent, and point-based progress can unlock badges too.")
                     .font(EngifyTypography.body)
                     .foregroundStyle(EngifyColors.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -306,7 +313,7 @@ private struct AchievementBadgePreview: View {
                     .font(.caption2.weight(.bold))
                     .foregroundStyle(EngifyColors.textInverse)
                     .padding(6)
-                    .background(isUnlocked ? EngifyColors.sage : accentColor, in: Circle())
+                    .background(isUnlocked ? accentColor : EngifyColors.textSecondary, in: Circle())
                     .offset(x: 6, y: -6)
             }
 
@@ -325,10 +332,10 @@ private struct AchievementBadgePreview: View {
 
             Text(isUnlocked ? "Unlocked" : "Locked")
                 .font(.system(size: 10, weight: .bold, design: .rounded))
-                .foregroundStyle(isUnlocked ? EngifyColors.sage : EngifyColors.textSecondary)
+                .foregroundStyle(isUnlocked ? accentColor : EngifyColors.textSecondary)
                 .padding(.horizontal, Spacing.sm)
                 .padding(.vertical, 5)
-                .background((isUnlocked ? EngifyColors.sage : EngifyColors.border).opacity(0.14))
+                .background((isUnlocked ? accentColor : EngifyColors.border).opacity(0.14))
                 .clipShape(Capsule())
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)

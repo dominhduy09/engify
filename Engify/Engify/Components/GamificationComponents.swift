@@ -729,7 +729,14 @@ private struct BadgeUnlockedPopup: View {
             }
             .padding(Spacing.xl)
             .frame(maxWidth: 360)
-            .background(EngifyColors.surface)
+            .background(
+                RoundedRectangle(cornerRadius: 30, style: .continuous)
+                    .fill(EngifyColors.surface)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 30, style: .continuous)
+                            .stroke(accentColor.opacity(0.18), lineWidth: 1)
+                    )
+            )
             .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
             .shadow(color: .black.opacity(0.18), radius: 28, x: 0, y: 14)
             .padding(.horizontal, Spacing.screenPadding)

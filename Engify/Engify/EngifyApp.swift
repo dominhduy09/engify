@@ -23,10 +23,12 @@
 //  - .tint() and .preferredColorScheme() propagate theme settings to the entire view tree.
 
 import SwiftUI
+import UserNotifications
 
 @MainActor
 @main
 struct EngifyApp: App {
+    @UIApplicationDelegateAdaptor(AppNotificationDelegate.self) private var appNotificationDelegate
     @StateObject private var savedWordsManager = SavedWordsManager()
     @StateObject private var themeManager = ThemeManager()
     @StateObject private var gamificationManager = GamificationManager()
@@ -63,6 +65,43 @@ struct EngifyApp: App {
                 .environment(\.themeAccentColor, themeManager.accentColor)
                 .tint(themeManager.accentColor)
                 .preferredColorScheme(themeManager.preferredColorScheme)
+        }
+    }
+}
+
+final class AppNotificationDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
+    private let appStoreURLUserInfoKey = "appStoreURL"
+
+    func application(
+        _ application: UIApplication,
+        didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
+    ) -> Bool {
+        UNUserNotificationCenter.current().delegate = self
+        return true
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler([.banner, .sound, .badge])
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        defer { completionHandler() }
+
+        guard let urlString = response.notification.request.content.userInfo[appStoreURLUserInfoKey] as? String,
+              let url = URL(string: urlString) else {
+            return
+        }
+
+        Task { @MainActor in
+            UIApplication.shared.open(url)
         }
     }
 }

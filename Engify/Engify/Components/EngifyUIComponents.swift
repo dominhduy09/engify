@@ -282,6 +282,7 @@ struct EngifyScreenScroll<Content: View>: View {
                 .padding(.bottom, bottomInset)
                 .frame(maxWidth: .infinity, alignment: .topLeading)
             }
+            .modifier(EngifyKeyboardDismissBehavior())
         }
         .coordinateSpace(name: EngifyOverlayCoordinator.coordinateSpaceName)
         .environmentObject(overlayCoordinator)
@@ -331,6 +332,17 @@ struct EngifyScreenScroll<Content: View>: View {
                     .zIndex(999)
                 }
             }
+        }
+    }
+}
+
+private struct EngifyKeyboardDismissBehavior: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 16.0, *) {
+            content
+                .scrollDismissesKeyboard(.interactively)
+        } else {
+            content
         }
     }
 }
@@ -1446,18 +1458,21 @@ struct EngifyGlobalTabHeader: View {
     @Binding var showSettings: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.sm) {
+        VStack(alignment: .leading, spacing: Spacing.md) {
             EngifyTopMetricsBar(showSettings: $showSettings)
 
             HStack {
                 VStack(alignment: .leading, spacing: Spacing.xxs) {
                     Text(title)
-                        .font(EngifyTypography.headline)
+                        .font(EngifyTypography.screenTitle)
                         .foregroundStyle(EngifyColors.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
 
                     Text(subtitle)
-                        .font(EngifyTypography.caption)
+                        .font(EngifyTypography.body)
                         .foregroundStyle(EngifyColors.textSecondary)
+                        .lineSpacing(3)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 Spacer(minLength: 0)

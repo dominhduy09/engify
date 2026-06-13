@@ -24,13 +24,6 @@ struct PracticeView: View {
             globalHeader
             routedContent
         }
-        .overlay(alignment: .bottom) {
-            if gamification.showXPGain {
-                XPGainToast(amount: gamification.lastXPGained)
-                    .padding(.bottom, 120)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-        }
         .engifySettingsSheet(isPresented: $showSettingsSheet)
         .sheet(item: $activePracticeSheet) { route in
             if #available(iOS 16.0, *) {
@@ -172,6 +165,22 @@ struct PracticeView: View {
                     onRefresh: refreshQuiz,
                     onAppear: refreshQuiz
                 )
+            }
+        }
+        .overlay {
+            LessonCompleteOverlay()
+        }
+        .overlay {
+            LevelUpOverlay()
+        }
+        .overlay {
+            BadgeUnlockedOverlay()
+        }
+        .overlay(alignment: .bottom) {
+            if gamification.showXPGain {
+                XPGainToast(amount: gamification.lastXPGained)
+                    .padding(.bottom, 120)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
         .navigationTitle("Practice")
@@ -1182,6 +1191,22 @@ private struct DedicatedImagePracticeView: View {
         }?.name
     }
 
+    private var configuredProviderSummary: String {
+        if let preferredConfiguredProviderName {
+            return "Live image search is ready with \(preferredConfiguredProviderName)."
+        }
+
+        return "Add an image API key in Settings to unlock live web image lessons."
+    }
+
+    private var searchFieldAccessibilityHint: String {
+        if let preferredConfiguredProviderName {
+            return "Type a topic and press Search to load live image lessons from \(preferredConfiguredProviderName)."
+        }
+
+        return "Type a topic and press Search. Without an API key, Engify will show backup image lessons."
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.xl) {
             PracticeDetailHeader(
@@ -1209,6 +1234,8 @@ private struct DedicatedImagePracticeView: View {
                                 .onSubmit {
                                     applySearchSelection()
                                 }
+                                .accessibilityLabel("Search image lessons")
+                                .accessibilityHint(searchFieldAccessibilityHint)
 
                             if !searchText.isEmpty {
                                 Button {
@@ -1218,18 +1245,30 @@ private struct DedicatedImagePracticeView: View {
                                         .foregroundStyle(EngifyColors.textSecondary)
                                 }
                                 .buttonStyle(.plain)
+                                .accessibilityLabel("Clear image search")
                             }
                         }
                         .padding(.horizontal, Spacing.md)
-                        .frame(minHeight: 54)
+                        .frame(minHeight: 56)
                         .background(
                             RoundedRectangle(cornerRadius: 18, style: .continuous)
                                 .fill(EngifyColors.surface)
                         )
                         .overlay(
                             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                .stroke(accentColor.opacity(0.14), lineWidth: 1)
+                                .stroke(isSearchingWeb ? accentColor.opacity(0.42) : accentColor.opacity(0.14), lineWidth: isSearchingWeb ? 1.5 : 1)
                         )
+
+                        HStack(alignment: .top, spacing: Spacing.sm) {
+                            Image(systemName: preferredConfiguredProviderName == nil ? "lock.open.trianglebadge.exclamationmark" : "bolt.badge.checkmark.fill")
+                                .foregroundStyle(preferredConfiguredProviderName == nil ? EngifyColors.warning : EngifyColors.sage)
+                                .font(.caption.weight(.semibold))
+
+                            Text(configuredProviderSummary)
+                                .font(EngifyTypography.caption)
+                                .foregroundStyle(EngifyColors.textSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
 
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: Spacing.sm) {
@@ -1248,14 +1287,15 @@ private struct DedicatedImagePracticeView: View {
 
                         Text(tutorBotSummary)
                             .font(EngifyTypography.caption)
-                            .foregroundStyle(filteredLessons.isEmpty && !normalizedSearchText.isEmpty ? EngifyColors.coral : EngifyColors.textSecondary)
+                            .foregroundStyle(summaryColor)
                             .fixedSize(horizontal: false, vertical: true)
 
                         if let imageSearchStatusMessage, !imageSearchStatusMessage.isEmpty {
-                            Text(imageSearchStatusMessage)
-                                .font(EngifyTypography.caption)
-                                .foregroundStyle(searchStatusColor)
-                                .fixedSize(horizontal: false, vertical: true)
+                            statusBanner(
+                                text: imageSearchStatusMessage,
+                                color: searchStatusColor,
+                                systemImage: statusBannerIcon
+                            )
                         }
 
                         if let pexelsSearchURL {
@@ -1273,6 +1313,7 @@ private struct DedicatedImagePracticeView: View {
                                 .background(accentColor.opacity(0.10))
                                 .clipShape(Capsule())
                             }
+                            .accessibilityHint("Opens the public Pexels website for the current topic.")
                         }
                     }
 
@@ -1705,6 +1746,52 @@ private struct DedicatedImagePracticeView: View {
         }
 
         return "Searching the web for '\(query)'."
+    }
+
+    private var summaryColor: Color {
+        if filteredLessons.isEmpty && !normalizedSearchText.isEmpty && !isSearchingWeb && webLessons.isEmpty {
+            return EngifyColors.coral
+        }
+
+        return EngifyColors.textSecondary
+    }
+
+    private var statusBannerIcon: String {
+        if isSearchingWeb {
+            return "network"
+        }
+
+        if !webLessons.isEmpty {
+            return "checkmark.seal.fill"
+        }
+
+        return "exclamationmark.triangle.fill"
+    }
+
+    @ViewBuilder
+    private func statusBanner(text: String, color: Color, systemImage: String) -> some View {
+        HStack(alignment: .top, spacing: Spacing.sm) {
+            Image(systemName: systemImage)
+                .font(.caption.weight(.bold))
+                .foregroundStyle(color)
+                .padding(.top, 1)
+
+            Text(text)
+                .font(EngifyTypography.caption)
+                .foregroundStyle(EngifyColors.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, Spacing.md)
+        .padding(.vertical, Spacing.sm)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(color.opacity(0.10))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(color.opacity(0.18), lineWidth: 1)
+        )
     }
 }
 

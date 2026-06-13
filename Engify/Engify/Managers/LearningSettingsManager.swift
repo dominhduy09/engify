@@ -132,6 +132,14 @@ final class LearningSettingsManager: ObservableObject {
             Task { await syncNotificationSettings() }
         }
     }
+
+    @Published var appUpdateNotificationsEnabled: Bool {
+        didSet {
+            guard appUpdateNotificationsEnabled != oldValue else { return }
+            save("app_update_notifications", appUpdateNotificationsEnabled)
+            Task { await syncNotificationSettings() }
+        }
+    }
     
     // MARK: - Microphone & Voice
     
@@ -226,6 +234,7 @@ final class LearningSettingsManager: ObservableObject {
     private static let validSpeeds = ["slow", "normal", "fast"]
     private static let validModels = ["us_english", "uk_english", "australian"]
     private static let validSoundStyles = SoundEffectStyle.allCases.map(\.rawValue)
+    private static let appUpdateNotificationLastVersionKey = "engify.notifications.last_app_update_version"
     
     private enum Keys {
         static let prefix = "engify.settings."
@@ -256,6 +265,7 @@ final class LearningSettingsManager: ObservableObject {
         self.dailyReminderTime = Self.loadDate("daily_reminder_time", default: Self.defaultReminderTime())
         self.streakReminderEnabled = Self.loadBool("streak_reminder", default: true)
         self.weeklySummaryEnabled = Self.loadBool("weekly_summary", default: true)
+        self.appUpdateNotificationsEnabled = Self.loadBool("app_update_notifications", default: true)
         
         self.microphoneEnabled = Self.loadBool("microphone_enabled", default: true)
         self.voiceHistoryEnabled = Self.loadBool("voice_history_enabled", default: true)
@@ -292,6 +302,7 @@ final class LearningSettingsManager: ObservableObject {
                 if !granted {
                     self.notificationsEnabled = false
                     self.dailyReminderEnabled = false
+                    self.appUpdateNotificationsEnabled = false
                 }
             }
             await syncNotificationSettings()
@@ -302,6 +313,7 @@ final class LearningSettingsManager: ObservableObject {
                 self.notificationPermissionStatus = .denied
                 self.notificationsEnabled = false
                 self.dailyReminderEnabled = false
+                self.appUpdateNotificationsEnabled = false
             }
             return false
         }
@@ -352,6 +364,7 @@ final class LearningSettingsManager: ObservableObject {
             if permissionStatus != .granted {
                 self.notificationsEnabled = false
                 self.dailyReminderEnabled = false
+                self.appUpdateNotificationsEnabled = false
             }
         }
     }
@@ -383,7 +396,7 @@ final class LearningSettingsManager: ObservableObject {
     }
 
     private func syncNotificationSettings() async {
-        let identifiers = ["daily_reminder", "streak_reminder", "weekly_summary"]
+        let identifiers = ["daily_reminder", "streak_reminder", "weekly_summary", "app_update_available"]
 
         guard notificationsEnabled, notificationPermissionStatus == .granted else {
             UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: identifiers)
@@ -393,6 +406,96 @@ final class LearningSettingsManager: ObservableObject {
         await scheduleDailyReminder()
         await scheduleStreakReminder()
         await scheduleWeeklySummary()
+        await checkForAppUpdateIfNeeded()
+    }
+
+    func checkForAppUpdateIfNeeded() async {
+        let identifier = "app_update_available"
+
+        guard notificationsEnabled, appUpdateNotificationsEnabled else {
+            UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [identifier])
+            return
+        }
+
+        guard notificationPermissionStatus == .granted else {
+            logWarning("Cannot check app updates: notifications not permitted")
+            return
+        }
+
+        guard let bundleID = Bundle.main.bundleIdentifier,
+              let currentVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String,
+              !bundleID.isEmpty,
+              !currentVersion.isEmpty else {
+            return
+        }
+
+        do {
+            guard let appStoreApp = try await fetchLatestAppStoreApp(bundleID: bundleID) else {
+                return
+            }
+
+            let latestVersion = appStoreApp.version
+
+            guard Self.isVersion(latestVersion, newerThan: currentVersion) else {
+                UserDefaults.standard.removeObject(forKey: Self.appUpdateNotificationLastVersionKey)
+                UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [identifier])
+                return
+            }
+
+            let lastNotifiedVersion = UserDefaults.standard.string(forKey: Self.appUpdateNotificationLastVersionKey)
+            guard lastNotifiedVersion != latestVersion else { return }
+
+            let content = UNMutableNotificationContent()
+            content.title = "A new Engify update is available"
+            content.body = "Version \(latestVersion) is ready on the App Store. Update to get the latest improvements."
+            content.sound = .default
+            if let trackViewURL = appStoreApp.trackViewURL {
+                content.userInfo["appStoreURL"] = trackViewURL
+            }
+
+            let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 2, repeats: false)
+            let request = UNNotificationRequest(identifier: identifier, content: content, trigger: trigger)
+
+            try await UNUserNotificationCenter.current().add(request)
+            UserDefaults.standard.set(latestVersion, forKey: Self.appUpdateNotificationLastVersionKey)
+            logAnalytics("app_update_notification_scheduled", ["version": latestVersion])
+        } catch {
+            logError("Failed to check app update availability", error)
+        }
+    }
+
+    private func fetchLatestAppStoreApp(bundleID: String) async throws -> AppStoreLookupApp? {
+        var components = URLComponents(string: "https://itunes.apple.com/lookup")
+        components?.queryItems = [
+            URLQueryItem(name: "bundleId", value: bundleID)
+        ]
+
+        guard let url = components?.url else { return nil }
+
+        let (data, response) = try await URLSession.shared.data(from: url)
+        guard let httpResponse = response as? HTTPURLResponse, 200..<300 ~= httpResponse.statusCode else {
+            return nil
+        }
+
+        let decoded = try JSONDecoder().decode(AppStoreLookupResponse.self, from: data)
+        return decoded.results.first
+    }
+
+    private static func isVersion(_ candidate: String, newerThan current: String) -> Bool {
+        let candidateParts = candidate.split(separator: ".").compactMap { Int($0) }
+        let currentParts = current.split(separator: ".").compactMap { Int($0) }
+        let maxCount = max(candidateParts.count, currentParts.count)
+
+        for index in 0..<maxCount {
+            let candidateValue = index < candidateParts.count ? candidateParts[index] : 0
+            let currentValue = index < currentParts.count ? currentParts[index] : 0
+
+            if candidateValue != currentValue {
+                return candidateValue > currentValue
+            }
+        }
+
+        return false
     }
     
     private func scheduleDailyReminder() async {
@@ -890,6 +993,20 @@ final class LearningSettingsManager: ObservableObject {
         dictionaryAPIBaseURL = ""
         customNewsSources = []
         imageAPIProviders = Self.defaultImageAPIProviders()
+    }
+}
+
+private struct AppStoreLookupResponse: Decodable {
+    let results: [AppStoreLookupApp]
+}
+
+private struct AppStoreLookupApp: Decodable {
+    let version: String
+    let trackViewURL: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case version
+        case trackViewURL = "trackViewUrl"
     }
 }
 

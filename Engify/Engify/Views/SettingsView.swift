@@ -218,6 +218,7 @@ struct SettingsView: View {
                                 .id(SettingsFocusSection.newsSources)
                             privacySection
                             legalSection
+                            creditsSection
                             resetSection
                         }
                         .padding()
@@ -876,6 +877,14 @@ struct SettingsView: View {
                             subtitle: "Get a recap of wins, weak areas, and next steps.",
                             isOn: $settings.weeklySummaryEnabled
                         )
+
+                        Divider()
+
+                        EngifySettingToggleRow(
+                            title: "App update alerts",
+                            subtitle: "Notify you when a newer Engify version is available on the App Store.",
+                            isOn: $settings.appUpdateNotificationsEnabled
+                        )
                     }
                 } else if settings.notificationPermissionStatus == .granted {
                     Text("Turn on notifications to enable reminders.")
@@ -1333,6 +1342,53 @@ struct SettingsView: View {
     }
 
     @ViewBuilder
+    private func externalLinkRow(
+        title: String,
+        subtitle: String,
+        systemImage: String,
+        urlString: String,
+        hostLabel: String
+    ) -> some View {
+        if let url = URL(string: urlString) {
+            Link(destination: url) {
+                HStack(alignment: .top, spacing: Spacing.md) {
+                    Image(systemName: systemImage)
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(theme.accentColor)
+                        .frame(width: 40, height: 40)
+                        .background(theme.accentColor.opacity(0.12))
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+                    VStack(alignment: .leading, spacing: Spacing.xs) {
+                        Text(title)
+                            .font(EngifyTypography.bodyStrong)
+                            .foregroundStyle(EngifyColors.textPrimary)
+
+                        Text(subtitle)
+                            .font(EngifyTypography.caption)
+                            .foregroundStyle(EngifyColors.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        Text(hostLabel)
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(theme.accentColor)
+                    }
+
+                    Spacer(minLength: 0)
+
+                    Image(systemName: "arrow.up.right")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(theme.accentColor)
+                        .padding(.top, 4)
+                }
+                .padding(.vertical, Spacing.sm)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    @ViewBuilder
     private func newsSourceRow(
         title: String,
         category: String,
@@ -1586,6 +1642,43 @@ struct SettingsView: View {
                         tint: EngifyColors.coral
                     )
                 }
+            }
+        }
+    }
+
+    private var creditsSection: some View {
+        EngifySettingsSection(
+            title: "Credits",
+            subtitle: "Support the creator, follow development updates, or open the full profile hub."
+        ) {
+            VStack(alignment: .leading, spacing: Spacing.md) {
+                externalLinkRow(
+                    title: "Support on PayPal",
+                    subtitle: "Help support Engify development.",
+                    systemImage: "heart.text.square.fill",
+                    urlString: "https://www.paypal.com/paypalme/dominhduy09",
+                    hostLabel: "paypal.com/paypalme/dominhduy09"
+                )
+
+                Divider()
+
+                externalLinkRow(
+                    title: "GitHub",
+                    subtitle: "See projects and code updates from dominhduy09.",
+                    systemImage: "chevron.left.forwardslash.chevron.right",
+                    urlString: "https://github.com/dominhduy09",
+                    hostLabel: "github.com/dominhduy09"
+                )
+
+                Divider()
+
+                externalLinkRow(
+                    title: "Bio Link",
+                    subtitle: "Open the full profile hub for more links.",
+                    systemImage: "link.circle.fill",
+                    urlString: "https://bio.link/dmduy",
+                    hostLabel: "bio.link/dmduy"
+                )
             }
         }
     }
