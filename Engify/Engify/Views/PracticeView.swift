@@ -18,6 +18,7 @@ struct PracticeView: View {
     @EnvironmentObject private var gamification: GamificationManager
     @EnvironmentObject private var learningSettings: LearningSettingsManager
     @State private var showSettingsSheet = false
+    @State private var showImageAPISettingsSheet = false
 
     var body: some View {
         EngifyScreenScroll {
@@ -25,6 +26,7 @@ struct PracticeView: View {
             routedContent
         }
         .engifySettingsSheet(isPresented: $showSettingsSheet)
+        .engifySettingsSheet(isPresented: $showImageAPISettingsSheet, initialSection: .imageProviders)
         .sheet(item: $activePracticeSheet) { route in
             if #available(iOS 16.0, *) {
                 NavigationView {
@@ -137,7 +139,8 @@ struct PracticeView: View {
                     learnerNotes: $imageLessonNotes,
                     searchText: $imageLessonSearchText,
                     learningSettings: learningSettings,
-                    onComplete: completeImageLesson
+                    onComplete: completeImageLesson,
+                    onOpenAPISettings: { showImageAPISettingsSheet = true }
                 )
 
             case .dialogue:
@@ -1038,6 +1041,7 @@ private struct DedicatedImagePracticeView: View {
     @Binding var searchText: String
     let learningSettings: LearningSettingsManager
     let onComplete: () -> Void
+    let onOpenAPISettings: () -> Void
     @State private var submittedSearchText = ""
     @State private var webLessons: [PracticeImageLesson] = []
     @State private var isSearchingWeb = false
@@ -1268,6 +1272,28 @@ private struct DedicatedImagePracticeView: View {
                                 .font(EngifyTypography.caption)
                                 .foregroundStyle(EngifyColors.textSecondary)
                                 .fixedSize(horizontal: false, vertical: true)
+                        }
+
+                        if preferredConfiguredProviderName == nil {
+                            Button {
+                                onOpenAPISettings()
+                            } label: {
+                                HStack(spacing: Spacing.sm) {
+                                    Image(systemName: "key.fill")
+                                        .font(.caption.weight(.bold))
+                                    Text("Configure API Key")
+                                        .font(EngifyTypography.bodyStrong)
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption.weight(.bold))
+                                }
+                                .foregroundStyle(accentColor)
+                                .padding(.horizontal, Spacing.md)
+                                .padding(.vertical, Spacing.sm)
+                                .background(accentColor.opacity(0.10))
+                                .clipShape(Capsule())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityHint("Opens Settings to configure an image provider API key.")
                         }
 
                         ScrollView(.horizontal, showsIndicators: false) {
