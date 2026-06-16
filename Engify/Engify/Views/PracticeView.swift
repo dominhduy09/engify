@@ -1886,7 +1886,7 @@ private struct PracticeLessonImageView: View {
             case .success(let image):
                 image
                     .resizable()
-                    .scaledToFill()
+                    .scaledToFit()
 
             case .failure:
                 fallbackImage
