@@ -1,6 +1,22 @@
 # Engify
 
+**v1.0 (Build 1)**
+
 Engify is a SwiftUI-based iOS English learning app focused on vocabulary, dictionary lookup, reading practice, lightweight gamification, and beginner-friendly daily study flows.
+
+## What's New in v1.0
+
+- **Image-based Learning** — Real images for vocabulary and dialogue lessons to improve visual retention
+- **Notification System** — Learning reminders and progress nudges
+- **Enhanced Navigation** — Consistent API-driven navigation with image support
+- **Polished UI/UX** — Unified accent color sync across all screens, skeuomorphic liquid-glass profile dropdown, and consistent visual design
+- **Gamification Overhaul** — Milestone and XP-level system, streak tracking, heart system, and lesson completion overlays
+- **Daily Content** — Daily quotes, learning tips, and fallback content for offline-safe learning
+- **News Reader** — RSS-driven news lessons with article detail view, pull-to-refresh, vocabulary saving, and filtering
+- **Practice Flows** — Speaking, grammar, and quiz-style practice sections
+- **Settings & Accessibility** — Learning preferences, reminders, accessibility options, appearance themes, and font size controls
+- **Authentication** — Email/password auth with Supabase, guest mode with feature gating, Google Sign-In integration
+- **Dictionary** — Live dictionary lookup with suggestions, phonetics, examples, and audio pronunciation
 
 The project combines a polished mobile UI with practical language-learning features:
 - onboarding and guest access
