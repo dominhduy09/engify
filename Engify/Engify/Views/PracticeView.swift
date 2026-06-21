@@ -36,7 +36,10 @@ struct PracticeView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
             } else {
-                // Fallback on earlier versions
+                NavigationView {
+                    practiceSheetView(for: route)
+                }
+                .navigationViewStyle(StackNavigationViewStyle())
             }
         }
         .onChange(of: authManager.isGuestMode) { isGuestMode in
@@ -188,6 +191,9 @@ struct PracticeView: View {
         }
         .navigationTitle("Practice")
         .navigationBarTitleDisplayMode(.inline)
+        .onDisappear {
+            TTSService.shared.stop()
+        }
     }
 
     private var scoreColor: Color {
@@ -525,10 +531,31 @@ private struct DedicatedSpeakingPracticeView: View {
             EngifyCard(tint: accentColor) {
                 VStack(alignment: .center, spacing: Spacing.xl) {
                     VStack(alignment: .leading, spacing: Spacing.md) {
-                        Text("Target phrase")
-                            .font(EngifyTypography.caption.weight(.semibold))
-                            .foregroundStyle(accentColor)
-                            .textCase(.uppercase)
+                        HStack(alignment: .center) {
+                            Text("Target phrase")
+                                .font(EngifyTypography.caption.weight(.semibold))
+                                .foregroundStyle(accentColor)
+                                .textCase(.uppercase)
+
+                            Spacer()
+
+                            Button {
+                                TTSService.shared.speak(
+                                    text: speakingSentence,
+                                    speed: learningSettings.speakingSpeed,
+                                    model: learningSettings.pronunciationModel
+                                )
+                            } label: {
+                                Image(systemName: "speaker.wave.2.fill")
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(accentColor)
+                                    .frame(width: 32, height: 32)
+                                    .background(accentColor.opacity(0.12))
+                                    .clipShape(Circle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Listen to pronunciation")
+                        }
 
                         Text(speakingSentence)
                             .font(.system(size: 24, weight: .regular, design: .rounded))
@@ -2110,9 +2137,30 @@ private struct DedicatedDialoguePracticeView: View {
                     }
 
                     VStack(alignment: .leading, spacing: Spacing.md) {
-                        Text("Conversation opener")
-                            .font(EngifyTypography.headline)
-                            .foregroundStyle(EngifyColors.textPrimary)
+                        HStack(alignment: .center) {
+                            Text("Conversation opener")
+                                .font(EngifyTypography.headline)
+                                .foregroundStyle(EngifyColors.textPrimary)
+
+                            Spacer()
+
+                            Button {
+                                TTSService.shared.speak(
+                                    text: scenario.partnerOpeningLine,
+                                    speed: learningSettings.speakingSpeed,
+                                    model: learningSettings.pronunciationModel
+                                )
+                            } label: {
+                                Image(systemName: "speaker.wave.2.fill")
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(accentColor)
+                                    .frame(width: 32, height: 32)
+                                    .background(accentColor.opacity(0.12))
+                                    .clipShape(Circle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Listen to opener")
+                        }
 
                         Text("\"\(scenario.partnerOpeningLine)\"")
                             .font(.system(size: 22, weight: .medium, design: .rounded))
